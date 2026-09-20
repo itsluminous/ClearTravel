@@ -64,4 +64,5 @@ dependencies {
 
     testImplementation(project(":core:testing"))
     testImplementation(libs.turbine)
+    testImplementation(libs.robolectric)
 }
