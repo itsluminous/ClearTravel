@@ -1,5 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="checklist_title">Checklists</string>
     <string name="checklist_empty_title">No checklists yet</string>
     <string name="checklist_empty_message">Create a packing checklist from a preset or start blank.</string>
+    <string name="checklist_add_fab">Add checklist</string>
+    <string name="checklist_progress">%1$d of %2$d packed</string>
+
+    <string name="checklist_create_title">New checklist</string>
+    <string name="checklist_name_label">Name</string>
+    <string name="checklist_start_from_label">Start from</string>
+    <string name="checklist_start_blank">Blank</string>
+    <string name="checklist_create_confirm">Create</string>
+    <string name="checklist_cancel">Cancel</string>
+
+    <string name="checklist_back">Back</string>
+    <string name="checklist_no_items_title">Nothing on this list</string>
+    <string name="checklist_no_items_message">Add items below or append a preset.</string>
+    <string name="checklist_add_item_hint">Add item</string>
+    <string name="checklist_add_item_action">Add item to checklist</string>
+    <string name="checklist_item_move_up">Move item up</string>
+    <string name="checklist_item_move_down">Move item down</string>
+    <string name="checklist_item_remove">Remove item</string>
+
+    <string name="checklist_append_preset">Append preset</string>
+    <string name="checklist_append_preset_title">Append a preset</string>
+    <string name="checklist_append_preset_message">Items are copied to the end of this checklist. Items already on the list are skipped.</string>
+    <string name="checklist_append_preset_empty">No presets available. Create one in Menu → Manage presets.</string>
+    <plurals name="checklist_items_appended">
+        <item quantity="one">%d item added</item>
+        <item quantity="other">%d items added</item>
+    </plurals>
+    <string name="checklist_items_appended_none">No new items — everything was already on the list</string>
+
+    <string name="checklist_delete">Delete checklist</string>
+    <string name="checklist_delete_confirm_title">Delete checklist?</string>
+    <string name="checklist_delete_confirm_message">“%1$s” and all of its items will be removed.</string>
+    <string name="checklist_delete_confirm">Delete</string>
 </resources>
