@@ -1,0 +1,136 @@
+<!--
+Air India flight status recon — captured 2026-09-20
+URL after submit: https://www.airindia.com/in/en/manage/flight-status.html?fno=101&on=20260920
+Query: AI 101, date 20 Sep 2026 (today)
+See NOTES.md for selector summary.
+-->
+
+<!-- ============ FORM (before submit) ============ -->
+<div class="booking-form position-relative container flightState">
+  <div class="flight-status-radio">
+    <mat-radio-group role="radiogroup" class="large-secondary-radio-group">
+      <mat-radio-button id="mat-radio-3" class="mat-mdc-radio-checked">
+        <input type="radio" id="mat-radio-3-input" name="mat-radio-group-0" value="flight_number">
+        <label for="mat-radio-3-input">Flight number</label>
+      </mat-radio-button>
+      <mat-radio-button id="mat-radio-4">
+        <input type="radio" id="mat-radio-4-input" name="mat-radio-group-0" value="pnr">
+        <label for="mat-radio-4-input">PNR</label>
+      </mat-radio-button>
+      <mat-radio-button id="mat-radio-5">
+        <input type="radio" id="mat-radio-5-input" name="mat-radio-group-0" value="route">
+        <label for="mat-radio-5-input">Route</label>
+      </mat-radio-button>
+    </mat-radio-group>
+  </div>
+  <form novalidate class="row gx-3 justify-content-between">
+    <div class="col-lg col-12">
+      <div class="placeholder-form-group">
+        <div class="flight-status-textfield">
+          <input type="text" name="flight-number-ip" formcontrolname="flightNo" id="flight-number-ip-id"
+                 autocomplete="off" maxlength="4" class="placeholder-form-control text-capitalize flight-status-input"
+                 aria-label="Flight Number*">
+          <label for="flightNo" class="flight-status-input-label">Flight Number*</label>
+        </div>
+        <lib-ai-error errorclass="tertiary-error"></lib-ai-error>
+      </div>
+    </div>
+    <div class="col-lg col-12">
+      <lib-ai-select-group selecttype="formFieldSelect" formcontrolname="dateOption"
+                            selectclass="w-100 flight-status-select" required>
+        <mat-form-field class="mat-mdc-form-field w-100 mat-mdc-form-field-type-mat-select mat-form-field-appearance-outline">
+          <mat-label class="ai-select-label">Date</mat-label>
+          <mat-select id="mat-select-0" role="combobox" required>
+            <!-- options rendered on open, in an overlay (cdk-overlay), NOT inside the form DOM subtree -->
+            <!-- <mat-option id="mat-option-0">18 Sep 2026</mat-option> -->
+            <!-- <mat-option id="mat-option-1">19 Sep 2026</mat-option> -->
+            <!-- <mat-option id="mat-option-2">20 Sep 2026</mat-option>  (today) -->
+            <!-- <mat-option id="mat-option-3">21 Sep 2026</mat-option> -->
+            <!-- <mat-option id="mat-option-4">22 Sep 2026</mat-option> -->
+          </mat-select>
+        </mat-form-field>
+      </lib-ai-select-group>
+    </div>
+    <button type="submit" class="form-btn booking-flight-btn">Get Flight Status</button>
+  </form>
+</div>
+
+<!-- ============ RESULT (after submit, URL becomes ?fno=101&on=20260920) ============ -->
+<!-- readySignal: presence of .flight-status-card (there can be MULTIPLE cards — one per matching -->
+<!-- leg/segment for that flight number+date, e.g. an inbound leg AND the outbound leg). -->
+
+<div class="card flight-status-card">
+  <div class="card-body">
+    <div class="content-top">
+      <div class="content-wrap">
+        <div class="departure">
+          <div class="top-text-left-area bottom-spacing-sm">
+            <div class="list-inline flight-details-ar">
+              <div class="list-inline-item">
+                <img alt="inlineflight" src="[airline-logo-url]"> AI 101
+              </div>
+              <div class="list-inline-item airCraftTypeName"> Airbus A350-900 </div>
+            </div>
+            <!-- STATUS selector -->
+            <p class="list-inline-item ontime-check-state"> Scheduled </p>
+          </div>
+          <p class="sch-dep">Departure</p>
+          <div class="fsm-flight-time">
+            <!-- when on-time only .fsm-estimated-time is present; when delayed, both
+                 .fsm-scheduled-time (struck-through original) and .fsm-estimated-time appear,
+                 see arrival block below for the delayed/early shape -->
+            <span class="fsm-estimated-time"> 22:55 </span>
+          </div>
+          <p class="sch-dep-date"><span class="sch-dep-date-status-time">20 Sep 2026</span></p>
+          <!-- AIRPORT NAME + IATA CODE selector -->
+          <h4 class="aiport-name"><span>Indira Gandhi International Airport (DEL)</span></h4>
+          <!-- TERMINAL + GATE selector (pipe-separated in one <p>, gate can be "N/A") -->
+          <p class="terminal">Terminal 3 | Gate 24</p>
+        </div>
+
+        <div class="route-image">
+          <div class="route-dot"></div>
+          <p class="duration"> 8 h 53 m </p>
+        </div>
+
+        <div class="arrival arrival-text-right">
+          <p class="sch-dep">Arrival</p>
+          <div class="fsm-flight-time">
+            <!-- delayed/early example: scheduled time (original) + estimated time (revised) + delta -->
+            <span class="fsm-scheduled-time"> 04:40 </span>
+            <span class="fsm-estimated-time fsm-is-early"> 04:18 </span>
+            <!-- fsm-is-early / fsm-is-late class toggles which direction -->
+            <span class="fsm-early-time"> 22min </span>
+          </div>
+          <p class="sch-dep-date"><span class="sch-dep-date-status-time">21 Sep 2026</span></p>
+          <h4 class="aiport-name"><span>Rome Fiumicino Airport (FCO)</span></h4>
+          <p class="terminal">Terminal 3 | Gate N/A</p>
+        </div>
+      </div>
+
+      <!-- Secondary info block: origin-of-inbound-aircraft, tail number, live progress, last-updated -->
+      <div class="flight-from">
+        <div>
+          <p>
+            <span> This flight is coming from: <span class="flight-from-textb">London Heathrow</span></span>
+            | <span class="flight-from-airline"><img alt="flightfromairline" src="[logo]"> AI 2016 </span>
+            | <span class="tailnumber"> VT-JRB </span>
+          </p>
+          <p>
+            <span>The flight has arrived in New Delhi at 11:14</span> |
+            <span>Status : <span> ARRIVED </span></span>  <!-- status of the INBOUND leg, distinct from .ontime-check-state above -->
+          </p>
+          <div class="last-updated"> Last Updated On <span>21:15:01 20 Sep 2026</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Second card for the SAME query (fno=101 matches more than one scheduled leg on/around this date,
+     here the return/next-day leg FCO -> JFK). Rule must therefore expect an ARRAY of .flight-status-card
+     nodes, not assume exactly one, and disambiguate by departure airport code / date if the user's
+     itinerary specifies a particular leg. -->
+<div class="card flight-status-card">
+  <!-- same shape, AI 101 FCO(21 Sep) -> JFK(21 Sep), Terminal 3 -> Terminal 4, Gate N/A both ends -->
+</div>

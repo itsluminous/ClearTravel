@@ -1,0 +1,125 @@
+<!--
+Indian Railways PNR Enquiry recon — captured 2026-09-20
+Final URL: https://www.indianrail.gov.in/enquiry/PNR/PnrEnquiry.html?locale=en (no redirect)
+NOT submitted (per task instructions — no valid PNR available). Flow reconstructed by reading
+the live pnrEnquiryJS.js (?version=18) and probing the CaptchaConfig endpoint directly.
+See NOTES.md for full selector/endpoint summary.
+-->
+
+<!-- ============ FORM (as rendered) ============ -->
+<div class="col-md-12 text-center" align="center">
+  <div class="col-md-6 text-center label_text" align="center">
+    <label>Enter PNR No.</label>
+  </div>
+  <div class="col-md-6" align="center">
+    <input class="form-control_custom input_text_custom" type="text" id="inputPnrNo" maxlength="10"
+           placeholder="Enter PNR No."
+           onkeypress="return ((event.charCode >= 48 &amp;&amp; event.charCode <= 57) || event.charCode == 0)">
+           <!-- numeric-only keypress filter, maxlength 10 -->
+  </div>
+</div>
+<div id="firstCondition">
+  <!-- Initial state: clicking here shows the captcha modal instead of submitting directly -->
+  <input type="button" class="btn btn-primary btn-md" value="Submit" id="modal1">
+  <input type="reset" class="btn btn-primary btn-md" id="clearPnrNo" value="Clear">
+</div>
+
+<!-- ============ CAPTCHA MODAL (only injected into DOM if CaptchaConfig endpoint != '0') ============ -->
+<!-- Confirmed LIVE on 2026-09-20: GET https://www.indianrail.gov.in/enquiry/CaptchaConfig returned "1" -->
+<!-- i.e. captcha IS currently active. This is a server-side toggle that can flip at any time. -->
+<div class="modal fade" id="myModal" role="dialog">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="row form-group">
+          <div class="col-md-12">
+            <div class="alert alert-danger hidden container col-md-12" id="errorResultmodal">
+              <p id="errorMessagemodal"></p>
+            </div>
+          </div>
+        </div>
+        <div class="row form-group">
+          <div class="col-md-12">
+            <div class="col-md-6 text-center label_text" id="CaptchaLabel" align="center">
+              <label>Please enter the answer to the given captcha question?</label>
+            </div>
+            <div class="col-md-6" align="center">
+              <!-- CAPTCHA IMAGE selector -->
+              <img id="CaptchaImgID" class="captcha_style" src="../captchaDraw.png?&lt;timestamp&gt;">
+              <img id="refreshCaptcha" src="../images/refresh.jpg" width="30" height="30" title="Refresh Captcha">
+            </div>
+          </div>
+        </div>
+        <div class="row form-group">
+          <div class="col-md-12">
+            <div class="col-md-6" align="center">
+              <!-- CAPTCHA ANSWER input selector -->
+              <input class="form-control_custom input_text_custom" type="text" id="inputCaptcha"
+                     placeholder="Enter answer for the above Question">
+            </div>
+          </div>
+        </div>
+        <input id="flagLabel" type="hidden">  <!-- set to 'PNR' or 'TRAIN' depending on which form invoked the modal -->
+        <div class="row form-group">
+          <div class="col-md-12" align="center">
+            <!-- FINAL SUBMIT (inside modal) selector -->
+            <input type="button" class="btn btn-primary btn-md" value="Submit" id="submitPnrNo">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SUBMIT FLOW (reconstructed from pnrEnquiryJS.js) ============ -->
+<!--
+1. Click #modal1 -> client validates PNR is 10 digits -> shows #myModal, sets #flagLabel = 'PNR',
+   sets #CaptchaImgID src = "../captchaDraw.png?<ts>" (relative to /enquiry/PNR/, i.e.
+   GET https://www.indianrail.gov.in/enquiry/captchaDraw.png -- a fresh drawn CAPTCHA image, no OCR-able text).
+2. User reads image, types answer into #inputCaptcha, clicks #submitPnrNo.
+3. AJAX: POST https://www.indianrail.gov.in/enquiry/CommonCaptcha
+   Content-Type: form-encoded (jQuery $.ajax default)
+   Body params:
+     inputCaptcha : <captcha answer>
+     inputPnrNo   : <the 10-digit PNR>
+     inputPage    : 'PNR'
+     language     : 'en'  (from hidden #language input)
+4. JSON response shape (parsed via jQuery.parseJSON):
+     resp.flag            -- 'NO' means captcha answer was wrong
+     resp.errorMessage    -- e.g. 'Captcha not matched', or null/'' on success
+     resp.generatedTimeStamp { day, month, year, hour, minute, second }  -- server IST time
+     resp.trainNumber
+     resp.trainName        (implied, used in showPnr rendering — see below)
+     resp.chartStatus       -- e.g. "Chart Prepared" / "Chart Not Prepared"
+     resp.isWL              -- 'Y'/'N', drives visibility of the "Get Chances of Confirmation" button
+     resp.journeyClass      -- e.g. '1A', '2A', '3A', 'SL' etc — drives per-class passenger rendering
+     resp.passengerList[]   -- array; each entry has fields incl. currentCoachId / berth info per class
+                               (exact per-class field names not confirmed without a live PNR to inspect —
+                               would need a real successful call to capture the full passenger object shape)
+5. On success: $('#myModal').modal('hide'); $('#inputPnrNoDiv').hide(); $('#pnrOutputDiv').show();
+   $('#result').removeClass('hidden');
+   => READY SIGNAL for scrape rule: #pnrOutputDiv visible (or #result no longer has class 'hidden')
+6. On wrong captcha: resp.flag == 'NO' -> #errorResultmodal shown inside the modal, captcha image
+   refreshed (new random question), user must retry — modal stays open.
+7. On other errors (e.g. 'Captcha not matched' from resp.errorMessage on the TRAIN-schedule variant
+   of this same modal): #errorResultmodal shown with message, image refreshed.
+-->
+
+<!-- ============ QUIRKS ============ -->
+<!--
+- Heavy ad iframes (Google/DoubleClick, Confirmtkt) surround the form; scrape rule must scope
+  queries to the known container ids (#inputPnrNo, #firstCondition, #myModal) and ignore iframe content.
+- Captcha presence is a LIVE server-side toggle (GET /enquiry/CaptchaConfig -> "0" off / non-"0" on).
+  Confirmed ON at recon time. A rule that assumes "no captcha" will randomly break. This site MUST
+  use a user-visible WebView (foreground) so the user can read+solve the captcha image manually —
+  headless/background scraping is not viable whenever the toggle is on, which per this recon is
+  the current live state.
+- The captcha image endpoint (../captchaDraw.png) generates a fresh random image per request; it is
+  a classic drawn CAPTCHA (not text-selectable), so no OCR shortcut without a solver.
+- Same modal (#myModal / #submitPnrNo) is reused for both the "PNR" flow and the "Train Running
+  Status by train number" flow, disambiguated only by the hidden #flagLabel value ('PNR' vs 'TRAIN').
+  A scrape rule must set/read this correctly or it will hit the wrong endpoint's response shape.
+-->

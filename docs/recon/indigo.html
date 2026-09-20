@@ -1,0 +1,67 @@
+<!--
+IndiGo flight status recon — captured 2026-09-20
+Final URL: https://www.goindigo.in/check-flight-status.html (no redirect)
+IMPORTANT: unlike the task brief assumed, IndiGo's flight tracker takes PNR + travel date ONLY.
+There is NO flight-number input on this page at all — no flight-number/route fallback either.
+Could not fully test the result DOM because a real PNR is required (task disallows fabricating one
+that might hit a real booking) and the "Search Flight" submit button stayed disabled even after
+typing a syntactically-plausible 10-char PNR into the field (Angular/React form gating likely also
+requires a same-page "confirm" step on the date widget, or validates PNR against a client-side
+pattern stricter than length). Selectors below are confirmed from live DOM; result-page selectors
+are NOT captured for this site — flag for follow-up recon with a real PNR, or treat as "unknown,
+verify via WebView on first real use".
+-->
+
+<!-- ============ FORM (as rendered) ============ -->
+<form class="fs-form">
+  <div class="fs-form__fields">
+    <div class="fs-form__group open-top">
+      <div class="top-search-group">
+        <div class="fs-form-control close show-icon" tabindex="-1">
+          <i class="sky-icons fs-icon fs-icon-input icon-search md"></i>
+          <!-- PNR input selector -->
+          <input name="png_search" type="text" class="fs-form-control__input"
+                 placeholder="Search by PNR" autocomplete="off"
+                 data-openreplay-obscured="true">
+                 <!-- data-openreplay-obscured=true: site uses OpenReplay session-recording;
+                      this attribute means IndiGo itself treats this field as sensitive/PII
+                      and masks it from their own analytics recordings. -->
+        </div>
+        <!-- DATE selector: a styled button that opens a date-picker dropdown, not a raw <input type=date> -->
+        <button type="button" class="skyplus-button--filled skyplus-button--filled-primary skyplus-button--medium fs-select-dropdown__control__button">
+          20/09/2026 - Today
+        </button>
+        <!-- SUBMIT selector -->
+        <button type="submit" class="skyplus-button--filled skyplus-button--filled-primary skyplus-button--medium skyplus-button--disabled form-submit" disabled>
+          Search Flight
+        </button>
+      </div>
+    </div>
+  </div>
+</form>
+
+<!-- readySignal candidate (untested — page has a placeholder container that should populate): -->
+<!-- <generic aria-label="Flight Status Result"> ... </generic>  (empty at rest; watch for children) -->
+
+<!-- ============ QUIRKS ============ -->
+<!--
+- No flight-number / route search mode exists on this page — PNR + date is the ONLY supported input.
+  ClearTravel's scrape-rule design for IndiGo MUST be keyed on PNR, not flight number. If a user only
+  has a flight number (no PNR on hand, e.g. checking a friend's flight), this provider cannot serve them;
+  the rule should declare its required-fields contract as {pnr, date} and fail closed (fall back to
+  manual/mock provider) when PNR is unavailable.
+- "Search Flight" button stayed disabled after typing a 10-character numeric string into #png_search
+  even after dispatching real keyboard events (pressSequentially, not just synthetic 'input' events —
+  React/Angular change detection did register the value change via ng-valid-style class inspection
+  attempted, but no ng-* class was found so this may be a bespoke skyplus-* component with its own
+  validation rules, e.g. requiring letters+digits mixed, or requiring the date-dropdown to be
+  explicitly re-confirmed even when it already shows "Today"). Needs follow-up with a real PNR format
+  or interactive (visible) WebView debugging to observe the exact enable condition.
+- Cookie consent dialog ("We respect your privacy") appears on load; did not block programmatic
+  fill/type in this recon session, but a production WebView rule should dismiss it (look for a button
+  with exact text "Accept All" or "Accept Essential Only") before interacting, in case it does block
+  clicks on some devices/viewport sizes the way OneTrust does on Air India.
+- Uses OpenReplay session-recording (data-openreplay-obscured attribute) — informational only, not
+  a scraping blocker, but confirms the site actively monitors real user sessions (bot-detection risk
+  if automation patterns look inhuman; favor a real foreground WebView over synthetic event dispatch).
+-->

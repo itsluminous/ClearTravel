@@ -28,3 +28,4 @@ build.log
 
 # IDE (VS Code / Eclipse) module output
 bin/
+.playwright-mcp/

@@ -1,0 +1,76 @@
+<!--
+Akasa Air flight status recon — captured 2026-09-20
+URL: https://www.akasaair.com/flight-status (no redirect)
+Form filled (flight number "1101" typed into #flightNumber -> renders as "QP1101" with the fixed
+"QP" carrier prefix shown as a label overlay, since Akasa only flies as QP). Could NOT complete
+submission in this recon session — clicking the date combobox timed out ("element outside of
+viewport" even after scroll-into-view retries), likely a sticky header or overlay intercepting;
+did not chase further given time budget. Selectors below are confirmed from live DOM inspection.
+-->
+
+<!-- ============ FORM (as rendered, three tabs: Flight Number / PNR / Cities) ============ -->
+<!-- tab selectors: three <p> elements with exact text "Flight Number" / "PNR" / "Cities",
+     class "p-4 text-typography-primary" when active, "p-4 false" when inactive (no id/data-testid,
+     must match by exact text content) -->
+
+<form class="flightstatus_pnr_form__1Pyji">
+  <div class="flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:gap-3 w-full">
+
+    <div class="w-full lg:w-2/5 mt-[-7px]">
+      <div class="flex flex-col relative mt-2">
+        <label for="flightNumber">Flight Number *</label>
+        <div class="group flex flex-col item-center">
+          <!-- FLIGHT NUMBER input selector (numeric part only, carrier code fixed) -->
+          <input class="uppercase h-12 w-full ..." id="flightNumber" required maxlength="5"
+                 type="text" name="flightNumber">
+          <!-- fixed "QP " prefix rendered as an overlay span, not part of the input value -->
+          <div class="cursor-pointer left-0">
+            <span class="text-zinc-500 ...">QP </span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="w-full lg:w-2/5">
+      <div class="flex flex-col relative">
+        <div class="group flex flex-col item-center">
+          <!-- react-select (mui-style-* hashed classes) combobox for date — NOT a native <input type=date>.
+               id "phoneCode" is a recycled/misleading id from a shared component library; do not assume
+               semantic meaning from the id string itself. -->
+          <div class="mui-style-zs9cwx-control">
+            <div class="mui-style-1jqq78o-placeholder" id="react-select-3-placeholder">
+              <span>Departure date *</span>
+            </div>
+            <!-- DATE combobox trigger selector -->
+            <input id="phoneCode" role="combobox" aria-label="Departure date"
+                   aria-haspopup="true" aria-expanded="false" readonly>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  <!-- Submit button not captured in this session (page scrolled/overlay before reaching it) -->
+</form>
+
+<!-- ============ QUIRKS ============ -->
+<!--
+- Single-airline site: flight number field only accepts the numeric suffix (maxlength=5); the "QP"
+  carrier code is a fixed decorative overlay, NOT submitted as part of the field value. A scrape rule
+  must strip any user-entered "QP" prefix before filling this field, or filling will silently exceed
+  visual space / look wrong (though maxlength doesn't structurally break on a prefixed string, the
+  overlay is designed for numeric-only input).
+- Date is a react-select (mui-style-* hashed class) combobox, not a native date input or Angular
+  mat-select — needs a THIRD distinct automation pattern (click to open overlay dropdown, options
+  render outside the normal DOM flow in a portal) compared to IndiGo's button+overlay and Air India's
+  mat-select+overlay. No two of the four airline sites recon'd so far share the same date-widget
+  implementation — expect to write bespoke per-site date-selection logic, not a shared helper.
+  id="phoneCode" on the combobox trigger is a copy-pasted/generic id, likely NOT stable across
+  Akasa's own deploys (probably comes from an internal shared form-library default) — prefer
+  aria-label="Departure date" as the anchor instead of the id.
+- Could not reach the submit button/result DOM in this session (timeout on date combobox open due to
+  "element outside of viewport" even after scrolling) — needs follow-up recon, ideally in a real
+  mobile-viewport WebView context (matches ClearTravel's actual runtime) rather than desktop headless,
+  since the layout is responsive (flex-col on lg breakpoints) and may behave differently on a phone
+  form factor which is what the app will actually use.
+-->
