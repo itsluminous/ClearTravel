@@ -104,4 +104,60 @@ class TrainTicketLogicTest {
 
         assertThat(journeyDuration(stops)).isNull()
     }
+
+    // --- hasUnconfirmedSeat ---
+
+    @Test
+    fun `waitlisted current status is unconfirmed`() {
+        val passengers = listOf(Fixtures.trainPassenger(bookingStatus = "WL 45", currentStatus = "WL 12"))
+
+        assertThat(hasUnconfirmedSeat(passengers)).isTrue()
+    }
+
+    @Test
+    fun `rac current status is unconfirmed`() {
+        val passengers = listOf(Fixtures.trainPassenger(bookingStatus = "RAC 20", currentStatus = "RAC 4"))
+
+        assertThat(hasUnconfirmedSeat(passengers)).isTrue()
+    }
+
+    @Test
+    fun `confirmed statuses are not flagged`() {
+        val passengers =
+            listOf(
+                Fixtures.trainPassenger(currentStatus = "CNF"),
+                Fixtures.trainPassenger(currentStatus = "CNF/B4/32"),
+                Fixtures.trainPassenger(currentStatus = "cnf/B1/12"),
+            )
+
+        assertThat(hasUnconfirmedSeat(passengers)).isFalse()
+    }
+
+    @Test
+    fun `blank current status falls back to the booking status`() {
+        val waitlisted = listOf(Fixtures.trainPassenger(bookingStatus = "WL 8", currentStatus = ""))
+        val confirmed = listOf(Fixtures.trainPassenger(bookingStatus = "CNF/B2/32/GN", currentStatus = ""))
+
+        assertThat(hasUnconfirmedSeat(waitlisted)).isTrue()
+        assertThat(hasUnconfirmedSeat(confirmed)).isFalse()
+    }
+
+    @Test
+    fun `no statuses at all is not flagged`() {
+        val passengers = listOf(Fixtures.trainPassenger(bookingStatus = "", currentStatus = ""))
+
+        assertThat(hasUnconfirmedSeat(passengers)).isFalse()
+        assertThat(hasUnconfirmedSeat(emptyList())).isFalse()
+    }
+
+    @Test
+    fun `one unconfirmed passenger among confirmed ones flags the ticket`() {
+        val passengers =
+            listOf(
+                Fixtures.trainPassenger(currentStatus = "CNF/B4/32"),
+                Fixtures.trainPassenger(currentStatus = "RAC 2"),
+            )
+
+        assertThat(hasUnconfirmedSeat(passengers)).isTrue()
+    }
 }

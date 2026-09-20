@@ -26,6 +26,7 @@ import com.itsluminous.cleartravel.feature.trains.list.AddChoice
 import com.itsluminous.cleartravel.feature.trains.list.TrainListScreen
 import com.itsluminous.cleartravel.feature.trains.list.TrainListViewModel
 import com.itsluminous.cleartravel.feature.trains.pnr.PnrCheckScreen
+import com.itsluminous.cleartravel.feature.trains.route.RouteFetchScreen
 import kotlinx.coroutines.launch
 
 /** Where a form session got its initial content from. */
@@ -56,6 +57,11 @@ private sealed interface TrainsScreen {
     data class PnrCheck(
         val ticketId: String,
         val pnr: String,
+    ) : TrainsScreen
+
+    data class RouteFetch(
+        val ticketId: String,
+        val trainNumber: String,
     ) : TrainsScreen
 }
 
@@ -158,6 +164,23 @@ fun TrainsContent(
                     },
                     onClose = { screen = TrainsScreen.List },
                 )
+            is TrainsScreen.RouteFetch ->
+                RouteFetchScreen(
+                    ticketId = current.ticketId,
+                    trainNumber = current.trainNumber,
+                    onApplied = { stationCount ->
+                        screen = TrainsScreen.List
+                        // Reopen the detail sheet so the freshly loaded route is
+                        // immediately visible under it.
+                        detailTicketId = current.ticketId
+                        scope.launch {
+                            snackbarHostState.showSnackbar(
+                                context.getString(R.string.trains_route_fetch_applied, stationCount),
+                            )
+                        }
+                    },
+                    onClose = { screen = TrainsScreen.List },
+                )
         }
 
         if (detailTicketId != null && detailState.ticket != null && screen is TrainsScreen.List) {
@@ -169,6 +192,17 @@ fun TrainsContent(
                     if (ticket != null) {
                         detailTicketId = null
                         screen = TrainsScreen.PnrCheck(ticketId = ticket.id, pnr = ticket.pnr)
+                    }
+                },
+                onFetchRoute = {
+                    val ticket = detailState.ticket
+                    if (ticket != null && ticket.trainNumber.isNotBlank()) {
+                        detailTicketId = null
+                        screen =
+                            TrainsScreen.RouteFetch(
+                                ticketId = ticket.id,
+                                trainNumber = ticket.trainNumber,
+                            )
                     }
                 },
                 onEdit = {

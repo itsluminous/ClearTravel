@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
 import com.itsluminous.cleartravel.feature.trains.R
+import com.itsluminous.cleartravel.feature.trains.hasUnconfirmedSeat
 import com.itsluminous.cleartravel.feature.trains.list.formatDate
 import com.itsluminous.cleartravel.feature.trains.list.lastFetchedText
 
@@ -43,6 +44,7 @@ internal fun TrainDetailSheet(
     state: TrainDetailUiState,
     onDismiss: () -> Unit,
     onCheckStatus: () -> Unit,
+    onFetchRoute: () -> Unit,
     onEdit: () -> Unit,
     onArchiveToggle: () -> Unit,
     onDelete: () -> Unit,
@@ -121,8 +123,20 @@ internal fun TrainDetailSheet(
             }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+            if (hasUnconfirmedSeat(state.passengers)) {
+                Text(
+                    text = stringResource(R.string.trains_detail_unconfirmed_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Button(onClick = onCheckStatus, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.trains_detail_check_status))
+            }
+            if (ticket.trainNumber.isNotBlank()) {
+                OutlinedButton(onClick = onFetchRoute, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.trains_detail_fetch_route))
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f)) {
@@ -235,6 +249,13 @@ private fun RouteStopDetail(
                 Text(
                     text = stringResource(R.string.trains_detail_stop_times, stop.arrival, stop.departure),
                     style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            if (stop.day > 1) {
+                Text(
+                    text = stringResource(R.string.trains_detail_stop_day, stop.day),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
             if (stop.platform.isNotBlank()) {

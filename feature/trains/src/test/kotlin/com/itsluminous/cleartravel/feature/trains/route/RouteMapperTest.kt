@@ -1,0 +1,209 @@
+package com.itsluminous.cleartravel.feature.trains.route
+
+import com.google.common.truth.Truth.assertThat
+import com.itsluminous.cleartravel.core.scrape.ScrapedData
+import org.junit.Test
+
+/**
+ * Pins [RouteMapper] to the exact `erail-route` rule output shape — the row maps
+ * below mirror the recorded fixture
+ * `core/scrape/src/test/resources/fixtures/erail-route/expected.json` (train 22346,
+ * real captured DOM, recon 2026-09-21).
+ */
+class RouteMapperTest {
+    private val ticketId = "ticket-1"
+
+    /** The full 7-station fixture shape for train 22346. */
+    private fun fixtureData(): ScrapedData =
+        ScrapedData(
+            fields = mapOf("trainNumber" to "22346", "trainName" to "VANDE BHARAT EXP"),
+            rows =
+                listOf(
+                    row("GTNR", "Gomtinagar (Lucknow)", "First", "15.20", "2", "1"),
+                    row("AY", "Ayodhya Dham Jn", "17.15", "17.20", "1", "1"),
+                    row("BSB", "Varanasi Jn", "19.50", "19.55", "7", "1"),
+                    row("DDU", "Dd Upadhyaya Jn", "20.45", "20.50", "4", "1"),
+                    row("BXR", "Buxar", "21.50", "21.52", "1", "1"),
+                    row("ARA", "Ara", "22.33", "22.35", "1", "1"),
+                    row("PNBE", "Patna Jn", "23.45", "Last", "8", "1"),
+                ),
+        )
+
+    private fun row(
+        code: String,
+        name: String,
+        arrival: String,
+        departure: String,
+        platform: String,
+        day: String,
+    ): Map<String, String> =
+        mapOf(
+            "stationCode" to code,
+            "stationName" to name,
+            "arrival" to arrival,
+            "departure" to departure,
+            "halt" to "0",
+            "platform" to platform,
+            "distance" to "0",
+            "day" to day,
+        )
+
+    @Test
+    fun `real fixture shape maps to all seven stops in order`() {
+        val stops = RouteMapper.map(ticketId, fixtureData())
+
+        assertThat(stops).isNotNull()
+        assertThat(stops!!).hasSize(7)
+        assertThat(stops.map { it.stationName })
+            .containsExactly(
+                "Gomtinagar (Lucknow)",
+                "Ayodhya Dham Jn",
+                "Varanasi Jn",
+                "Dd Upadhyaya Jn",
+                "Buxar",
+                "Ara",
+                "Patna Jn",
+            ).inOrder()
+        assertThat(stops.all { it.ticketId == ticketId }).isTrue()
+    }
+
+    @Test
+    fun `sortOrder is assigned sequentially from extraction order`() {
+        val stops = RouteMapper.map(ticketId, fixtureData())!!
+
+        assertThat(stops.map { it.sortOrder }).containsExactly(0, 1, 2, 3, 4, 5, 6).inOrder()
+    }
+
+    @Test
+    fun `dot-separated times normalize to colon HH-mm`() {
+        val stops = RouteMapper.map(ticketId, fixtureData())!!
+
+        assertThat(stops[1].arrival).isEqualTo("17:15")
+        assertThat(stops[1].departure).isEqualTo("17:20")
+        assertThat(stops[6].arrival).isEqualTo("23:45")
+    }
+
+    @Test
+    fun `First and Last literals become empty times at the route ends`() {
+        val stops = RouteMapper.map(ticketId, fixtureData())!!
+
+        assertThat(stops.first().arrival).isEmpty()
+        assertThat(stops.first().departure).isEqualTo("15:20")
+        assertThat(stops.last().arrival).isEqualTo("23:45")
+        assertThat(stops.last().departure).isEmpty()
+    }
+
+    @Test
+    fun `single-digit hours are zero-padded and colon input is accepted`() {
+        val data =
+            ScrapedData(
+                fields = emptyMap(),
+                rows =
+                    listOf(
+                        row("A", "Alpha", "First", "9.05", "1", "1"),
+                        row("B", "Beta", "9:45", "Last", "1", "1"),
+                    ),
+            )
+
+        val stops = RouteMapper.map(ticketId, data)!!
+
+        assertThat(stops[0].departure).isEqualTo("09:05")
+        assertThat(stops[1].arrival).isEqualTo("09:45")
+    }
+
+    @Test
+    fun `out-of-range or garbage time text maps to empty`() {
+        val data =
+            ScrapedData(
+                fields = emptyMap(),
+                rows =
+                    listOf(
+                        row("A", "Alpha", "25.99", "soon", "1", "1"),
+                        row("B", "Beta", "not a time", "99:99", "1", "1"),
+                    ),
+            )
+
+        val stops = RouteMapper.map(ticketId, data)!!
+
+        assertThat(stops[0].arrival).isEmpty()
+        assertThat(stops[0].departure).isEmpty()
+        assertThat(stops[1].arrival).isEmpty()
+        assertThat(stops[1].departure).isEmpty()
+    }
+
+    @Test
+    fun `day column parses and non-numeric day defaults to 1`() {
+        val data =
+            ScrapedData(
+                fields = emptyMap(),
+                rows =
+                    listOf(
+                        row("A", "Alpha", "First", "17.00", "1", "1"),
+                        row("B", "Beta", "08.35", "Last", "1", "2"),
+                        row("C", "Gamma", "10.00", "10.05", "1", "??"),
+                    ),
+            )
+
+        val stops = RouteMapper.map(ticketId, data)!!
+
+        assertThat(stops[0].day).isEqualTo(1)
+        assertThat(stops[1].day).isEqualTo(2)
+        assertThat(stops[2].day).isEqualTo(1)
+    }
+
+    @Test
+    fun `station name falls back to the station code`() {
+        val data =
+            ScrapedData(
+                fields = emptyMap(),
+                rows =
+                    listOf(
+                        mapOf("stationCode" to "GTNR", "stationName" to "", "departure" to "15.20"),
+                        mapOf("stationCode" to "PNBE", "stationName" to "", "arrival" to "23.45"),
+                    ),
+            )
+
+        val stops = RouteMapper.map(ticketId, data)!!
+
+        assertThat(stops.map { it.stationName }).containsExactly("GTNR", "PNBE").inOrder()
+    }
+
+    @Test
+    fun `garbage rows with no station at all yield null`() {
+        val data =
+            ScrapedData(
+                fields = emptyMap(),
+                rows = listOf(mapOf("foo" to "bar"), mapOf("stationName" to " ")),
+            )
+
+        assertThat(RouteMapper.map(ticketId, data)).isNull()
+    }
+
+    @Test
+    fun `empty rows yield null`() {
+        assertThat(RouteMapper.map(ticketId, ScrapedData(fields = emptyMap()))).isNull()
+    }
+
+    @Test
+    fun `a single usable stop is not a route and yields null`() {
+        val data =
+            ScrapedData(
+                fields = emptyMap(),
+                rows =
+                    listOf(
+                        row("A", "Alpha", "First", "15.20", "1", "1"),
+                        mapOf("stationName" to "", "stationCode" to ""),
+                    ),
+            )
+
+        assertThat(RouteMapper.map(ticketId, data)).isNull()
+    }
+
+    @Test
+    fun `platform text is kept verbatim`() {
+        val stops = RouteMapper.map(ticketId, fixtureData())!!
+
+        assertThat(stops[2].platform).isEqualTo("7")
+        assertThat(stops[6].platform).isEqualTo("8")
+    }
+}

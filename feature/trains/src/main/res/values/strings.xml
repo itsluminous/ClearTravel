@@ -70,9 +70,12 @@
     <string name="trains_detail_route_stops">Route</string>
     <string name="trains_detail_stop_times">Arr %1$s · Dep %2$s</string>
     <string name="trains_detail_stop_platform">Platform %1$s</string>
+    <string name="trains_detail_stop_day">Day %1$d</string>
     <string name="trains_detail_last_fetched">Status checked %1$s</string>
     <string name="trains_detail_never_fetched">Status never checked</string>
     <string name="trains_detail_check_status">Check PNR status</string>
+    <string name="trains_detail_fetch_route">Fetch route</string>
+    <string name="trains_detail_unconfirmed_hint">Seats not confirmed yet — check again closer to your journey</string>
     <string name="trains_detail_edit">Edit</string>
     <string name="trains_detail_archive">Archive</string>
     <string name="trains_detail_unarchive">Unarchive</string>
@@ -93,6 +96,14 @@
     <string name="trains_pnr_check_parse_failed">Couldn\'t read the results — your data is unchanged</string>
     <string name="trains_pnr_check_rule_missing">The PNR enquiry rule isn\'t available on this build</string>
     <string name="trains_pnr_check_loading">Opening Indian Railways PNR enquiry…</string>
+
+    <string name="trains_route_fetch_title">Fetch train route</string>
+    <string name="trains_route_fetch_instructions">Loading the schedule from eRail.in — no input needed, the app reads the route automatically.</string>
+    <string name="trains_route_fetch_close">Close</string>
+    <string name="trains_route_fetch_retry">Retry</string>
+    <string name="trains_route_fetch_applied">%1$d stations loaded</string>
+    <string name="trains_route_fetch_parse_failed">Couldn\'t read the route — your data is unchanged</string>
+    <string name="trains_route_fetch_rule_missing">The train route rule isn\'t available on this build</string>
 
     <string name="trains_shared_text_title">Ticket shared with ClearTravel</string>
 </resources>
