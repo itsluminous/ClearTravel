@@ -18,7 +18,7 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * Background flight polling (ADR-010). Deliberately does NOT run a headless WebView
+ * Background flight polling (ADR-013). Deliberately does NOT run a headless WebView
  * scrape — status refresh stays interactive; this worker computes what can be known
  * offline (check-in window crossings from the ADR-003 data file) and posts the
  * spec-sanctioned "status may have changed — tap to check" nudge near departure.

@@ -37,7 +37,7 @@ data class PollPlan(
 )
 
 /**
- * The PURE brain of [FlightStatusWorker] (ADR-010): given the active flights, the
+ * The PURE brain of [FlightStatusWorker] (ADR-013): given the active flights, the
  * check-in rules, "now" and the set of already-sent dedupe keys, decides what to
  * notify and when to run next. The worker itself stays thin (load → evaluate →
  * post → mark → reschedule) and needs no unit test of its own.

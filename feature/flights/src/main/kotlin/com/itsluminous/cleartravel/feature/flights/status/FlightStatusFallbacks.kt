@@ -36,7 +36,7 @@ object FlightStatusFallbacks {
     /**
      * The `{date}` placeholder shape each rule's URL expects. The frozen ScrapeRule
      * schema has no date-format field (core:scrape is not ours to change), so the
-     * per-rule format lives here, keyed by rule id — default ISO (ADR-010).
+     * per-rule format lives here, keyed by rule id — default ISO (ADR-013).
      */
     fun formatDateForRule(
         ruleId: String,

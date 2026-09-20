@@ -336,7 +336,7 @@ makes the grouping/marker/reorder behavior unit-testable without Robolectric or 
 services, and honors the spec requirement that everything except live map tiles works
 offline.
 
-## ADR-010: Flights milestone — interactive-only scrape, data-driven check-in windows, EntryPoint worker
+## ADR-013: Flights milestone — interactive-only scrape, data-driven check-in windows, EntryPoint worker
 
 **What.** `feature:flights` + `core:notifications` land with these choices:
 

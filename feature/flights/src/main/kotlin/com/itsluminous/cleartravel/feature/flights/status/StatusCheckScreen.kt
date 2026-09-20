@@ -35,7 +35,7 @@ import com.itsluminous.cleartravel.feature.flights.R
 
 /**
  * The "Check status" flow: a VISIBLE WebView driven by the rule engine (ADR-008/
- * ADR-010). Rule found → prefill + poll + extract; extraction lands in Room and the
+ * ADR-013). Rule found → prefill + poll + extract; extraction lands in Room and the
  * screen closes. No rule (e.g. SpiceJet) → plain web search the user reads, plus
  * manual edit back on the detail sheet. Parse failure → the raw page stays visible.
  */

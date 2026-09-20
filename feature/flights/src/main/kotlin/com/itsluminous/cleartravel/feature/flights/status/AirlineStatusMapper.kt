@@ -28,7 +28,7 @@ import java.util.Locale
  *
  * Times are airport-LOCAL on the source pages; without a timezone database the
  * mapper interprets them in [zone] (defaults to the device zone) — documented
- * best-effort (ADR-010).
+ * best-effort (ADR-013).
  */
 object AirlineStatusMapper {
     fun map(

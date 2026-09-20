@@ -44,7 +44,7 @@ anchor on `aria-label="Departure date"`.
 
 ## Airline rules — flights milestone status (2026-09-20, flights agent)
 
-Rule inventory decision recorded in ADR-010; per-airline status:
+Rule inventory decision recorded in ADR-013; per-airline status:
 
 | Airline | IATA | Rule file | Basis / reason |
 |---|---|---|---|

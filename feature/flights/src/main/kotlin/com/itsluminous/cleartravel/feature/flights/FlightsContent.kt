@@ -42,7 +42,7 @@ fun FlightsContent(modifier: Modifier = Modifier) {
     var route by remember { mutableStateOf<FlightsRoute>(FlightsRoute.Journeys) }
     val context = LocalContext.current
 
-    // Feature-local WorkManager wiring: make sure a poll chain exists (ADR-010).
+    // Feature-local WorkManager wiring: make sure a poll chain exists (ADR-013).
     LaunchedEffect(Unit) {
         FlightPollScheduler.ensureScheduled(context, nextDeparture = null)
     }

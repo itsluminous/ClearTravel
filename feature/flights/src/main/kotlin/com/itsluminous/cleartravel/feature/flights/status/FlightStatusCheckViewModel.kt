@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
 import java.time.Clock
 import javax.inject.Inject
 
-/** UI state of the "Check status" flow (interactive WebView scrape, ADR-010). */
+/** UI state of the "Check status" flow (interactive WebView scrape, ADR-013). */
 sealed interface StatusCheckUiState {
     data object Loading : StatusCheckUiState
 
