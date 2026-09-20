@@ -1,5 +1,135 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Trips list -->
     <string name="itinerary_empty_title">No trips yet</string>
     <string name="itinerary_empty_message">Create a trip to plan a day-wise itinerary and see it on a map.</string>
+    <string name="itinerary_trips_title">Trips</string>
+    <string name="itinerary_add_trip">Add trip</string>
+    <string name="itinerary_filter_active">Active</string>
+    <string name="itinerary_filter_archived">Archived</string>
+    <string name="itinerary_empty_archived_title">No archived trips</string>
+    <string name="itinerary_empty_archived_message">Archived trips appear here.</string>
+    <string name="itinerary_trip_date_range">%1$s – %2$s</string>
+    <string name="itinerary_edit_trip">Edit trip</string>
+    <string name="itinerary_archive_trip">Archive trip</string>
+    <string name="itinerary_unarchive_trip">Unarchive trip</string>
+    <string name="itinerary_delete_trip">Delete trip</string>
+    <string name="itinerary_delete_trip_title">Delete trip?</string>
+    <string name="itinerary_delete_trip_message">This removes the trip along with its itinerary and trip checklists.</string>
+    <string name="itinerary_delete">Delete</string>
+    <string name="itinerary_cancel">Cancel</string>
+    <string name="itinerary_save">Save</string>
+    <string name="itinerary_ok">OK</string>
+    <string name="itinerary_back">Back</string>
+
+    <!-- Trip form -->
+    <string name="itinerary_new_trip_title">New trip</string>
+    <string name="itinerary_edit_trip_title">Edit trip</string>
+    <string name="itinerary_trip_name_label">Trip name</string>
+    <string name="itinerary_trip_destination_label">Destination</string>
+    <string name="itinerary_trip_start_date">Start date</string>
+    <string name="itinerary_trip_end_date">End date</string>
+    <string name="itinerary_date_not_set">Not set</string>
+    <string name="itinerary_pick_start_date">Pick start date</string>
+    <string name="itinerary_pick_end_date">Pick end date</string>
+    <string name="itinerary_cover_emoji_label">Cover emoji</string>
+    <string name="itinerary_cover_color_label">Cover color</string>
+    <string name="itinerary_cover_color_option">Cover color option</string>
+
+    <!-- Snackbar messages -->
+    <string name="itinerary_msg_trip_name_required">Enter a trip name</string>
+    <string name="itinerary_msg_trip_dates_invalid">End date must be on or after the start date</string>
+    <string name="itinerary_msg_trip_saved">Trip saved</string>
+    <string name="itinerary_msg_trip_deleted">Trip deleted</string>
+    <string name="itinerary_msg_trip_archived">Trip archived</string>
+    <string name="itinerary_msg_trip_unarchived">Trip unarchived</string>
+    <string name="itinerary_msg_item_name_required">Enter a place name</string>
+    <string name="itinerary_msg_item_route_required">Enter both from and to</string>
+    <string name="itinerary_msg_item_saved">Itinerary item saved</string>
+    <string name="itinerary_msg_item_deleted">Itinerary item deleted</string>
+
+    <!-- Trip detail -->
+    <string name="itinerary_view_timeline">Timeline</string>
+    <string name="itinerary_view_map">Map</string>
+    <string name="itinerary_day_label">Day %1$d</string>
+    <string name="itinerary_add_item">Add itinerary item</string>
+    <string name="itinerary_empty_items_title">Nothing planned yet</string>
+    <string name="itinerary_empty_items_message">Add places and commute legs to build the day-wise plan.</string>
+    <string name="itinerary_move_up">Move up within the day</string>
+    <string name="itinerary_move_down">Move down within the day</string>
+    <string name="itinerary_commute_route">%1$s → %2$s</string>
+    <string name="itinerary_trip_missing_title">Trip not found</string>
+    <string name="itinerary_trip_missing_message">This trip no longer exists.</string>
+
+    <!-- Categories + commute modes (icon explanations and chip labels) -->
+    <string name="itinerary_category_sight">Sight</string>
+    <string name="itinerary_category_food">Food</string>
+    <string name="itinerary_category_stay">Stay</string>
+    <string name="itinerary_category_shopping">Shopping</string>
+    <string name="itinerary_category_activity">Activity</string>
+    <string name="itinerary_category_other">Other</string>
+    <string name="itinerary_mode_train">Train</string>
+    <string name="itinerary_mode_flight">Flight</string>
+    <string name="itinerary_mode_cab">Cab</string>
+    <string name="itinerary_mode_bus">Bus</string>
+    <string name="itinerary_mode_walk">Walk</string>
+    <string name="itinerary_mode_ferry">Ferry</string>
+    <string name="itinerary_mode_other">Other</string>
+
+    <!-- Map view -->
+    <string name="itinerary_map_unavailable_key">The map needs a Google Maps API key, which is not configured in this build. The timeline keeps working offline.</string>
+    <string name="itinerary_map_unavailable_play">The map needs Google Play services, which is unavailable on this device. The timeline keeps working offline.</string>
+    <string name="itinerary_map_empty_title">No places on the map</string>
+    <string name="itinerary_map_empty_message">Add coordinates to your places to see numbered day-wise markers here.</string>
+    <string name="itinerary_enable_my_location">Show my location on the map</string>
+
+    <!-- Item detail sheet -->
+    <string name="itinerary_sheet_category">Category</string>
+    <string name="itinerary_sheet_time">Planned time</string>
+    <string name="itinerary_sheet_note">Note / fun facts</string>
+    <string name="itinerary_sheet_link">Link</string>
+    <string name="itinerary_open_link">Open link</string>
+    <string name="itinerary_sheet_coordinates">Coordinates</string>
+    <string name="itinerary_sheet_mode">Mode</string>
+    <string name="itinerary_sheet_route">Route</string>
+    <string name="itinerary_sheet_linked_journey">Linked journey</string>
+    <string name="itinerary_linked_train">Train %1$s</string>
+    <string name="itinerary_linked_flight">Flight %1$s</string>
+    <string name="itinerary_edit_item">Edit item</string>
+    <string name="itinerary_delete_item">Delete item</string>
+    <string name="itinerary_delete_item_title">Delete itinerary item?</string>
+    <string name="itinerary_delete_item_message">This removes the item from the trip plan.</string>
+
+    <!-- Item form -->
+    <string name="itinerary_new_item_title">New itinerary item</string>
+    <string name="itinerary_edit_item_title">Edit itinerary item</string>
+    <string name="itinerary_type_place">Place</string>
+    <string name="itinerary_type_commute">Commute</string>
+    <string name="itinerary_day_picker_label">Day</string>
+    <string name="itinerary_item_name_label">Name</string>
+    <string name="itinerary_planned_time_label">Planned time (HH:mm)</string>
+    <string name="itinerary_pick_time">Pick time</string>
+    <string name="itinerary_note_label">Note / fun facts</string>
+    <string name="itinerary_link_label">Link (optional)</string>
+    <string name="itinerary_location_label">Location</string>
+    <string name="itinerary_location_none">No location set</string>
+    <string name="itinerary_pick_on_map">Pick on map</string>
+    <string name="itinerary_clear_location">Clear location</string>
+    <string name="itinerary_latlng_label">Latitude, longitude</string>
+    <string name="itinerary_latlng_invalid">Enter as latitude, longitude — e.g. 12.97160, 77.59460</string>
+    <string name="itinerary_from_label">From</string>
+    <string name="itinerary_to_label">To</string>
+    <string name="itinerary_link_journey">Link a journey</string>
+    <string name="itinerary_unlink_journey">Remove journey link</string>
+    <string name="itinerary_journey_picker_title">Link a journey</string>
+    <string name="itinerary_journey_picker_trains">Trains</string>
+    <string name="itinerary_journey_picker_flights">Flights</string>
+    <string name="itinerary_journey_picker_empty">No journeys yet. Add trains or flights in the Journeys tab first.</string>
+
+    <!-- Location picker -->
+    <string name="itinerary_location_picker_title">Pick location</string>
+    <string name="itinerary_location_picker_hint">Move the map to place the pin, then confirm.</string>
+    <string name="itinerary_confirm_location">Use this location</string>
+    <string name="itinerary_center_pin">Map center pin</string>
+    <string name="itinerary_location_picker_unavailable">The map is unavailable — enter coordinates manually on the form instead.</string>
 </resources>

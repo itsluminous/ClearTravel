@@ -238,6 +238,31 @@ Tink into DataStore by hand is more code and more crypto surface for zero benefi
 this data size. Keys are read rarely (only when an API provider fires), so
 SharedPreferences' synchronous model is fine behind `Dispatchers.IO`.
 
+## ADR-010: Per-tab nested NavHost; built-in presets read-only (duplicate-to-customize)
+
+**What.** (1) Feature tabs own their sub-navigation: `checklistGraph()`/`menuGraph()`
+register ONE destination on the app NavHost, and that destination hosts a nested
+`NavHost` (`rememberNavController` inside the tab) for its subscreens (checklist
+list → full-screen detail; menu root → Settings / Manage presets / preset editor /
+About). Checklist detail is a full screen, not a bottom sheet — packing lists are
+long and need the add-item field + reorder controls anchored. Reordering uses
+up/down buttons (swap `sort_order` with the neighbour), not drag handles. (2) In
+Manage presets, built-in presets are READ-ONLY: no edit/delete (guarded in both the
+UI and the ViewModels); the sanctioned customization path is duplicate-then-edit
+(`duplicatePreset` yields a user copy, `builtIn = false`). User presets support
+rename, add/remove/reorder, duplicate and delete.
+
+**Why.** (1) The app module passes no NavController into feature graphs, and feature
+modules must not depend on each other — a nested NavHost keeps ALL subscreen wiring
+inside the owning module (app/ is never touched when a feature adds a screen) and
+keeps the bottom bar highlighted on the owning tab, matching the feature READMEs.
+Up/down buttons are deterministic and trivially unit-testable where drag-reorder in
+Lazy lists is gesture-fragile. (2) Tombstone-aware seeding (ADR-006) means an edited
+built-in would never be re-seeded — a user who breaks a built-in template could never
+recover it; read-only built-ins + duplicate-to-customize preserves the templates
+while allowing full customization, and copy semantics already guarantee editing any
+preset never mutates existing checklists.
+
 ## ADR-011: Train PNR refresh bypasses TrainStatusProvider; manual stub keeps the seam alive
 
 **What.** The trains feature's DEFAULT PNR refresh is an interactive, full-screen,
@@ -271,3 +296,42 @@ the active provider first — on success call `applyStatusResult` with its resul
 `InteractiveCheckRequiredException`/failure fall back to launching the interactive
 WebView screen. No UI or repository changes are needed; only the action's dispatch
 logic grows one branch.
+
+## ADR-010: Itinerary feature — nested NavHost, pure map/day logic, map degradation, maps-compose version pin
+
+**What.** `feature:itinerary` (milestone 3) is structured around four decisions:
+
+1. **Nested NavHost inside the Trips tab.** The app shell calls `tripsGraph()` with no
+   NavController, so in-feature navigation (trip list → trip detail → item form) runs
+   on a nested `NavHost` owned by the `TRIPS_ROUTE` composable. `TRIPS_ROUTE` and the
+   `tripsGraph()` signature are unchanged from the skeleton — the app module needs no
+   edits, and system back works because the nested NavController registers with the
+   back dispatcher.
+2. **Pure logic extracted from UI** (`logic/` package, plain Kotlin, JVM-testable):
+   day grouping (`groupItemsByDay`, `nextOrderInDay`, `moveWithinDay`, `dayCount`,
+   `dateForDay`), map content building (`buildTripMapContent` — numbered per-day
+   markers for located PLACEs, per-day ordered polylines, null-coordinate items
+   skipped), the stable day palette (`dayColorArgb`), manual "lat, lng" parsing
+   (`parseLatLng`) and the map readiness guard (`mapUnavailableReason`). ViewModels
+   and composables only orchestrate these functions.
+3. **Offline-first map degradation.** The GoogleMap composable renders only when the
+   pure guard `mapUnavailableReason(hasPlayServices, hasApiKey)` passes; otherwise
+   the map view (and the tap-picker) degrade to an inline notice while the timeline —
+   which reads Room only — keeps working. The API key presence is read from the
+   merged manifest meta-data, so the empty-key default never crashes.
+4. **maps-compose transitive pin exclusion.** maps-compose 6.12.2 declares
+   `androidx.core:core(-ktx):1.17.0` (requires AGP ≥ 8.9.1; project is on 8.7.3) and
+   its own newer Compose BOM. Both are excluded on the dependency edge in
+   `feature/itinerary/build.gradle.kts` so the version-catalog pins keep winning
+   across every consumer, without touching the frozen catalog. Revisit when AGP is
+   upgraded.
+
+Commute legs store only `linkedJourneyId`/`linkedJourneyType` (ADR-004); the journey
+picker lists candidates by injecting `TrainRepository`/`FlightRepository` read-only —
+feature modules may inject any `core:data` interface, keeping the no feature→feature
+dependency rule intact.
+
+**Why.** Keeps milestone 3 fully inside `feature:itinerary` (parallel-agent safe),
+makes the grouping/marker/reorder behavior unit-testable without Robolectric or Play
+services, and honors the spec requirement that everything except live map tiles works
+offline.
