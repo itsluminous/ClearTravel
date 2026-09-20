@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<!-- Deliberately CHANGED markup for the parse-failure fallback test: simulates a site
+     redesign where the result tables were replaced with a card layout and all the
+     ids the rule relies on are gone. Extraction MUST return ParseFailure carrying
+     this raw HTML — never throw. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PNR ENQUIRY — New Look</title>
+</head>
+<body>
+<main class="pnr-result-v2">
+	<section class="result-card">
+		<header class="result-card__title">PNR 8524317690</header>
+		<div class="result-card__grid">
+			<span data-field="train">12951 — MUMBAI RAJDHANI</span>
+			<span data-field="date">25 Sep 2026</span>
+			<span data-field="route">MMCT → NDLS</span>
+		</div>
+		<ul class="passenger-chips">
+			<li class="chip chip--cnf">P1 CNF B4/32</li>
+			<li class="chip chip--rac">P2 RAC B1/54</li>
+		</ul>
+	</section>
+</main>
+</body>
+</html>

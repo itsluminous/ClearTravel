@@ -1,0 +1,29 @@
+{
+  "fields": {
+    "trainNumber": "12951",
+    "trainName": "MUMBAI RAJDHANI",
+    "journeyDate": "2026-09-25",
+    "fromStation": "MMCT",
+    "toStation": "NDLS",
+    "reservedUpto": "NDLS",
+    "boardingPoint": "MMCT",
+    "journeyClass": "3A",
+    "totalFare": "4590",
+    "chartingStatus": "Chart Not Prepared",
+    "remarks": "",
+    "trainStatus": "",
+    "queriedPnr": "8524317690"
+  },
+  "rows": [
+    {
+      "passenger": "Passenger 1",
+      "bookingStatus": "CNF/B4/32/GN",
+      "currentStatus": "CNF/B4/32"
+    },
+    {
+      "passenger": "Passenger 2",
+      "bookingStatus": "RAC/B1/54/GN",
+      "currentStatus": "CNF/B1/49"
+    }
+  ]
+}

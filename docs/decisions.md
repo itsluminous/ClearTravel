@@ -65,3 +65,35 @@ engines (`RuleDrivenScraper`, preset instantiator, extraction runner) are writte
 unit-tested once; per-site/per-preset behavior stays reviewable, diff-able data. This
 also keeps behavior changes safe for parallel agents: adding an airline touches one
 new file plus one fixture, with no merge conflicts in shared code.
+
+## ADR-008: Scrape engine — JS-dump + pure jsoup extraction, events Flow, CI fixture enforcement
+
+**What.** `core:scrape` implements the ADR-003 rule engine in three strictly separated
+layers: (1) `RuleDrivenScrapeSession` — a WebView-agnostic "brain" per scrape attempt
+that expands the rule's URL/prefill/submit/readySignal into JavaScript snippets and
+emits a `Flow<ScrapeEvent>` (`PageReady`, `NeedsUserAction`, `Extracted`,
+`ParseFailed(rawHtml)`); (2) `ScrapeWebViewController` — a deliberately thin host that
+wires a CALLER-owned WebView to the session (load → inject prefill via
+`evaluateJavascript` → optional auto-click submit → poll the ready signal → dump
+`document.documentElement.outerHTML`), carrying zero parsing logic; (3)
+`RuleExtractor.extract(rule, html)` — a PURE Kotlin function (jsoup on the dumped
+HTML) returning `ExtractionResult.Success(ScrapedData)` or
+`Failure(reason, rawHtml)`, never throwing on unexpected markup. Rules with
+`submitSelector: null` (captcha pages, e.g. indianrail-pnr) emit `NeedsUserAction`
+instead of auto-submitting. `RuleRegistry` loads all JSON files from
+`assets/scrape-rules/` behind a `RuleSource` interface (asset-backed at runtime,
+filesystem-backed in tests) and selects flight rules by IATA prefix
+(`6E-2345` → the rule declaring `"6E"` in `iataCodes`); unknown airlines return null
+so features fall back to a web-search URL. jsoup (pinned in the version catalog) is
+the single new dependency.
+
+**Why.** The WebView half is inherently untestable on the JVM, so ALL intelligence
+lives in the pure extraction path — the exact code fixture tests exercise; the host
+stays dumb enough that instrumented coverage later is a formality. Events-as-Flow
+keeps feature modules reactive and the WebView lifecycle in the caller's composable
+(engine written once, no per-feature engine code). Fixture enforcement is structural:
+a parameterized test enumerates EVERY rule file in assets and fails for any rule
+without `src/test/resources/fixtures/<ruleId>/{page.html,expected.json}` — adding an
+airline without a recorded fixture cannot pass CI (ADR-003), and the enforcement
+mechanism itself is self-tested. Parse failures carry the raw HTML because the spec's
+fallback is showing the user the raw page, never a crash or a blocked UI.

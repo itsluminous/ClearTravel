@@ -1,12 +1,77 @@
 # core:scrape
 
 The rule-driven WebView scraping engine shared by trains (Indian Railways PNR enquiry)
-and flights (per-airline status pages). Parsing rules are **data, not code** (ADR-003):
-each scraped site gets its own versioned JSON rule file in `assets/scrape-rules/`
-(url template, prefill/submit selectors, ready signal, extract map), and the generic
-`RuleDrivenScraper` engine — written once, unit-tested once — executes any rule file
-inside an in-app WebView via a JS bridge. Every rule file ships with a recorded HTML
-fixture + expected-output JSON and a parameterized test runs every rule against its
-fixture; a rule without a fixture fails CI. Parse failures always fall back to showing
-the raw page — never a crash, never a blocked UI. The skeleton ships the rule schema
-stub; the engine lands with the Trains milestone.
+and flights (per-airline status pages). Parsing rules are **data, not code** (ADR-003,
+ADR-008): each scraped site gets its own versioned JSON rule file in
+`src/main/assets/scrape-rules/` and the engine — written once, unit-tested once —
+executes any rule. Parse failures always fall back to the raw page — never a crash.
+
+## Architecture (ADR-008)
+
+```
+feature module (owns the WebView composable)
+   │  RuleRegistry.ruleById(..) / flightRuleFor("6E-2345")
+   ▼
+RuleDrivenScrapeSession(rule, params)   ← WebView-agnostic brain; emits events Flow
+   ▲ onPageReady() / onHtmlDumped(html)
+   │
+ScrapeWebViewController(webView, session)  ← THIN host: load → prefill → poll → dump
+   │  document.documentElement.outerHTML
+   ▼
+RuleExtractor.extract(rule, html)  ← PURE jsoup fn = the fixture-tested code path
+```
+
+## Public API surface
+
+- `RuleRegistry(source: RuleSource)` — `all()`, `ruleById(id)`,
+  `flightRuleFor(flightNumber)` (IATA prefix, e.g. `6E-2345` → the rule declaring
+  `"6E"`; unknown airline → `null` so features fall back to a web-search URL).
+  Runtime source: `AssetRuleSource(context)`.
+- `RuleDrivenScrapeSession(rule, params)` — `events: Flow<ScrapeEvent>`, `startUrl`,
+  `prefillJavaScript()`, `submitJavaScript()`, `readySignalJavaScript()`,
+  `dumpHtmlJavaScript()`, callbacks `onPageReady()` / `onHtmlDumped(html)`.
+- `ScrapeEvent` — `PageReady`, `NeedsUserAction(reason)` (captcha / manual submit),
+  `Extracted(data: ScrapedData)`, `ParseFailed(reason, rawHtml)`.
+- `ScrapeWebViewController(webView, session)` — `start()` / `stop()`; caller's
+  composable owns the WebView lifecycle. Deliberately thin, instrumented-tested later.
+- `RuleExtractor.extract(rule, html): ExtractionResult` — pure, never throws.
+
+## Rule file schema (`assets/scrape-rules/<id>.json`)
+
+| Field | Meaning |
+|---|---|
+| `id` | Stable id; MUST equal the file name and the fixture directory name |
+| `displayName` | Human-readable site name |
+| `version` | Bump whenever selectors change |
+| `kind` | `train` or `flight` |
+| `iataCodes` | Airline IATA codes served (flight rules only), e.g. `["6E"]` |
+| `urlTemplate` | Page URL; placeholders `{pnr}` `{flightNumber}` `{date}` |
+| `prefill` | `[{selector, valueTemplate}]` — form fields injected via JS after load |
+| `submitSelector` | CSS selector auto-clicked after prefill; **`null` when unsafe (captcha)** → user submits manually |
+| `readySignal` | `{selector}` (exists + visible) or `{jsCondition}` (JS expr) marking the result rendered |
+| `extract` | field → `{selector, attribute?, regexChain?, required?}`; regex chain applied sequentially, capture group 1 wins |
+| `rows` | `{rowSelector, fields, minRows}` — repeating extraction (per passenger etc.) |
+| `postProcess` | field → `{type: date\|time\|trim, inputFormats, outputFormat}` (best-effort) |
+
+Failure semantics: blank `required` field, fewer than `minRows` rows, or nothing
+extracted at all ⇒ `ExtractionResult.Failure(reason, rawHtml)`.
+
+## Adding an airline rule (fixture-harness contract — CI enforced)
+
+1. Create `src/main/assets/scrape-rules/<airline>.json` with `kind: "flight"` and its
+   `iataCodes`. Verify the status-page URL live while writing it.
+2. Record a fixture: run the site once, dump `document.documentElement.outerHTML` of
+   the RESULT page, save as `src/test/resources/fixtures/<airline>/page.html`.
+3. Write `src/test/resources/fixtures/<airline>/expected.json`:
+   `{"fields": {..}, "rows": [{..}]}` — exactly what `RuleExtractor` must produce.
+4. Run `./gradlew :core:scrape:testDebugUnitTest`. `RuleFixtureTest` enumerates EVERY
+   rule file in assets; a rule without its fixture pair **fails the suite** with an
+   actionable message. Nothing else to register — the harness discovers the file.
+
+## Shipped rules
+
+- `indianrail-pnr` v1 — https://www.indianrail.gov.in/enquiry/PNR/PnrEnquiry.html
+  (prefills `#inputPnrNo`; NO auto-submit — captcha; extracts journey/passenger/chart
+  tables). Selectors derived from the live page skeleton + its render JS
+  (`pnrEnquiryJS.js` `showPnr()`/`drawRow()`); see `docs/recon-followup.md` for the
+  post-captcha live-DOM verification TODO.

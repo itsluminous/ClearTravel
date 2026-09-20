@@ -1,0 +1,41 @@
+{
+  "id": "indianrail-pnr",
+  "displayName": "Indian Railways PNR Enquiry",
+  "version": 1,
+  "kind": "train",
+  "urlTemplate": "https://www.indianrail.gov.in/enquiry/PNR/PnrEnquiry.html?locale=en",
+  "prefill": [
+    { "selector": "#inputPnrNo", "valueTemplate": "{pnr}" }
+  ],
+  "submitSelector": null,
+  "readySignal": {
+    "jsCondition": "(function(){var d=document.getElementById('pnrOutputDiv');return !!d&&window.getComputedStyle(d).display!=='none'&&document.querySelectorAll('#psgnDetailsTable tr').length>1;})()"
+  },
+  "extract": {
+    "trainNumber": { "selector": "#journeyDetailsTable tbody tr td:nth-of-type(1)", "required": true },
+    "trainName": { "selector": "#journeyDetailsTable tbody tr td:nth-of-type(2)" },
+    "journeyDate": { "selector": "#journeyDetailsTable tbody tr td:nth-of-type(3)" },
+    "fromStation": { "selector": "#journeyDetailsTable tbody tr td:nth-of-type(4)" },
+    "toStation": { "selector": "#journeyDetailsTable tbody tr td:nth-of-type(5)" },
+    "reservedUpto": { "selector": "#journeyDetailsTable tbody tr td:nth-of-type(6)" },
+    "boardingPoint": { "selector": "#journeyDetailsTable tbody tr td:nth-of-type(7)" },
+    "journeyClass": { "selector": "#journeyDetailsTable tbody tr td:nth-of-type(8)" },
+    "totalFare": { "selector": "#otherDetailsTable tbody tr td:nth-of-type(1)" },
+    "chartingStatus": { "selector": "#otherDetailsTable tbody tr td:nth-of-type(2)", "required": true },
+    "remarks": { "selector": "#otherDetailsTable tbody tr td:nth-of-type(3)" },
+    "trainStatus": { "selector": "#otherDetailsTable tbody tr td:nth-of-type(4)" },
+    "queriedPnr": { "selector": "#pnrOutputDiv #h4", "regexChain": ["([0-9]{10})"] }
+  },
+  "rows": {
+    "rowSelector": "#psgnDetailsTable tbody tr",
+    "minRows": 1,
+    "fields": {
+      "passenger": { "selector": "td:nth-of-type(1)" },
+      "bookingStatus": { "selector": "td:nth-of-type(2)" },
+      "currentStatus": { "selector": "td:nth-of-type(3)" }
+    }
+  },
+  "postProcess": {
+    "journeyDate": { "type": "date", "inputFormats": ["d-M-uuuu", "dd-MM-uuuu"], "outputFormat": "uuuu-MM-dd" }
+  }
+}

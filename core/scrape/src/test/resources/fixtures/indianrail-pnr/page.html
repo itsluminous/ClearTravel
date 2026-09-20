@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<!-- Fixture for rule indianrail-pnr v1.
+     Reconstruction of https://www.indianrail.gov.in/enquiry/PNR/PnrEnquiry.html?locale=en
+     AFTER a successful captcha submit: static skeleton captured live on 2026-09-20 plus
+     result rows appended exactly as pnrEnquiryJS.js?version=18 showPnr()/drawRow() do —
+     jQuery appends <tr> directly under <table> (after <thead>), inputPnrNoDiv is hidden
+     and pnrOutputDiv shown via inline styles. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PNR ENQUIRY</title>
+</head>
+<body>
+<div class="alert alert-danger hidden container col-md-12" id="errorResult1">
+	<p id="errorMessage"><strong>ERROR!</strong>Indicates a dangerous or potentially negative action.</p>
+</div>
+<div id="firstCaptcha"></div>
+<div id="secondCaptcha"></div>
+<div class="modal fade" id="myModal2" role="dialog">
+	<div class="modal-dialog">
+		<div class="modal-content">
+			<div class="modal-header">
+				<button type="button" class="close" data-dismiss="modal">&times;</button>
+			</div>
+			<div class="modal-body"></div>
+		</div>
+	</div>
+</div>
+<div class="container col-md-12" id="inputPnrNoDiv" style="display: none;">
+	<div>
+		<div class="row form-group">
+			<div class="col-md-12 text-center">
+				<h4 id="h2">Enter the PNR for your booking below to get the current status.</h4>
+			</div>
+		</div>
+		<div class="row form-group">
+			<div class="col-md-12 text-center">
+				<label>Enter PNR No.</label>
+				<input class="form-control_custom input_text_custom" type="text" id="inputPnrNo" maxlength="10" value="8524317690" placeholder="Enter PNR No.">
+			</div>
+		</div>
+	</div>
+</div>
+<div class="container col-md-12" id="pnrOutputDiv" style="display: block;">
+	<div>
+		<div class="row">
+			<div class="col-md-12">
+				<h4 align="center" id="h4">You Queried For : PNR Number: 8524317690</h4>
+			</div>
+		</div>
+		<div class="row">
+			<div class="col-md-12 table-responsive">
+				<table border="1" class="table table-bordered table-responsive text-center" id="journeyDetailsTable">
+					<thead>
+						<tr class="bg-primary">
+							<th><b> Train Number</b></th>
+							<th><b>Train Name</b></th>
+							<th><b>Boarding Date <br>(DD-MM-YYYY)</b></th>
+							<th><b>From</b></th>
+							<th><b>To</b></th>
+							<th><b>Reserved Upto</b></th>
+							<th><b>Boarding Point</b></th>
+							<th><b>Class</b></th>
+						</tr>
+					</thead>
+				<tr><td>12951</td><td>MUMBAI RAJDHANI</td><td>25-9-2026</td><td>MMCT</td><td>NDLS</td><td>NDLS</td><td>MMCT</td><td>3A</td></tr></table>
+			</div>
+		</div>
+		<div class="row">
+			<div class="col-md-12 table-responsive">
+				<table border="1" class="table table-bordered table-responsive text-center" id="psgnDetailsTable">
+					<thead>
+						<tr class="bg-primary">
+							<th>S. No.</th>
+							<th>Booking Status (Coach No , Berth No., Quota)</th>
+							<th>*Current Status (Coach No , Berth No.)</th>
+						</tr>
+					</thead>
+				<tr><td>Passenger 1</td><td>CNF/B4/32/GN</td><td>CNF/B4/32</td></tr><tr><td>Passenger 2</td><td>RAC/B1/54/GN</td><td>CNF/B1/49</td></tr></table>
+			</div>
+		</div>
+		<div class="row">
+			<div class="col-md-12 table-responsive">
+				<table border="1" class="table table-bordered table-responsive text-center" id="otherDetailsTable">
+					<thead>
+						<tr class="bg-primary">
+							<th>Total Fare</th>
+							<th>Charting Status</th>
+							<th>Remarks if any</th>
+							<th>Train Status</th>
+						</tr>
+					</thead>
+				<tr><td>4590</td><td>Chart Not Prepared</td><td></td><td></td></tr></table>
+			</div>
+		</div>
+		<div class="row" id="PNRPredictionDsplDiv"></div>
+		<div class="col-md-12">
+			<p style="color: blue;"><b>*Please Note that in case the Final Charts have not been prepared, the Current Status might upgrade/downgrade at a later stage.</b></p>
+		</div>
+	</div>
+</div>
+</body>
+</html>
