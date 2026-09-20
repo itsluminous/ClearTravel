@@ -2,4 +2,107 @@
 <resources>
     <string name="flights_empty_title">No flight journeys yet</string>
     <string name="flights_empty_message">Add a flight or import a boarding pass to track status, gate and baggage belt here.</string>
+    <string name="flights_empty_archived_title">No archived flights</string>
+    <string name="flights_empty_archived_message">Past flights you archive will appear here.</string>
+
+    <!-- List -->
+    <string name="flights_filter_active">Active</string>
+    <string name="flights_filter_archived">Archived</string>
+    <string name="flights_add">Add flight</string>
+    <string name="flights_add_sheet_title">Add a flight</string>
+    <string name="flights_add_manual">Enter manually</string>
+    <string name="flights_add_manual_hint">Airline, flight number, date and booking details</string>
+    <string name="flights_add_import">Import boarding pass</string>
+    <string name="flights_add_import_hint">Scan the barcode of a boarding-pass image or PDF</string>
+    <string name="flights_card_route_separator">→</string>
+    <string name="flights_card_dep_arr">Dep %1$s · Arr %2$s</string>
+    <string name="flights_last_fetched">Checked %1$s</string>
+    <string name="flights_never_fetched">Status never checked</string>
+
+    <!-- Status names (chip + detail) -->
+    <string name="flights_status_scheduled">Scheduled</string>
+    <string name="flights_status_boarding">Boarding</string>
+    <string name="flights_status_departed">Departed</string>
+    <string name="flights_status_landed">Landed</string>
+    <string name="flights_status_delayed">Delayed</string>
+    <string name="flights_status_cancelled">Cancelled</string>
+    <string name="flights_status_unknown">Unknown</string>
+
+    <!-- Detail sheet -->
+    <string name="flights_label_departure">Departure</string>
+    <string name="flights_label_arrival">Arrival</string>
+    <string name="flights_label_scheduled">Scheduled</string>
+    <string name="flights_label_estimated">Estimated</string>
+    <string name="flights_label_terminal">Terminal</string>
+    <string name="flights_label_gate">Gate</string>
+    <string name="flights_label_belt">Baggage belt</string>
+    <string name="flights_label_aircraft">Aircraft</string>
+    <string name="flights_label_seat">Seat</string>
+    <string name="flights_label_cabin">Cabin</string>
+    <string name="flights_label_pnr">PNR / booking ref</string>
+    <string name="flights_value_unknown">—</string>
+    <string name="flights_action_check_status">Check status</string>
+    <string name="flights_action_web_checkin">Open web check-in</string>
+    <string name="flights_action_view_pass">View boarding pass</string>
+    <string name="flights_action_edit">Edit</string>
+    <string name="flights_action_archive">Archive</string>
+    <string name="flights_action_unarchive">Unarchive</string>
+    <string name="flights_action_delete">Delete</string>
+    <string name="flights_delete_title">Delete this flight?</string>
+    <string name="flights_delete_message">The flight and its boarding pass attachment will be removed.</string>
+    <string name="flights_delete_confirm">Delete</string>
+    <string name="flights_delete_cancel">Cancel</string>
+    <string name="flights_deleted_snackbar">Flight deleted</string>
+    <string name="flights_archived_snackbar">Flight archived</string>
+    <string name="flights_unarchived_snackbar">Flight unarchived</string>
+
+    <!-- Form -->
+    <string name="flights_form_title_add">Add flight</string>
+    <string name="flights_form_title_edit">Edit flight</string>
+    <string name="flights_field_airline">Airline (IATA)</string>
+    <string name="flights_field_flight_number">Flight number</string>
+    <string name="flights_field_date">Date (YYYY-MM-DD)</string>
+    <string name="flights_field_pnr">PNR / booking reference</string>
+    <string name="flights_field_seat">Seat</string>
+    <string name="flights_field_cabin">Cabin class</string>
+    <string name="flights_field_dep_airport">From (IATA)</string>
+    <string name="flights_field_arr_airport">To (IATA)</string>
+    <string name="flights_field_dep_time">Departure time (HH:MM)</string>
+    <string name="flights_field_arr_time">Arrival time (HH:MM)</string>
+    <string name="flights_form_route_hint">Route and times are optional — "Save &amp; check status" can fill them from the airline site.</string>
+    <string name="flights_error_airline">Enter the 2-character airline code, e.g. 6E</string>
+    <string name="flights_error_flight_number">Enter the numeric flight number, e.g. 2345</string>
+    <string name="flights_error_date">Enter the date as YYYY-MM-DD</string>
+    <string name="flights_error_dep_time">Enter the time as HH:MM</string>
+    <string name="flights_error_arr_time">Enter the time as HH:MM</string>
+    <string name="flights_form_save">Save</string>
+    <string name="flights_form_save_fetch">Save &amp; check status</string>
+    <string name="flights_form_cancel">Cancel</string>
+    <string name="flights_form_importing">Reading boarding pass…</string>
+    <string name="flights_prefill_source_barcode">Filled from the boarding-pass barcode — review and save</string>
+    <string name="flights_prefill_source_ocr">Filled from scanned text — review carefully before saving</string>
+    <string name="flights_prefill_source_none">Nothing recognized — fill the form in; the file stays attached</string>
+    <string name="flights_confidence_high">High confidence</string>
+    <string name="flights_confidence_medium">Medium confidence — review</string>
+    <string name="flights_confidence_low">Low confidence — review</string>
+
+    <!-- Status check (scrape) screen -->
+    <string name="flights_check_title">Check status</string>
+    <string name="flights_check_loading">Preparing…</string>
+    <string name="flights_check_scraping">Waiting for the airline page to load results…</string>
+    <string name="flights_check_waiting_user">Complete the search on the page below if it doesn\'t submit automatically.</string>
+    <string name="flights_check_done">Status updated</string>
+    <string name="flights_check_parse_failed">Couldn\'t read the results — the site may have changed. Read the page below and edit the flight manually.</string>
+    <string name="flights_check_fallback_hint">No status rule for this airline — showing a web search instead. Update the flight manually from what you see.</string>
+    <string name="flights_check_close">Close</string>
+
+    <!-- Boarding pass viewer -->
+    <string name="flights_pass_viewer_title">Boarding pass</string>
+    <string name="flights_pass_missing">The boarding-pass file is missing.</string>
+    <string name="flights_pass_image_description">Boarding pass</string>
+
+    <!-- Icon explanations (ExplainableIcon) -->
+    <string name="flights_icon_back">Back</string>
+    <string name="flights_icon_close">Close</string>
+    <string name="flights_icon_boarding_pass">Boarding pass attached</string>
 </resources>

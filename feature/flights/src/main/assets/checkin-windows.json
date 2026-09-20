@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "notes": "Behavior-as-data (ADR-003): airline check-in windows + web check-in deep links. Hours are relative to scheduled departure. URLs are best-effort research values — safe to update without code changes; a wrong URL still lands on the airline site.",
+  "defaultWindow": { "opensHoursBefore": 48, "closesHoursBefore": 1 },
+  "airlines": {
+    "6E": { "name": "IndiGo", "opensHoursBefore": 48, "closesHoursBefore": 1, "checkInUrl": "https://www.goindigo.in/web-check-in.html" },
+    "AI": { "name": "Air India", "opensHoursBefore": 48, "closesHoursBefore": 2, "checkInUrl": "https://www.airindia.com/in/en/manage/web-checkin.html" },
+    "SG": { "name": "SpiceJet", "opensHoursBefore": 48, "closesHoursBefore": 1, "checkInUrl": "https://www.spicejet.com/check-in" },
+    "QP": { "name": "Akasa Air", "opensHoursBefore": 48, "closesHoursBefore": 1, "checkInUrl": "https://www.akasaair.com/check-in" },
+    "IX": { "name": "Air India Express", "opensHoursBefore": 48, "closesHoursBefore": 2, "checkInUrl": "https://www.airindiaexpress.com/check-in" },
+    "EK": { "name": "Emirates", "opensHoursBefore": 48, "closesHoursBefore": 2, "checkInUrl": "https://www.emirates.com/in/english/manage-booking/online-check-in/" },
+    "QR": { "name": "Qatar Airways", "opensHoursBefore": 48, "closesHoursBefore": 2, "checkInUrl": "https://www.qatarairways.com/en/check-in.html" },
+    "SQ": { "name": "Singapore Airlines", "opensHoursBefore": 48, "closesHoursBefore": 2, "checkInUrl": "https://www.singaporeair.com/en_UK/in/travel-info/check-in/" },
+    "EY": { "name": "Etihad Airways", "opensHoursBefore": 30, "closesHoursBefore": 2, "checkInUrl": "https://www.etihad.com/en-in/manage/check-in" },
+    "DL": { "name": "Delta Air Lines", "opensHoursBefore": 24, "closesHoursBefore": 1, "checkInUrl": "https://www.delta.com/checkin" },
+    "AA": { "name": "American Airlines", "opensHoursBefore": 24, "closesHoursBefore": 1, "checkInUrl": "https://www.aa.com/checkin" },
+    "LH": { "name": "Lufthansa", "opensHoursBefore": 30, "closesHoursBefore": 1, "checkInUrl": "https://www.lufthansa.com/in/en/online-check-in" },
+    "CX": { "name": "Cathay Pacific", "opensHoursBefore": 48, "closesHoursBefore": 2, "checkInUrl": "https://www.cathaypacific.com/cx/en_IN/manage-booking/check-in.html" }
+  }
+}
