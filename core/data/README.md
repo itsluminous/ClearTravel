@@ -7,5 +7,7 @@ feature-to-feature dependencies. This module also owns the pluggable status-prov
 interfaces (`TrainStatusProvider`, `FlightStatusProvider`, bound via Hilt so
 mock/manual implementations work without API keys) and the settings DataStore.
 Repositories bump `updated_at` on every write and soft-delete via tombstones
-(ADR-002). Concrete repositories land with their feature milestones; the skeleton
-ships the provider contract stubs.
+(ADR-002). Provider result contracts are documented in ADR-005, checklist preset
+append semantics in ADR-006, and API-key storage (EncryptedSharedPreferences) in
+ADR-007. Built-in checklist presets are behavior-as-data: a versioned JSON asset
+(`assets/presets/builtin-presets.json`, ADR-003) seeded idempotently on first run.

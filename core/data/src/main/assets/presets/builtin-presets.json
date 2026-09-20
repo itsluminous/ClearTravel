@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "presets": [
+    {
+      "id": "b0000000-0000-4000-8000-000000000001",
+      "name": "Domestic trip",
+      "items": [
+        "ID card",
+        "Phone charger",
+        "Power bank",
+        "Clothes",
+        "Toiletries",
+        "Comfortable footwear",
+        "Water bottle",
+        "Snacks",
+        "Cash",
+        "Sunglasses"
+      ]
+    },
+    {
+      "id": "b0000000-0000-4000-8000-000000000002",
+      "name": "International travel",
+      "items": [
+        "Passport",
+        "Visa documents",
+        "Travel insurance",
+        "Currency / forex card",
+        "Flight tickets",
+        "Hotel bookings",
+        "Universal power adapter",
+        "Phone charger",
+        "Power bank",
+        "Clothes",
+        "Toiletries",
+        "SIM / roaming plan",
+        "Photocopies of documents"
+      ]
+    },
+    {
+      "id": "b0000000-0000-4000-8000-000000000003",
+      "name": "Trek",
+      "items": [
+        "Backpack",
+        "Trekking shoes",
+        "Water bottle",
+        "Rain jacket",
+        "Warm layers",
+        "Torch / headlamp",
+        "First-aid kit",
+        "Energy bars",
+        "Sunscreen",
+        "Cap / hat",
+        "Trekking pole",
+        "Power bank"
+      ]
+    },
+    {
+      "id": "b0000000-0000-4000-8000-000000000004",
+      "name": "Medicines",
+      "items": [
+        "Paracetamol",
+        "Band-aids",
+        "Antiseptic cream",
+        "ORS sachets",
+        "Motion sickness tablets",
+        "Personal prescriptions"
+      ]
+    }
+  ]
+}

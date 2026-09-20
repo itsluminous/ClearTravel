@@ -132,3 +132,108 @@ full serialized result (extraction models are `@Serializable` precisely to enabl
 this). The set ships with two IRCTC ERS layouts, two boarding-pass layouts, one IRCTC
 SMS, and one garbage fixture asserting the EMPTY fallback — adding an extraction
 behavior without a fixture is a review-blocking omission, same as scrape rules.
+
+## ADR-004: Entity catalog and relations (schema v1)
+
+**What.** Room schema v1 (`ClearTravelDatabase`, exported to `core/database/schemas/`,
+committed) with 11 tables. Domain models live in `core:model` (pure Kotlin,
+`SyncableEntity` implementations); Room `*Entity` mirrors + trivial mappers live in
+`core:database`; repositories in `core:data` expose ONLY `core:model` types — feature
+modules never see Room classes. Relations are by UUID reference (no Room foreign
+keys — soft deletes make FK cascades wrong; repositories own delete cascades):
+
+- `trips` ←(trip_id)— `itinerary_items`. An itinerary item is one row for both
+  variants: `type` PLACE (lat/lng, category, planned time, note, link) or COMMUTE
+  (mode, from/to names, optional `linked_journey_id` + `linked_journey_type`
+  pointing at a train ticket or flight journey).
+- `checklists` (nullable `trip_id` — standalone checklists allowed) ←— `checklist_items`.
+- `checklist_presets` ←— `checklist_preset_items` (templates; see ADR-006).
+- `train_tickets` ←(ticket_id)— `train_passengers` and `train_route_stops`.
+- `flight_journeys` (self-contained; status/gate/belt columns are the merge target
+  of provider results, ADR-005).
+- `attachments` with a polymorphic owner (`owner_type` TRAIN|FLIGHT|ITINERARY +
+  `owner_id`), `drive_file_id` null until uploaded (drives the Drive upload queue).
+- Google Calendar sync uses a nullable `google_event_id` column directly on
+  `itinerary_items`, `train_tickets`, and `flight_journeys` (simplest; no join table).
+
+Conventions: snake_case columns; enums stored as stable `storageValue` strings (never
+`name()`); `Instant` as epoch millis; `LocalDate` as ISO strings; unknown stored enum
+values parse to a safe fallback (`UNKNOWN`/`OTHER`) so old app versions never crash on
+newer data. Every table carries ADR-002's `id`/`updated_at`/`deleted_at`; all DAO read
+queries filter `deleted_at IS NULL`; soft-delete queries set `deleted_at` AND
+`updated_at` in one statement. Repository delete cascades: trip → itinerary items +
+trip-scoped checklists (+ their items); train ticket → passengers + route stops +
+TRAIN attachments; flight → FLIGHT attachments; checklist → items; preset → items.
+
+**Why.** One schema freeze for every feature agent to build on. Model/entity
+separation keeps the module graph honest (`core:data` api-exposes `core:model` only)
+and keeps `core:model` framework-free.
+
+## ADR-005: Provider result contracts (TrainStatusResult / FlightStatusResult)
+
+**What.** `core:data` owns the provider contracts; implementations land elsewhere
+(`core:scrape`, feature modules) and are Hilt-bound:
+
+- `TrainStatusProvider.fetchPnrStatus(pnr): Result<TrainStatusResult>` —
+  `TrainStatusResult(pnr, passengers: List<TrainPassengerStatus>, chartPrepared?,
+  trainNumber, trainName, fetchedAt)`; `TrainPassengerStatus(currentStatus,
+  bookingStatus, coach, seatBerth)`.
+- `FlightStatusProvider.fetchFlightStatus(airlineIata, flightNumber, date):
+  Result<FlightStatusResult>` — `FlightStatusResult(status, schedDep/schedArr,
+  estDep/estArr, depTerminal/depGate, arrTerminal/arrGate, baggageBelt,
+  aircraftType, fetchedAt)`.
+
+Conventions: `suspend` even for the interactive WebView provider (it suspends while
+the user completes the page); errors are `Result.failure` — callers keep showing the
+last stored data. Empty string / null in a result means "source didn't report it".
+Persistence goes through `TrainRepository.applyStatusResult` (per-passenger
+`currentStatus` matched BY POSITION, coach/seat merged only when reported, ticket
+`lastFetchedAt` set) and `FlightRepository.applyStatusResult` (status always; times/
+gates/terminals/belt/aircraft merged only when reported; `lastFetchedAt` set) — so a
+partial scrape never wipes known data.
+
+**Why.** Freezes the seam between the domain layer and the scrape/API engines so both
+sides can be built in parallel; merge-only-known-fields keeps flaky scrapes safe.
+
+## ADR-006: Checklist preset append semantics (multi-append, dedupe-by-text, isolation)
+
+**What.** `ChecklistRepository.appendPreset(checklistId, presetId)`:
+
+- **Cumulative multi-append**: a checklist can absorb any number of presets over
+  time (canonical example: append "International travel", then "Medicines", onto the
+  same checklist). Each call appends after the current max `sort_order`.
+- **Dedupe by exact text**: preset items whose exact text already exists live in the
+  checklist are skipped (so overlapping presets — e.g. both containing "Power bank" —
+  don't duplicate). Re-appending the same preset is a no-op.
+- **Copy, never link**: appended items are NEW `checklist_items` rows with fresh
+  UUIDs. The preset is never mutated by an append, and editing/deleting a preset
+  later never mutates checklists built from it (spec §4).
+
+Built-in presets are behavior-as-data (ADR-003): a versioned JSON asset
+(`core/data/src/main/assets/presets/builtin-presets.json`) with FOUR presets —
+Domestic trip, International travel, Trek, Medicines — each with a FIXED UUID.
+Seeding runs from the Room `onCreate` callback and is idempotent by id, checking
+existence INCLUDING tombstones: a user-deleted built-in stays deleted and a
+user-edited built-in is never overwritten; fixed ids also keep backup merges
+duplicate-free. The seeding test doubles as the asset's fixture test.
+
+**Why.** The multi-append + dedupe behavior is an explicit user requirement; copy
+semantics are the only ones compatible with "editing a preset never mutates existing
+checklists"; tombstone-aware seeding is what makes "built-in" and "user-deletable"
+coexist.
+
+## ADR-007: User-entered API keys in EncryptedSharedPreferences
+
+**What.** `SettingsRepository` splits storage: theme mode and provider selection live
+in a plain Preferences DataStore; user-entered status API keys (train/flight) live in
+`EncryptedSharedPreferences` (androidx-security-crypto, AES256-GCM values + AES256-SIV
+keys under an Android Keystore master key). The encrypted store is injected as a
+`SharedPreferences` behind the `@SecurePreferences` qualifier, so unit tests
+substitute a plain instance (Robolectric has no Keystore). API keys are exposed as
+suspend accessors only — never Flows — to keep them out of observable state.
+
+**Why (vs "encrypted DataStore").** The version catalog already ships
+androidx-security-crypto and there is no first-party encrypted DataStore — wiring
+Tink into DataStore by hand is more code and more crypto surface for zero benefit at
+this data size. Keys are read rarely (only when an API provider fires), so
+SharedPreferences' synchronous model is fine behind `Dispatchers.IO`.

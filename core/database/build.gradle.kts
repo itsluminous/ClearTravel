@@ -33,6 +33,11 @@ android {
     }
 }
 
+// Export the Room schema history (ADR-004): committed under core/database/schemas/.
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 dependencies {
     api(project(":core:model"))
 
@@ -41,9 +46,11 @@ dependencies {
     ksp(libs.room.compiler)
     implementation(libs.kotlinx.coroutines.core)
 
+    testImplementation(project(":core:testing"))
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core.ktx)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.turbine)
 }
