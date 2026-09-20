@@ -237,3 +237,62 @@ androidx-security-crypto and there is no first-party encrypted DataStore — wir
 Tink into DataStore by hand is more code and more crypto surface for zero benefit at
 this data size. Keys are read rarely (only when an API provider fires), so
 SharedPreferences' synchronous model is fine behind `Dispatchers.IO`.
+
+## ADR-010: Train PNR refresh bypasses TrainStatusProvider; manual stub keeps the seam alive
+
+**What.** The trains feature's DEFAULT PNR refresh is an interactive, full-screen,
+user-visible WebView flow (`feature:trains` `pnr` package): it builds a
+`RuleDrivenScrapeSession` from `RuleRegistry.ruleById("indianrail-pnr")` +
+`ScrapeParams(pnr)`, hosts a caller-owned WebView via `ScrapeWebViewController`, lets
+the USER tap submit and solve the captcha (CONFIRMED live on indianrail at recon time,
+`docs/recon/NOTES.md`), then maps `ScrapeEvent.Extracted`'s `ScrapedData` through the
+pure `PnrStatusMapper` and persists via `TrainRepository.applyStatusResult` — WITHOUT
+going through `TrainStatusProvider.fetchPnrStatus`. The seam stays alive anyway:
+`feature:trains` Hilt-binds `ManualTrainStatusProvider` (providerId `"manual"`), an
+always-available stub whose `fetchPnrStatus` fails with
+`InteractiveCheckRequiredException`, signalling callers to route the user to the
+interactive check. `PnrStatusMapper.map(pnr, data, fetchedAt)` is a pure function
+pinned by unit tests to the exact field/row names the `indianrail-pnr` rule emits
+(`trainNumber`/`trainName`/`chartingStatus` fields; `bookingStatus`/`currentStatus`
+rows); it keeps the raw page status text and additionally extracts coach/seat from
+`STATUS/COACH/SEAT` shapes so `applyStatusResult`'s merge-only-known-fields semantics
+apply. A mapper null (rows present but no usable status text) is treated exactly like
+`ParseFailed`: raw page stays visible, stored data unchanged.
+
+**Why.** ADR-005 deliberately made `fetchPnrStatus` a suspend call, but a
+captcha-gated flow has no sane suspend shape: the "fetch" spans user interaction in a
+composable-owned WebView whose lifecycle belongs to the UI (ADR-008), and wrapping
+that in a suspending provider would force the provider to own UI state. Writing
+through `applyStatusResult` keeps the persistence contract identical for every future
+provider. **How an API provider slots in later:** implement `TrainStatusProvider`
+with a real `fetchPnrStatus` (user-supplied key, ADR-007 storage), bind it behind the
+Settings provider selection, and have the detail sheet's "Check PNR status" action try
+the active provider first — on success call `applyStatusResult` with its result, on
+`InteractiveCheckRequiredException`/failure fall back to launching the interactive
+WebView screen. No UI or repository changes are needed; only the action's dispatch
+logic grows one branch.
+
+## ADR-010: Per-tab nested NavHost; built-in presets read-only (duplicate-to-customize)
+
+**What.** (1) Feature tabs own their sub-navigation: `checklistGraph()`/`menuGraph()`
+register ONE destination on the app NavHost, and that destination hosts a nested
+`NavHost` (`rememberNavController` inside the tab) for its subscreens (checklist
+list → full-screen detail; menu root → Settings / Manage presets / preset editor /
+About). Checklist detail is a full screen, not a bottom sheet — packing lists are
+long and need the add-item field + reorder controls anchored. Reordering uses
+up/down buttons (swap `sort_order` with the neighbour), not drag handles. (2) In
+Manage presets, built-in presets are READ-ONLY: no edit/delete (guarded in both the
+UI and the ViewModels); the sanctioned customization path is duplicate-then-edit
+(`duplicatePreset` yields a user copy, `builtIn = false`). User presets support
+rename, add/remove/reorder, duplicate and delete.
+
+**Why.** (1) The app module passes no NavController into feature graphs, and feature
+modules must not depend on each other — a nested NavHost keeps ALL subscreen wiring
+inside the owning module (app/ is never touched when a feature adds a screen) and
+keeps the bottom bar highlighted on the owning tab, matching the feature READMEs.
+Up/down buttons are deterministic and trivially unit-testable where drag-reorder in
+Lazy lists is gesture-fragile. (2) Tombstone-aware seeding (ADR-006) means an edited
+built-in would never be re-seeded — a user who breaks a built-in template could never
+recover it; read-only built-ins + duplicate-to-customize preserves the templates
+while allowing full customization, and copy semantics already guarantee editing any
+preset never mutates existing checklists.
