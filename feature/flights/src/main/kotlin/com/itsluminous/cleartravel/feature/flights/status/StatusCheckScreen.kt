@@ -3,7 +3,9 @@ package com.itsluminous.cleartravel.feature.flights.status
 import android.annotation.SuppressLint
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,12 +16,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -37,17 +42,25 @@ import com.itsluminous.cleartravel.feature.flights.R
  * The "Check status" flow: a VISIBLE WebView driven by the rule engine (ADR-008/
  * ADR-013). Rule found → prefill + poll + extract; extraction lands in Room and the
  * screen closes. No rule (e.g. SpiceJet) → plain web search the user reads, plus
- * manual edit back on the detail sheet. Parse failure → the raw page stays visible.
+ * manual edit back on the detail sheet. Parse failure/timeout → the raw page STAYS
+ * visible (single WebView call site keyed on attempt, so the Scraping→ParseFailed
+ * flip does NOT reload the page) under a "data unchanged" banner with retry/close
+ * (defect D2 — parity with the trains PNR flow).
+ *
+ * [onClose] receives the last COMPLETED attempt's outcome (or null when the user
+ * bails before any attempt finished) so the caller can surface it on the detail
+ * sheet + a snackbar.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatusCheckScreen(
     flightId: String,
-    onClose: () -> Unit,
+    onClose: (CheckOutcome?) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: FlightStatusCheckViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val lastOutcome by viewModel.lastOutcome.collectAsStateWithLifecycle()
 
     LaunchedEffect(flightId) { viewModel.start(flightId) }
 
@@ -60,7 +73,7 @@ fun StatusCheckScreen(
                     ExplainableIcon(
                         icon = Icons.Filled.Close,
                         explanationRes = R.string.flights_icon_close,
-                        onClick = onClose,
+                        onClick = { onClose(lastOutcome) },
                     )
                 },
             )
@@ -82,7 +95,6 @@ fun StatusCheckScreen(
                             R.string.flights_check_scraping
                         },
                     )
-                    ScrapeWebView(session = current.session, modifier = Modifier.fillMaxSize())
                 }
 
                 is StatusCheckUiState.WebSearchFallback -> {
@@ -93,21 +105,34 @@ fun StatusCheckScreen(
                 is StatusCheckUiState.Done -> {
                     StatusBanner(R.string.flights_check_done)
                     Button(
-                        onClick = onClose,
+                        onClick = { onClose(lastOutcome) },
                         modifier = Modifier.padding(16.dp).fillMaxWidth(),
                     ) { Text(stringResource(R.string.flights_check_close)) }
                 }
 
                 is StatusCheckUiState.ParseFailed -> {
-                    // Raw page fallback (spec): the WebView content stays on screen in
-                    // the Scraping composition until the state flips; from here the
-                    // user reads the page manually or closes.
-                    StatusBanner(R.string.flights_check_parse_failed)
-                    Button(
-                        onClick = onClose,
-                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    ) { Text(stringResource(R.string.flights_check_close)) }
+                    ParseFailedBanner(
+                        onRetry = viewModel::retry,
+                        onClose = { onClose(lastOutcome) },
+                    )
                 }
+            }
+
+            // SINGLE WebView call site shared by Scraping and ParseFailed so the raw
+            // page genuinely stays on screen (same attempt = same remembered WebView)
+            // when the state flips to failed; a retry bumps attempt and reloads.
+            val scrape =
+                when (val current = state) {
+                    is StatusCheckUiState.Scraping -> current.session to current.attempt
+                    is StatusCheckUiState.ParseFailed -> current.session to current.attempt
+                    else -> null
+                }
+            if (scrape != null) {
+                ScrapeWebView(
+                    session = scrape.first,
+                    attempt = scrape.second,
+                    modifier = Modifier.weight(1f),
+                )
             }
         }
     }
@@ -123,25 +148,60 @@ private fun StatusBanner(textRes: Int) {
     )
 }
 
-/** Caller-owned WebView wired to the rule session via [ScrapeWebViewController]. */
+/** Failure banner (D2): explains the data is unchanged and offers retry/close. */
+@Composable
+private fun ParseFailedBanner(
+    onRetry: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.errorContainer,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Text(
+                text = stringResource(R.string.flights_check_parse_failed),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(onClick = onRetry) {
+                    Text(stringResource(R.string.flights_check_retry))
+                }
+                TextButton(onClick = onClose) {
+                    Text(stringResource(R.string.flights_check_close))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Caller-owned WebView wired to the rule session via [ScrapeWebViewController].
+ * Keyed on [attempt] so a retry rebuilds the WebView and reloads the page.
+ */
 @Composable
 private fun ScrapeWebView(
     session: RuleDrivenScrapeSession,
+    attempt: Int,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val webView = remember(session) { WebView(context) }
-    val controller = remember(session) { ScrapeWebViewController(webView, session) }
+    key(attempt) {
+        val context = LocalContext.current
+        val webView = remember(attempt) { WebView(context) }
+        val controller = remember(attempt) { ScrapeWebViewController(webView, session) }
 
-    DisposableEffect(controller) {
-        controller.start()
-        onDispose {
-            controller.stop()
-            webView.destroy()
+        DisposableEffect(controller) {
+            controller.start()
+            onDispose {
+                controller.stop()
+                webView.destroy()
+            }
         }
-    }
 
-    AndroidView(factory = { webView }, modifier = modifier)
+        AndroidView(factory = { webView }, modifier = modifier)
+    }
 }
 
 /** Read-only browser for the no-rule web-search fallback. */
@@ -155,6 +215,8 @@ private fun PlainWebView(
         factory = { context ->
             WebView(context).apply {
                 settings.javaScriptEnabled = true
+                // Same D1 rationale as the scrape host: airline SPAs need localStorage.
+                settings.domStorageEnabled = true
                 webViewClient = WebViewClient()
                 loadUrl(url)
             }

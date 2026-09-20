@@ -12,6 +12,7 @@ import com.itsluminous.cleartravel.feature.flights.form.FlightFormScreen
 import com.itsluminous.cleartravel.feature.flights.list.FlightListScreen
 import com.itsluminous.cleartravel.feature.flights.pass.BoardingPassViewerScreen
 import com.itsluminous.cleartravel.feature.flights.polling.FlightPollScheduler
+import com.itsluminous.cleartravel.feature.flights.status.CheckOutcome
 import com.itsluminous.cleartravel.feature.flights.status.StatusCheckScreen
 
 /** In-tab navigation of the Flights segment (the app shell owns no flight routes). */
@@ -47,6 +48,9 @@ fun FlightsContent(
     initialFlightId: String? = null,
 ) {
     var route by remember { mutableStateOf<FlightsRoute>(FlightsRoute.Journeys) }
+    // Transient (per D2 decision — no DB column): outcome of the last completed
+    // status-check attempt, surfaced as a snackbar + detail-sheet line on return.
+    var checkOutcome by remember { mutableStateOf<CheckOutcome?>(null) }
     val context = LocalContext.current
 
     // Feature-local WorkManager wiring: make sure a poll chain exists (ADR-013).
@@ -64,10 +68,14 @@ fun FlightsContent(
                 onAddManual = { route = FlightsRoute.Form() },
                 onImportPass = { uri -> route = FlightsRoute.Form(importUri = uri) },
                 onEdit = { id -> route = FlightsRoute.Form(editId = id) },
-                onCheckStatus = { id -> route = FlightsRoute.StatusCheck(id) },
+                onCheckStatus = { id ->
+                    checkOutcome = null
+                    route = FlightsRoute.StatusCheck(id)
+                },
                 onViewPass = { path -> route = FlightsRoute.PassViewer(path) },
                 modifier = modifier,
                 initialDetailFlightId = initialFlightId,
+                lastCheckOutcome = checkOutcome,
             )
 
         is FlightsRoute.Form ->
@@ -75,14 +83,20 @@ fun FlightsContent(
                 editId = current.editId,
                 importUri = current.importUri,
                 onClose = { route = FlightsRoute.Journeys },
-                onSavedAndCheck = { id -> route = FlightsRoute.StatusCheck(id) },
+                onSavedAndCheck = { id ->
+                    checkOutcome = null
+                    route = FlightsRoute.StatusCheck(id)
+                },
                 modifier = modifier,
             )
 
         is FlightsRoute.StatusCheck ->
             StatusCheckScreen(
                 flightId = current.flightId,
-                onClose = { route = FlightsRoute.Journeys },
+                onClose = { outcome ->
+                    checkOutcome = outcome
+                    route = FlightsRoute.Journeys
+                },
                 modifier = modifier,
             )
 

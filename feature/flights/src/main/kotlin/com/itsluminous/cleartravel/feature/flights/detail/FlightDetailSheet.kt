@@ -34,6 +34,8 @@ import com.itsluminous.cleartravel.feature.flights.list.FlightStatusChip
 import com.itsluminous.cleartravel.feature.flights.list.formatDate
 import com.itsluminous.cleartravel.feature.flights.list.formatTime
 import com.itsluminous.cleartravel.feature.flights.list.formatTimestamp
+import com.itsluminous.cleartravel.feature.flights.status.CheckOutcome
+import com.itsluminous.cleartravel.feature.flights.status.CheckOutcomeKind
 import com.itsluminous.cleartravel.feature.flights.status.FlightStatusFallbacks
 
 /**
@@ -52,6 +54,8 @@ fun FlightDetailSheet(
     onArchiveToggle: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Transient last-attempt outcome (D2) — rendered under the fetched timestamp. */
+    lastCheckOutcome: CheckOutcome? = null,
 ) {
     val context = LocalContext.current
     var confirmDelete by remember { mutableStateOf(false) }
@@ -118,6 +122,27 @@ fun FlightDetailSheet(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (lastCheckOutcome != null) {
+                val at = formatTimestamp(lastCheckOutcome.at).orEmpty()
+                Text(
+                    text =
+                        stringResource(
+                            when (lastCheckOutcome.kind) {
+                                CheckOutcomeKind.UPDATED -> R.string.flights_outcome_updated
+                                CheckOutcomeKind.NO_CHANGES -> R.string.flights_outcome_no_changes
+                                CheckOutcomeKind.FAILED -> R.string.flights_outcome_failed
+                            },
+                            at,
+                        ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color =
+                        if (lastCheckOutcome.kind == CheckOutcomeKind.FAILED) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                )
+            }
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 

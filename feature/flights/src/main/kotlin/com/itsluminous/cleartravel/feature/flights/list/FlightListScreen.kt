@@ -51,6 +51,8 @@ import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.feature.flights.R
 import com.itsluminous.cleartravel.feature.flights.detail.FlightDetailSheet
+import com.itsluminous.cleartravel.feature.flights.status.CheckOutcome
+import com.itsluminous.cleartravel.feature.flights.status.CheckOutcomeKind
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,6 +67,11 @@ fun FlightListScreen(
     viewModel: FlightListViewModel = hiltViewModel(),
     /** Deep-link hook: opens this flight's detail sheet on first composition. */
     initialDetailFlightId: String? = null,
+    /**
+     * Transient outcome of the last completed status check (D2): reopens the
+     * flight's detail sheet — which renders the outcome line — plus a snackbar.
+     */
+    lastCheckOutcome: CheckOutcome? = null,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -74,6 +81,22 @@ fun FlightListScreen(
 
     LaunchedEffect(initialDetailFlightId) {
         if (initialDetailFlightId != null) detailFlightId = initialDetailFlightId
+    }
+
+    val checkUpdatedSnackbar = stringResource(R.string.flights_check_snackbar_updated)
+    val checkNoChangesSnackbar = stringResource(R.string.flights_check_snackbar_no_changes)
+    val checkFailedSnackbar = stringResource(R.string.flights_check_snackbar_failed)
+    LaunchedEffect(lastCheckOutcome) {
+        if (lastCheckOutcome != null) {
+            detailFlightId = lastCheckOutcome.flightId
+            snackbarHostState.showSnackbar(
+                when (lastCheckOutcome.kind) {
+                    CheckOutcomeKind.UPDATED -> checkUpdatedSnackbar
+                    CheckOutcomeKind.NO_CHANGES -> checkNoChangesSnackbar
+                    CheckOutcomeKind.FAILED -> checkFailedSnackbar
+                },
+            )
+        }
     }
 
     val passPicker =
@@ -176,6 +199,7 @@ fun FlightListScreen(
     if (detailFlight != null) {
         FlightDetailSheet(
             flight = detailFlight,
+            lastCheckOutcome = lastCheckOutcome?.takeIf { it.flightId == detailFlight.id },
             onDismiss = { detailFlightId = null },
             onCheckStatus = {
                 detailFlightId = null

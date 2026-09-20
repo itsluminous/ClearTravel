@@ -92,9 +92,16 @@
     <string name="flights_check_scraping">Waiting for the airline page to load results…</string>
     <string name="flights_check_waiting_user">Complete the search on the page below if it doesn\'t submit automatically.</string>
     <string name="flights_check_done">Status updated</string>
-    <string name="flights_check_parse_failed">Couldn\'t read the results — the site may have changed. Read the page below and edit the flight manually.</string>
+    <string name="flights_check_parse_failed">Couldn\'t read the results — your saved data is unchanged. Retry, or read the page below and update the flight manually.</string>
+    <string name="flights_check_retry">Retry</string>
     <string name="flights_check_fallback_hint">No status rule for this airline — showing a web search instead. Update the flight manually from what you see.</string>
     <string name="flights_check_close">Close</string>
+    <string name="flights_check_snackbar_updated">Flight status updated</string>
+    <string name="flights_check_snackbar_no_changes">Status checked — no changes</string>
+    <string name="flights_check_snackbar_failed">Status check failed — data unchanged</string>
+    <string name="flights_outcome_updated">Last check (%1$s): status updated</string>
+    <string name="flights_outcome_no_changes">Last check (%1$s): no changes found</string>
+    <string name="flights_outcome_failed">Last check (%1$s): couldn\'t read the airline page — data unchanged</string>
 
     <!-- Boarding pass viewer -->
     <string name="flights_pass_viewer_title">Boarding pass</string>

@@ -111,6 +111,9 @@ class FlightStatusCheckViewModelTest {
             assertThat(announcedFlight.id).isEqualTo(flight.id)
             assertThat(changes).contains(FlightChange.GateAssigned("9"))
             assertThat(repository.getFlight(flight.id)!!.lastFetchedAt).isEqualTo(Fixtures.NOW)
+            val outcome = requireNotNull(viewModel.lastOutcome.value)
+            assertThat(outcome.kind).isEqualTo(CheckOutcomeKind.UPDATED)
+            assertThat(outcome.flightId).isEqualTo(flight.id)
         }
 
     @Test
@@ -129,7 +132,7 @@ class FlightStatusCheckViewModelTest {
         }
 
     @Test
-    fun `changed markup lands in the parse-failed fallback`() =
+    fun `changed markup lands in the parse-failed fallback keeping the session and a FAILED outcome`() =
         runTest {
             buildViewModel("testair.json" to testRuleJson)
             viewModel.start(flight.id)
@@ -137,9 +140,78 @@ class FlightStatusCheckViewModelTest {
 
             session.onHtmlDumped("<html><body><p>site redesigned</p></body></html>")
 
-            assertThat(viewModel.uiState.value).isInstanceOf(StatusCheckUiState.ParseFailed::class.java)
+            val state = viewModel.uiState.value as StatusCheckUiState.ParseFailed
+            // The raw page stays visible: same session + attempt = same WebView (D2).
+            assertThat(state.session).isSameInstanceAs(session)
+            assertThat(state.attempt).isEqualTo(1)
             assertThat(repository.appliedResults).isEmpty()
             assertThat(alerts.announced).isEmpty()
+            val outcome = requireNotNull(viewModel.lastOutcome.value)
+            assertThat(outcome.kind).isEqualTo(CheckOutcomeKind.FAILED)
+            assertThat(outcome.flightId).isEqualTo(flight.id)
+            assertThat(outcome.at).isEqualTo(Fixtures.NOW)
+        }
+
+    @Test
+    fun `retry after a parse failure starts a fresh attempt with a new session`() =
+        runTest {
+            buildViewModel("testair.json" to testRuleJson)
+            viewModel.start(flight.id)
+            val firstSession = (viewModel.uiState.value as StatusCheckUiState.Scraping).session
+            firstSession.onHtmlDumped("<html><body></body></html>")
+            assertThat(viewModel.uiState.value).isInstanceOf(StatusCheckUiState.ParseFailed::class.java)
+
+            viewModel.retry()
+
+            val state = viewModel.uiState.value as StatusCheckUiState.Scraping
+            assertThat(state.attempt).isEqualTo(2)
+            assertThat(state.session).isNotSameInstanceAs(firstSession)
+            assertThat(state.session.startUrl).isEqualTo(firstSession.startUrl)
+        }
+
+    @Test
+    fun `retry then successful extraction completes with an UPDATED outcome`() =
+        runTest {
+            buildViewModel("testair.json" to testRuleJson)
+            viewModel.start(flight.id)
+            (viewModel.uiState.value as StatusCheckUiState.Scraping)
+                .session
+                .onHtmlDumped("<html><body></body></html>")
+            viewModel.retry()
+            val retrySession = (viewModel.uiState.value as StatusCheckUiState.Scraping).session
+
+            retrySession.onHtmlDumped(RESULT_HTML)
+
+            assertThat(viewModel.uiState.value).isInstanceOf(StatusCheckUiState.Done::class.java)
+            assertThat(repository.appliedResults).hasSize(1)
+            val outcome = requireNotNull(viewModel.lastOutcome.value)
+            assertThat(outcome.kind).isEqualTo(CheckOutcomeKind.UPDATED)
+        }
+
+    @Test
+    fun `extraction with no user-visible changes records a NO_CHANGES outcome`() =
+        runTest {
+            val unchanged =
+                Fixtures.flightJourney(
+                    airlineIata = "AI",
+                    flightNumber = "101",
+                    status = FlightStatus.DELAYED,
+                    depGate = "9",
+                    depTerminal = "2",
+                )
+            repository.seed(unchanged)
+            buildViewModel("testair.json" to testRuleJson)
+            viewModel.start(unchanged.id)
+            val session = (viewModel.uiState.value as StatusCheckUiState.Scraping).session
+
+            session.onHtmlDumped(RESULT_HTML)
+
+            val state = viewModel.uiState.value as StatusCheckUiState.Done
+            assertThat(state.changes).isEmpty()
+            assertThat(alerts.announced).isEmpty()
+            val outcome = requireNotNull(viewModel.lastOutcome.value)
+            assertThat(outcome.kind).isEqualTo(CheckOutcomeKind.NO_CHANGES)
+            assertThat(outcome.flightId).isEqualTo(unchanged.id)
         }
 
     @Test
@@ -157,7 +229,9 @@ class FlightStatusCheckViewModelTest {
 
             val state = viewModel.uiState.value
             assertThat(state).isInstanceOf(StatusCheckUiState.ParseFailed::class.java)
+            assertThat((state as StatusCheckUiState.ParseFailed).session).isSameInstanceAs(session)
             assertThat(repository.appliedResults).isEmpty()
+            assertThat(viewModel.lastOutcome.value!!.kind).isEqualTo(CheckOutcomeKind.FAILED)
         }
 
     private companion object {
