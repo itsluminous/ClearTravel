@@ -1,0 +1,30 @@
+{
+  "id": "erail-route",
+  "displayName": "eRail.in Train Route",
+  "version": 1,
+  "kind": "train",
+  "urlTemplate": "https://erail.in/train-enquiry/{trainNumber}",
+  "prefill": [],
+  "submitSelector": null,
+  "readySignal": {
+    "jsCondition": "document.querySelectorAll('#divRouteList table.RouteList tr').length > 1"
+  },
+  "extract": {
+    "trainNumber": { "selector": "#divRouteList > div:first-child", "regexChain": ["^([0-9]+)"], "required": true },
+    "trainName": { "selector": "#divRouteList > div:first-child", "regexChain": ["^[0-9]+\\s+(.+)$"] }
+  },
+  "rows": {
+    "rowSelector": "#divRouteList table.RouteList tr:not(:first-child)",
+    "minRows": 2,
+    "fields": {
+      "stationCode": { "selector": "td:nth-child(2)" },
+      "stationName": { "selector": "td:nth-child(3) span" },
+      "arrival": { "selector": "td:nth-child(6)" },
+      "departure": { "selector": "td:nth-child(7)" },
+      "halt": { "selector": "td:nth-child(8)" },
+      "platform": { "selector": "td:nth-child(9)" },
+      "distance": { "selector": "td:nth-child(10)" },
+      "day": { "selector": "td:nth-child(11)" }
+    }
+  }
+}

@@ -10,7 +10,7 @@ import kotlinx.serialization.Serializable
  * changes when a site changes, only the rule file (and its fixture) does.
  *
  * Placeholders usable in [urlTemplate] and [PrefillStep.valueTemplate]:
- * `{pnr}`, `{flightNumber}`, `{date}` — expanded from [ScrapeParams].
+ * `{pnr}`, `{flightNumber}`, `{date}`, `{trainNumber}` — expanded from [ScrapeParams].
  *
  * Every rule file MUST ship with a fixture pair in
  * `core/scrape/src/test/resources/fixtures/<id>/{page.html,expected.json}` —
@@ -69,7 +69,7 @@ enum class RuleKind {
 @Serializable
 data class PrefillStep(
     val selector: String,
-    /** May contain `{pnr}` / `{flightNumber}` / `{date}` placeholders. */
+    /** May contain `{pnr}` / `{flightNumber}` / `{date}` / `{trainNumber}` placeholders. */
     val valueTemplate: String,
 )
 

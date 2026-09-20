@@ -29,3 +29,6 @@ build.log
 # IDE (VS Code / Eclipse) module output
 bin/
 .playwright-mcp/
+
+# Agent recon captures (raw scrape-source HTML/notes) — never committed
+docs/recon/

@@ -129,6 +129,20 @@ class ScrapeSessionTest {
         assertThat(js).contains("document.querySelector('#result-table')")
         assertThat(js).contains("offsetParent")
     }
+
+    @Test
+    fun `erail-route rule is a direct-URL auto-flow with the train number expanded`() {
+        val rule = RuleFixtureHarness.loadRule("erail-route.json")
+        val session = RuleDrivenScrapeSession(rule, ScrapeParams(trainNumber = "22346"))
+
+        assertThat(session.startUrl).isEqualTo("https://erail.in/train-enquiry/22346")
+        // Direct GET: nothing to prefill, nothing to submit, nothing to dismiss —
+        // the route flow needs no user interaction (recon 2026-09-21, ADR-018).
+        assertThat(rule.prefill).isEmpty()
+        assertThat(session.submitJavaScript()).isNull()
+        assertThat(session.dismissJavaScript()).isNull()
+        assertThat(session.readySignalJavaScript()).contains("RouteList")
+    }
 }
 
 class ScrapeParamsTest {
@@ -144,6 +158,13 @@ class ScrapeParamsTest {
     @Test
     fun `missing params expand to empty strings`() {
         assertThat(ScrapeParams().expand("p={pnr}&f={flightNumber}")).isEqualTo("p=&f=")
+    }
+
+    @Test
+    fun `trainNumber placeholder expands and defaults to empty`() {
+        assertThat(ScrapeParams(trainNumber = "22346").expand("https://erail.in/train-enquiry/{trainNumber}"))
+            .isEqualTo("https://erail.in/train-enquiry/22346")
+        assertThat(ScrapeParams().expand("t={trainNumber}")).isEqualTo("t=")
     }
 
     @Test

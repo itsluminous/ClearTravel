@@ -45,7 +45,7 @@ RuleExtractor.extract(rule, html)  ← PURE jsoup fn = the fixture-tested code p
 | `version` | Bump whenever selectors change |
 | `kind` | `train` or `flight` |
 | `iataCodes` | Airline IATA codes served (flight rules only), e.g. `["6E"]` |
-| `urlTemplate` | Page URL; placeholders `{pnr}` `{flightNumber}` `{date}` |
+| `urlTemplate` | Page URL; placeholders `{pnr}` `{flightNumber}` `{date}` `{trainNumber}` |
 | `prefill` | `[{selector, valueTemplate}]` — form fields injected via JS after load |
 | `submitSelector` | CSS selector auto-clicked after prefill; **`null` when unsafe (captcha)** → user submits manually |
 | `readySignal` | `{selector}` (exists + visible) or `{jsCondition}` (JS expr) marking the result rendered |
@@ -75,3 +75,12 @@ extracted at all ⇒ `ExtractionResult.Failure(reason, rawHtml)`.
   tables). Selectors derived from the live page skeleton + its render JS
   (`pnrEnquiryJS.js` `showPnr()`/`drawRow()`); see `docs/recon-followup.md` for the
   post-captcha live-DOM verification TODO.
+- `erail-route` v1 — https://erail.in/train-enquiry/{trainNumber} (train schedule /
+  full station route; ADR-018). Direct GET, no prefill/submit/captcha/consent banner —
+  a fully hands-free flow. Extracts `trainNumber`/`trainName` from the
+  `#divRouteList` header and one row per station from `table.RouteList`
+  (code/name/arr/dep/halt/platform/distance/day). Quirks captured in the rule +
+  fixture: times are dot-separated `HH.MM`; the origin's arrival and the terminus'
+  departure cells hold the literals `First`/`Last` (normalized by `feature:trains`'
+  `RouteMapper`, not by the rule). Selectors + fixture from the real captured DOM of
+  train 22346 (recon 2026-09-21).
