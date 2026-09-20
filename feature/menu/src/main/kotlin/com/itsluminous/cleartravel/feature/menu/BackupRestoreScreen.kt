@@ -3,6 +3,7 @@ package com.itsluminous.cleartravel.feature.menu
 import android.text.format.Formatter
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -37,6 +38,7 @@ import com.itsluminous.cleartravel.core.data.backup.BackupEntries
 import com.itsluminous.cleartravel.core.data.backup.ImportPreview
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
+import com.itsluminous.cleartravel.core.google.backup.DriveBackupInfo
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -94,6 +96,8 @@ internal fun BackupRestoreScreen(
                     snackbarHostState.showSnackbar(context.getString(R.string.menu_backup_error_unreadable))
                 BackupRestoreEvent.IoFailed ->
                     snackbarHostState.showSnackbar(context.getString(R.string.menu_backup_error_io))
+                BackupRestoreEvent.DriveDownloadFailed ->
+                    snackbarHostState.showSnackbar(context.getString(R.string.menu_backup_drive_download_failed))
             }
         }
     }
@@ -186,6 +190,44 @@ internal fun BackupRestoreScreen(
                     Text(stringResource(R.string.menu_backup_import_action))
                 }
             }
+
+            ClearTravelCard {
+                Text(
+                    text = stringResource(R.string.menu_backup_drive_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                if (!uiState.driveLinked) {
+                    Text(
+                        text = stringResource(R.string.menu_backup_drive_not_linked),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                } else {
+                    val newest = uiState.driveBackups.firstOrNull()
+                    Text(
+                        text =
+                            if (newest == null) {
+                                stringResource(R.string.menu_backup_drive_none)
+                            } else {
+                                stringResource(
+                                    R.string.menu_backup_drive_last,
+                                    formatInstant(newest.createdAt),
+                                    Formatter.formatShortFileSize(context, newest.sizeBytes),
+                                )
+                            },
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                    Button(
+                        onClick = viewModel::openDriveList,
+                        enabled = !uiState.inProgress,
+                        modifier = Modifier.padding(top = 8.dp),
+                    ) {
+                        Text(stringResource(R.string.menu_backup_drive_restore_action))
+                    }
+                }
+            }
         }
     }
 
@@ -196,6 +238,87 @@ internal fun BackupRestoreScreen(
             onDismiss = viewModel::dismissImport,
         )
     }
+
+    if (uiState.showDriveList) {
+        DriveBackupListDialog(
+            backups = uiState.driveBackups,
+            onPick = viewModel::restoreFromDrive,
+            onDismiss = viewModel::dismissDriveList,
+        )
+    }
+
+    uiState.freshRestorePrompt?.let { backup ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissFreshRestore,
+            title = { Text(stringResource(R.string.menu_backup_fresh_restore_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.menu_backup_fresh_restore_message,
+                        formatInstant(backup.createdAt),
+                        Formatter.formatShortFileSize(context, backup.sizeBytes),
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmFreshRestore) {
+                    Text(stringResource(R.string.menu_backup_fresh_restore_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissFreshRestore) {
+                    Text(stringResource(R.string.menu_backup_fresh_restore_decline))
+                }
+            },
+        )
+    }
+}
+
+/** Picker over the ClearTravel backups found in Drive (newest first). */
+@Composable
+private fun DriveBackupListDialog(
+    backups: List<DriveBackupInfo>,
+    onPick: (DriveBackupInfo) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val context = LocalContext.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.menu_backup_drive_list_title)) },
+        text = {
+            if (backups.isEmpty()) {
+                Text(stringResource(R.string.menu_backup_drive_list_empty))
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    backups.forEach { backup ->
+                        Column(
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onPick(backup) }
+                                    .padding(vertical = 8.dp),
+                        ) {
+                            Text(text = backup.fileName, style = MaterialTheme.typography.bodyLarge)
+                            Text(
+                                text =
+                                    stringResource(
+                                        R.string.menu_backup_drive_last,
+                                        formatInstant(backup.createdAt),
+                                        Formatter.formatShortFileSize(context, backup.sizeBytes),
+                                    ),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.menu_cancel)) }
+        },
+    )
 }
 
 /** Confirmation before merging: backup date + record counts (spec feature 6). */

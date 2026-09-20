@@ -222,7 +222,7 @@ class FreshInstallDetectorTest {
     private val flights = FakeFlightRepository()
     private val checklists = FakeChecklistRepository()
 
-    private fun detector() = FreshInstallDetector(trips, trains, flights, checklists)
+    private fun detector() = RepositoryFreshInstallDetector(trips, trains, flights, checklists)
 
     @Test
     fun `zero trips, journeys and checklists is fresh`() =

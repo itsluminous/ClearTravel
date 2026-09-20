@@ -9,6 +9,12 @@ import com.itsluminous.cleartravel.core.data.backup.ExportResult
 import com.itsluminous.cleartravel.core.data.backup.ImportPreview
 import com.itsluminous.cleartravel.core.data.backup.LocalBackupInfo
 import com.itsluminous.cleartravel.core.data.backup.MergeSummary
+import com.itsluminous.cleartravel.core.google.auth.GoogleLinkState
+import com.itsluminous.cleartravel.core.google.auth.GoogleSyncScheduler
+import com.itsluminous.cleartravel.core.google.backup.DriveBackupInfo
+import com.itsluminous.cleartravel.core.google.backup.DriveBackupService
+import com.itsluminous.cleartravel.core.google.backup.DriveBackupUploadResult
+import com.itsluminous.cleartravel.core.google.backup.FreshInstallDetector
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.core.testing.MainDispatcherRule
 import kotlinx.coroutines.test.runTest
@@ -17,6 +23,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.io.File
+import java.io.IOException
 import java.time.Clock
 import java.time.ZoneOffset
 
@@ -60,6 +68,43 @@ private class FakeBackupManager : BackupManager {
     override suspend fun latestLocalBackup(): LocalBackupInfo? = localBackup
 }
 
+/** Scripted [DriveBackupService] for the ViewModel's Drive rows. */
+private class FakeDriveBackupService : DriveBackupService {
+    var backups: List<DriveBackupInfo> = emptyList()
+    var downloadFile: File? = null
+
+    override suspend fun uploadLatestBackup(): DriveBackupUploadResult = DriveBackupUploadResult.Skipped
+
+    override suspend fun listBackups(): List<DriveBackupInfo> = backups
+
+    override suspend fun downloadBackup(backup: DriveBackupInfo): File = downloadFile ?: throw IOException("offline")
+}
+
+private class FakeFreshInstallDetector(
+    var fresh: Boolean = false,
+) : FreshInstallDetector {
+    override suspend fun isFreshInstall(): Boolean = fresh
+}
+
+/** Recording [GoogleSyncScheduler] — verifies the export → Drive upload hook. */
+private class RecordingSyncScheduler : GoogleSyncScheduler {
+    var backupUploads = 0
+
+    override fun scheduleCalendarSync() = Unit
+
+    override fun cancelCalendarSync() = Unit
+
+    override fun scheduleDriveUploads() = Unit
+
+    override fun cancelDriveUploads() = Unit
+
+    override fun scheduleBackupUpload() {
+        backupUploads++
+    }
+
+    override fun scheduleDisconnectCleanup(calendarId: String) = Unit
+}
+
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class BackupRestoreViewModelTest {
@@ -68,10 +113,26 @@ class BackupRestoreViewModelTest {
 
     private val backupManager = FakeBackupManager()
     private val clock: Clock = Clock.fixed(Fixtures.NOW, ZoneOffset.UTC)
+    private val googleManager = FakeGoogleAccountManager()
+    private val driveService = FakeDriveBackupService()
+    private val detector = FakeFreshInstallDetector()
+    private val scheduler = RecordingSyncScheduler()
 
-    private fun viewModel() = BackupRestoreViewModel(backupManager, clock)
+    private fun viewModel() = BackupRestoreViewModel(backupManager, clock, googleManager, driveService, detector, scheduler)
 
     private val uri: Uri = Uri.parse("content://test/backup.zip")
+
+    private val driveBackup =
+        DriveBackupInfo(
+            fileId = "file-1",
+            fileName = "cleartravel-backup-20260101-0101.zip",
+            createdAt = Fixtures.NOW,
+            sizeBytes = 42L,
+        )
+
+    private fun linkGoogle() {
+        googleManager.state.value = GoogleLinkState.Linked("traveler@example.com", emptySet())
+    }
 
     @Test
     fun `suggested export file name follows the spec pattern`() {
@@ -201,5 +262,120 @@ class BackupRestoreViewModelTest {
                 viewModel.uiState.value.lastBackup
                     ?.fileName,
             ).isEqualTo("existing.zip")
+        }
+
+    @Test
+    fun `successful export schedules the drive backup upload`() =
+        runTest {
+            val viewModel = viewModel()
+            viewModel.events.test {
+                viewModel.export(uri)
+                awaitItem()
+            }
+
+            assertThat(scheduler.backupUploads).isEqualTo(1)
+        }
+
+    @Test
+    fun `failed export does not schedule a drive upload`() =
+        runTest {
+            backupManager.exportError = BackupException.Io()
+            val viewModel = viewModel()
+            viewModel.events.test {
+                viewModel.export(uri)
+                awaitItem()
+            }
+
+            assertThat(scheduler.backupUploads).isEqualTo(0)
+        }
+
+    @Test
+    fun `linking google loads the drive backup list`() =
+        runTest {
+            driveService.backups = listOf(driveBackup)
+            linkGoogle()
+
+            val viewModel = viewModel()
+
+            assertThat(viewModel.uiState.value.driveLinked).isTrue()
+            assertThat(viewModel.uiState.value.driveBackups).containsExactly(driveBackup)
+        }
+
+    @Test
+    fun `fresh install with a drive backup prompts once with that backup`() =
+        runTest {
+            driveService.backups = listOf(driveBackup)
+            detector.fresh = true
+            linkGoogle()
+
+            val viewModel = viewModel()
+
+            assertThat(viewModel.uiState.value.freshRestorePrompt).isEqualTo(driveBackup)
+
+            viewModel.dismissFreshRestore()
+            assertThat(viewModel.uiState.value.freshRestorePrompt).isNull()
+        }
+
+    @Test
+    fun `no prompt when the install is not fresh or drive is empty`() =
+        runTest {
+            detector.fresh = false
+            driveService.backups = listOf(driveBackup)
+            linkGoogle()
+            assertThat(viewModel().uiState.value.freshRestorePrompt).isNull()
+
+            detector.fresh = true
+            driveService.backups = emptyList()
+            assertThat(viewModel().uiState.value.freshRestorePrompt).isNull()
+        }
+
+    @Test
+    fun `confirming the fresh restore downloads and applies the backup`() =
+        runTest {
+            driveService.backups = listOf(driveBackup)
+            driveService.downloadFile = File.createTempFile("cleartravel-test", ".zip")
+            detector.fresh = true
+            linkGoogle()
+            val viewModel = viewModel()
+
+            viewModel.events.test {
+                viewModel.confirmFreshRestore()
+
+                val event = awaitItem() as BackupRestoreEvent.ImportDone
+                assertThat(event.summary.inserted).isEqualTo(3)
+            }
+            assertThat(backupManager.appliedFrom).hasSize(1)
+            assertThat(viewModel.uiState.value.freshRestorePrompt).isNull()
+        }
+
+    @Test
+    fun `manual restore from drive feeds the normal preview-confirm flow`() =
+        runTest {
+            driveService.backups = listOf(driveBackup)
+            driveService.downloadFile = File.createTempFile("cleartravel-test", ".zip")
+            linkGoogle()
+            val viewModel = viewModel()
+            viewModel.openDriveList()
+
+            viewModel.restoreFromDrive(driveBackup)
+
+            assertThat(viewModel.uiState.value.showDriveList).isFalse()
+            assertThat(viewModel.uiState.value.pendingImport).isNotNull()
+            assertThat(backupManager.appliedFrom).isEmpty()
+        }
+
+    @Test
+    fun `a failed drive download surfaces as DriveDownloadFailed`() =
+        runTest {
+            driveService.backups = listOf(driveBackup)
+            driveService.downloadFile = null
+            linkGoogle()
+            val viewModel = viewModel()
+
+            viewModel.events.test {
+                viewModel.restoreFromDrive(driveBackup)
+
+                assertThat(awaitItem()).isEqualTo(BackupRestoreEvent.DriveDownloadFailed)
+            }
         }
 }

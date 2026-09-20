@@ -12,13 +12,18 @@ import kotlinx.coroutines.flow.first
  * included) and checklists — only then is the restore-from-Drive prompt offered,
  * so an established device is never nagged to import over its data.
  */
-class FreshInstallDetector(
+interface FreshInstallDetector {
+    suspend fun isFreshInstall(): Boolean
+}
+
+/** [FreshInstallDetector] over the Room-backed repositories. */
+class RepositoryFreshInstallDetector(
     private val tripRepository: TripRepository,
     private val trainRepository: TrainRepository,
     private val flightRepository: FlightRepository,
     private val checklistRepository: ChecklistRepository,
-) {
-    suspend fun isFreshInstall(): Boolean =
+) : FreshInstallDetector {
+    override suspend fun isFreshInstall(): Boolean =
         tripRepository.observeActive().first().isEmpty() &&
             tripRepository.observeArchived().first().isEmpty() &&
             trainRepository.observeActive().first().isEmpty() &&

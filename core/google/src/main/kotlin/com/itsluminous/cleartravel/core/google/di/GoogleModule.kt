@@ -20,6 +20,7 @@ import com.itsluminous.cleartravel.core.google.auth.PlayServicesGoogleAuthorizer
 import com.itsluminous.cleartravel.core.google.backup.DefaultDriveBackupService
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupService
 import com.itsluminous.cleartravel.core.google.backup.FreshInstallDetector
+import com.itsluminous.cleartravel.core.google.backup.RepositoryFreshInstallDetector
 import com.itsluminous.cleartravel.core.google.calendar.CalendarClient
 import com.itsluminous.cleartravel.core.google.calendar.CalendarEventStringsFactory
 import com.itsluminous.cleartravel.core.google.calendar.CalendarSyncEngine
@@ -150,6 +151,6 @@ abstract class GoogleModule {
             trainRepository: TrainRepository,
             flightRepository: FlightRepository,
             checklistRepository: ChecklistRepository,
-        ): FreshInstallDetector = FreshInstallDetector(tripRepository, trainRepository, flightRepository, checklistRepository)
+        ): FreshInstallDetector = RepositoryFreshInstallDetector(tripRepository, trainRepository, flightRepository, checklistRepository)
     }
 }
