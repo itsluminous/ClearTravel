@@ -1,5 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="menu_empty_title">Menu</string>
-    <string name="menu_empty_message">Settings, backup and about will live here.</string>
+    <string name="menu_title">Menu</string>
+    <string name="menu_back">Back</string>
+    <string name="menu_cancel">Cancel</string>
+
+    <string name="menu_settings">Settings</string>
+    <string name="menu_settings_subtitle">Theme and preferences</string>
+    <string name="menu_manage_presets">Manage presets</string>
+    <string name="menu_manage_presets_subtitle">Checklist templates</string>
+    <string name="menu_about">About</string>
+    <string name="menu_about_subtitle">Version and source</string>
+
+    <string name="menu_theme_title">Theme</string>
+    <string name="menu_theme_system">System default</string>
+    <string name="menu_theme_light">Light</string>
+    <string name="menu_theme_dark">Dark</string>
+
+    <string name="menu_presets_title">Manage presets</string>
+    <string name="menu_presets_empty_title">No presets</string>
+    <string name="menu_presets_empty_message">Create a preset to reuse it when building checklists.</string>
+    <string name="menu_preset_built_in">Built-in</string>
+    <string name="menu_preset_add_fab">Add preset</string>
+    <string name="menu_preset_create_title">New preset</string>
+    <string name="menu_preset_name_label">Name</string>
+    <string name="menu_preset_create_confirm">Create</string>
+    <string name="menu_preset_duplicate">Duplicate preset</string>
+    <string name="menu_preset_copy_name">%1$s (copy)</string>
+    <string name="menu_preset_duplicated">Preset duplicated</string>
+    <string name="menu_preset_delete">Delete preset</string>
+    <string name="menu_preset_delete_confirm_title">Delete preset?</string>
+    <string name="menu_preset_delete_confirm_message">“%1$s” will be removed. Checklists already created from it keep their items.</string>
+    <string name="menu_preset_delete_confirm">Delete</string>
+    <string name="menu_preset_deleted">Preset deleted</string>
+
+    <string name="menu_preset_edit_title">Edit preset</string>
+    <string name="menu_preset_view_title">Preset</string>
+    <string name="menu_preset_built_in_readonly">Built-in presets can’t be edited. Duplicate this preset to customize it.</string>
+    <string name="menu_preset_no_items_title">No items yet</string>
+    <string name="menu_preset_no_items_message">Add the items this template should carry.</string>
+    <string name="menu_preset_add_item_hint">Add item</string>
+    <string name="menu_preset_add_item_action">Add item to preset</string>
+    <string name="menu_preset_item_move_up">Move item up</string>
+    <string name="menu_preset_item_move_down">Move item down</string>
+    <string name="menu_preset_item_remove">Remove item</string>
+
+    <string name="menu_about_title">About</string>
+    <string name="menu_about_app_name">ClearTravel</string>
+    <string name="menu_about_version">Version %1$s</string>
+    <string name="menu_about_description">ClearTravel is an offline-first travel companion: train and flight journeys, trip itineraries on a map, and packing checklists — all stored on your device.</string>
+    <string name="menu_about_source">Source code</string>
+    <string name="menu_about_source_url" translatable="false">https://github.com/itsluminous/ClearTravel</string>
 </resources>
