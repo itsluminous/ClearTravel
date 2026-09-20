@@ -5,6 +5,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import com.itsluminous.cleartravel.core.database.converter.Converters
 import com.itsluminous.cleartravel.core.database.dao.AttachmentDao
+import com.itsluminous.cleartravel.core.database.dao.BackupDao
 import com.itsluminous.cleartravel.core.database.dao.ChecklistDao
 import com.itsluminous.cleartravel.core.database.dao.ChecklistPresetDao
 import com.itsluminous.cleartravel.core.database.dao.FlightDao
@@ -60,4 +61,7 @@ abstract class ClearTravelDatabase : RoomDatabase() {
     abstract fun flightDao(): FlightDao
 
     abstract fun attachmentDao(): AttachmentDao
+
+    /** Backup engine only (ADR-015): full dumps incl. tombstones + raw upserts. */
+    abstract fun backupDao(): BackupDao
 }
