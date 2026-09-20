@@ -43,7 +43,7 @@ android {
         versionCode = (project.findProperty("appVersionCode") as? String)?.toInt() ?: 1
         versionName = (project.findProperty("appVersionName") as? String) ?: "0.1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.itsluminous.cleartravel.HiltTestRunner"
 
         // Maps SDK key read by the manifest <meta-data>; empty is a safe default
         // (map tiles render blank until a key is supplied in local.properties).
@@ -161,4 +161,8 @@ dependencies {
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.truth)
+    // Hilt in tests: HiltTestApplication + @TestInstallIn module replacement
+    // (TestDatabaseModule swaps the on-disk Room DB for an in-memory one).
+    androidTestImplementation(libs.hilt.android.testing)
+    kspAndroidTest(libs.hilt.compiler)
 }
