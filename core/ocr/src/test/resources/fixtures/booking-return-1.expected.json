@@ -1,0 +1,13 @@
+{
+  "passengerName": { "value": "ARJUN NAIR", "confidence": "HIGH" },
+  "pnr": { "value": "T5K2M9", "confidence": "HIGH" },
+  "carrier": { "value": "AI", "confidence": "MEDIUM" },
+  "flightNumber": { "value": "503", "confidence": "MEDIUM" },
+  "fromAirport": { "value": "COK", "confidence": "MEDIUM" },
+  "toAirport": { "value": "DEL", "confidence": "MEDIUM" },
+  "flightDate": { "value": "2026-09-26", "confidence": "HIGH" },
+  "cabinClass": { "value": "BUSINESS", "confidence": "HIGH" },
+  "seat": { "value": null, "confidence": "NONE" },
+  "additionalFlights": 1,
+  "source": "OCR_TEXT"
+}

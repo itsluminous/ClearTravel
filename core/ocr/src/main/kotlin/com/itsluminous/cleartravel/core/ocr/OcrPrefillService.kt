@@ -7,10 +7,13 @@ import android.net.Uri
 import com.itsluminous.cleartravel.core.ocr.bcbp.BcbpParseResult
 import com.itsluminous.cleartravel.core.ocr.bcbp.BcbpParser
 import com.itsluminous.cleartravel.core.ocr.bcbp.toBoardingPassExtraction
+import com.itsluminous.cleartravel.core.ocr.bcbp.toBookingConfirmationExtraction
 import com.itsluminous.cleartravel.core.ocr.extract.BoardingPassTextExtractor
+import com.itsluminous.cleartravel.core.ocr.extract.BookingConfirmationExtractor
 import com.itsluminous.cleartravel.core.ocr.extract.IrctcSmsParser
 import com.itsluminous.cleartravel.core.ocr.extract.IrctcTicketExtractor
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassExtraction
+import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
 import com.itsluminous.cleartravel.core.ocr.model.TrainTicketExtraction
 import com.itsluminous.cleartravel.core.ocr.pipeline.BcbpBarcodeDecoder
 import com.itsluminous.cleartravel.core.ocr.pipeline.BitmapPreprocessor
@@ -42,6 +45,7 @@ class OcrPrefillService
         private val irctcTicketExtractor: IrctcTicketExtractor,
         private val irctcSmsParser: IrctcSmsParser,
         private val boardingPassTextExtractor: BoardingPassTextExtractor,
+        private val bookingConfirmationExtractor: BookingConfirmationExtractor,
     ) {
         /** Train-ticket import: OCR the PDF/image at [uri] and extract IRCTC fields. */
         suspend fun prefillTrainTicket(uri: Uri): TrainTicketExtraction =
@@ -69,6 +73,26 @@ class OcrPrefillService
                 }
                 val text = textRecognizer.recognize(preprocessor.preprocess(bitmap))
                 boardingPassTextExtractor.extract(text)
+            }
+
+        /**
+         * Booking-confirmation (e-ticket PDF/image) import: confirmations normally
+         * carry no barcode, but when one IS present the BCBP pipeline is reused
+         * (authoritative); otherwise OCR-text heuristics extract the FIRST flight and
+         * count additional segments (return trips). Never throws — unreadable input
+         * degrades to [BookingConfirmationExtraction.EMPTY] (blank form, file attached).
+         */
+        suspend fun prefillBookingConfirmation(uri: Uri): BookingConfirmationExtraction =
+            withContext(Dispatchers.IO) {
+                val bitmap = loadBitmap(uri) ?: return@withContext BookingConfirmationExtraction.EMPTY
+                for (payload in barcodeDecoder.decode(bitmap)) {
+                    val result = BcbpParser.parse(payload)
+                    if (result is BcbpParseResult.Success) {
+                        return@withContext result.data.toBookingConfirmationExtraction()
+                    }
+                }
+                val text = textRecognizer.recognize(preprocessor.preprocess(bitmap))
+                bookingConfirmationExtractor.extract(text)
             }
 
         private fun loadBitmap(uri: Uri): Bitmap? =

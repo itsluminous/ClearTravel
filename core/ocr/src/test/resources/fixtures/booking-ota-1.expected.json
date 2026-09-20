@@ -1,0 +1,13 @@
+{
+  "passengerName": { "value": "ANANYA IYER", "confidence": "HIGH" },
+  "pnr": { "value": "QW3R7Y", "confidence": "HIGH" },
+  "carrier": { "value": "6E", "confidence": "MEDIUM" },
+  "flightNumber": { "value": "6114", "confidence": "MEDIUM" },
+  "fromAirport": { "value": "BLR", "confidence": "MEDIUM" },
+  "toAirport": { "value": "HYD", "confidence": "MEDIUM" },
+  "flightDate": { "value": "2026-11-05", "confidence": "HIGH" },
+  "cabinClass": { "value": "ECONOMY", "confidence": "HIGH" },
+  "seat": { "value": null, "confidence": "NONE" },
+  "additionalFlights": 0,
+  "source": "OCR_TEXT"
+}

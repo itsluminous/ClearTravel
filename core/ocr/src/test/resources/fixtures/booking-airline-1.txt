@@ -1,0 +1,12 @@
+AIR INDIA
+E-TICKET / ELECTRONIC TICKET RECEIPT
+Booking Reference (PNR): HJK92L
+Passenger: MR ROHIT VERMA
+Flight AI 0865
+New Delhi (DEL) → Mumbai (BOM)
+Date: 12 Oct 2026
+Departure 06:15   Terminal 3
+Class: ECONOMY
+Seat: 18C
+E-Ticket Number: 098-2345678901
+Fare INR 7,845 including taxes

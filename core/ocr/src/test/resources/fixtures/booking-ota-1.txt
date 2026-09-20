@@ -1,0 +1,11 @@
+MakeMyTrip
+BOOKING CONFIRMED
+Booking ID: NF712345678901
+Traveller: MS ANANYA IYER
+Airline PNR: QW3R7Y
+IndiGo 6E 6114
+BENGALURU (BLR) - HYDERABAD (HYD)
+Travel Date: 05-11-2026
+Departure 08:30 AM
+Cabin: ECONOMY
+Total Amount Paid Rs 4,520

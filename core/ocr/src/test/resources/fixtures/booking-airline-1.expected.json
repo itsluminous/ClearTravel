@@ -1,0 +1,13 @@
+{
+  "passengerName": { "value": "ROHIT VERMA", "confidence": "HIGH" },
+  "pnr": { "value": "HJK92L", "confidence": "HIGH" },
+  "carrier": { "value": "AI", "confidence": "HIGH" },
+  "flightNumber": { "value": "865", "confidence": "HIGH" },
+  "fromAirport": { "value": "DEL", "confidence": "MEDIUM" },
+  "toAirport": { "value": "BOM", "confidence": "MEDIUM" },
+  "flightDate": { "value": "2026-10-12", "confidence": "HIGH" },
+  "cabinClass": { "value": "ECONOMY", "confidence": "HIGH" },
+  "seat": { "value": "18C", "confidence": "HIGH" },
+  "additionalFlights": 0,
+  "source": "OCR_TEXT"
+}
