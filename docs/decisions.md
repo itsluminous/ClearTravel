@@ -674,3 +674,55 @@ layering: the rule stays a faithful selector map of the real DOM (fixture-pinned
 the engine stays generic, and the one function that interprets erail's conventions
 is trivially unit-testable (12 tests) and swappable per-source if a different
 schedule site ever ships as a fallback rule.
+
+## ADR-017: Booking-confirmation import — third add-flight path, attachment-row storage
+
+**What.** Flights gain a booking-confirmation (e-ticket PDF/image) import — a document
+that EXISTS FROM BOOKING DAY, unlike boarding passes — as a third add path plus an
+attach/view flow on existing flights:
+
+- **`core:ocr`: `BookingConfirmationExtractor`** (pure Kotlin, same discipline as
+  `BoardingPassTextExtractor` — labeled HIGH / structural MEDIUM / weak LOW, garbage
+  → typed EMPTY, never throws) extracts PNR/booking reference, passenger name,
+  airline IATA + flight number, date, route, cabin class and seat-if-present from
+  airline-direct AND OTA layouts. PNR resolution is tiered: a labeled airline
+  record locator (6-char alnum) is HIGH; a labeled OTA reference (MakeMyTrip/
+  Cleartrip booking-id shapes) is MEDIUM — a real booking handle but not the
+  airline PNR; a bare 6-char alnum is LOW. **Multi-flight handling:** confirmations
+  often describe several segments (return trips), so the extractor dedupes distinct
+  carrier+number tokens, extracts the FIRST segment fully and exposes
+  `additionalFlights` — the form renders a "return leg detected — add it
+  separately" hint rather than guessing at multi-leg persistence (one
+  `FlightJourney` IS one leg, ADR-004). `OcrPrefillService.prefillBookingConfirmation`
+  reuses the barcode-first pipeline: confirmations normally carry no BCBP, but when
+  one IS embedded it wins (authoritative; extra BCBP legs feed `additionalFlights`).
+  Fixtures (ADR-003/ADR-009 discipline): airline-direct (Air India style), OTA
+  (MakeMyTrip style), return-trip (Cleartrip style) + the shared garbage fixture
+  asserting the EMPTY fallback.
+- **`feature:flights`: storage as `Attachment` rows, NOT a new flight column.** The
+  picked file is copied into `filesDir/attachments/<attachmentId>.<ext>` and
+  persisted through `AttachmentRepository.save` as an `ownerType = FLIGHT` row with
+  its mimeType and `driveFileId = null` — which puts booking confirmations on the
+  existing Drive upload queue (ADR-016 drains pending rows automatically) and into
+  backup bundles (ADR-015 bundles local-only attachment bytes) with ZERO engine or
+  schema changes. `boardingPassPath` stays frozen and special (offline gate
+  display); the ADR-016 note that Drive registration keys boarding-pass attachment
+  rows by the same local path is honored by the documents list, which dedupes on it.
+- **UI.** Add-options sheet gains "Import booking confirmation" (picker → prefill →
+  form with per-field confidence markers incl. a new CABIN marker + the return-leg
+  hint); the flight detail sheet gains "Attach booking confirmation" for EXISTING
+  flights (picker → attachment row → snackbar) and a Documents list (boarding pass
+  first, then attachments) — each row opens the existing full-brightness viewer,
+  which gained only a `titleRes` parameter. New seams mirror the existing ones:
+  `BookingConfirmationImporter` (Hilt-bound `OcrBookingConfirmationImporter`)
+  keeps `FlightFormViewModel` and the new `FlightDocumentsViewModel` plain-JVM
+  testable, and the documents list is a pure `buildFlightDocuments` function.
+
+**Why.** Attachment-row storage was chosen over a second path column because the
+schema is frozen (ADR-004) and the attachments aggregate already carries exactly the
+needed behaviors (polymorphic FLIGHT owner, Drive queue, backup bundling, restore
+ladder, soft-delete cascade on flight delete) — a column would have required schema,
+backup-format and Drive-engine changes for a strictly worse result. First-leg-plus-
+hint multi-flight handling keeps the extractor honest about what a single
+`FlightJourney` row can represent while still telling the user the return leg was
+seen.
