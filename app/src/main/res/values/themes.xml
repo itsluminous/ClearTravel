@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material3 XML theme: Compose draws everything; this is the window backdrop. -->
+    <style name="Theme.ClearTravel" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/cleartravel_primary</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+    </style>
+
+    <!-- AndroidX splash screen: brand-colored window with the launcher mark, handing
+         over to Theme.ClearTravel once the activity draws. Applied to MainActivity;
+         MainActivity calls installSplashScreen() before super.onCreate(). -->
+    <style name="Theme.ClearTravel.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/cleartravel_splash_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.ClearTravel</item>
+    </style>
+</resources>

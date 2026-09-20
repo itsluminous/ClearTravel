@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand seed color (#0B57D0) — keep in sync with core:designsystem SeedColor. -->
+    <color name="cleartravel_primary">#0B57D0</color>
+    <color name="ic_launcher_background">#0B57D0</color>
+    <color name="cleartravel_splash_background">#0B57D0</color>
+</resources>

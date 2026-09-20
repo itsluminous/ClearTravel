@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ClearTravel</string>
+
+    <!-- Bottom navigation tab labels. -->
+    <string name="nav_trips">Trips</string>
+    <string name="nav_journeys">Journeys</string>
+    <string name="nav_checklist">Checklist</string>
+    <string name="nav_menu">Menu</string>
+
+    <!-- Journeys tab segmented control. -->
+    <string name="journeys_segment_trains">Trains</string>
+    <string name="journeys_segment_flights">Flights</string>
+</resources>

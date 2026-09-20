@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Paper-plane travel mark on the brand-blue adaptive-icon background. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Paper plane body -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M30,56 L78,36 L58,74 L52,60 Z" />
+    <!-- Fold shadow -->
+    <path
+        android:fillColor="#B3FFFFFF"
+        android:pathData="M52,60 L78,36 L58,74 Z" />
+    <!-- Motion trail -->
+    <path
+        android:fillColor="#80FFFFFF"
+        android:pathData="M26,64 L40,64 L38,68 L24,68 Z" />
+    <path
+        android:fillColor="#80FFFFFF"
+        android:pathData="M30,72 L44,72 L42,76 L28,76 Z" />
+</vector>
