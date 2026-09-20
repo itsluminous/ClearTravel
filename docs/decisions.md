@@ -475,3 +475,62 @@ contract, scheduler contract, shared-text entry, hoist note) — the integration
 only composes them in the app module, keeping the feature ownership boundaries
 intact (the sole feature-module edits are the defaulted deep-link hook parameters
 and the DI deletion the hoist note prescribed).
+
+## ADR-015: Backup, export & import — versioned ZIP, generic LWW merge, BackupManager seam
+
+**What.** Milestone 6 implements spec feature 6 across `core:database`, `core:data`
+and `feature:menu`; the full format contract lives in `docs/backup-format.md`.
+
+- **Format**: a versioned ZIP — `manifest.json` (`schemaVersion` = 1, `appVersion`,
+  `createdAt`, per-entity counts) + one JSON array per entity type under `entities/`
+  (FULL dumps INCLUDING tombstoned rows — deletions must replicate) + raw bytes of
+  bundled attachments under `attachments/<attachmentId>`. Wire DTOs
+  (kotlinx-serialization, `core/data/backup/BackupDtos.kt`) are deliberately
+  decoupled from Room entities AND domain models with explicit mappers: the backup
+  file is a frozen external contract that must outlive schema/model refactors.
+  Conventions mirror ADR-004 storage (epoch millis, ISO dates, enum `storageValue`
+  with safe fallbacks); readers ignore unknown keys and tolerate missing entity
+  files, so additive evolution needs no version bump.
+- **New `BackupDao`** on `ClearTravelDatabase` — the one sanctioned deviation from
+  the ADR-002 write discipline: full-table dumps (tombstones included) and
+  timestamp-PRESERVING `@Upsert`s. The merge already resolved last-write-wins, so
+  bumping `updated_at` there would corrupt future merges. The DAO is engine-internal;
+  features never see it.
+- **Merge = pure generic algorithm** (`BackupMerger.merge(local, backup)` over any
+  `SyncableEntity`): backup-only rows insert AS-IS (id + `updatedAt` + tombstone
+  preserved); local-only rows untouched; same-id rows resolve ENTIRELY to the newer
+  `updatedAt` including tombstone state; ties keep local → repeated imports are
+  idempotent by UUID. One implementation + one test suite covers all 11 entity
+  types; `importApply` runs it per entity inside a single Room transaction and
+  reports an aggregate inserted/updated/skipped `MergeSummary` for the snackbar.
+- **Attachments**: bundle ONLY local-only rows (`driveFileId == null`) whose file
+  exists at export time; Drive-backed rows carry just the id (bytes re-fetched on
+  restore — the Google-milestone seam). On import, winning bundled rows are
+  extracted to `filesDir/attachments/<id>` and `localPath` re-pointed (paths are
+  device-local; sync fields stay verbatim); drive-id-only rows restore as-is with
+  path resolution deferred.
+- **Version gate**: `schemaVersion > 1` → typed
+  `BackupException.UnsupportedSchemaVersion` at preview AND apply; unreadable
+  ZIP/manifest → typed `CorruptedBackup`; stream failures → typed `Io`. The menu UI
+  maps each to a distinct snackbar.
+- **Public seam** `BackupManager` (Hilt-bound `DefaultBackupManager`):
+  `exportToUri(uri)` (SAF write + refresh of the app-storage copy),
+  `exportLatestToAppStorage()` (`filesDir/backups`, pruned to the newest 3),
+  `importPreview(uri)` (manifest-only — drives the confirm dialog with date +
+  counts, zero writes), `importApply(uri)`, `latestLocalBackup()`. The Google
+  milestone composes exactly these for Drive upload/auto-restore; no engine changes
+  anticipated.
+- **feature:menu**: new data-driven root entry → Backup & Restore screen. Export
+  via SAF `CreateDocument` (suggested name `cleartravel-backup-YYYYMMDD-HHmm.zip`,
+  shared `BackupFileNames` helper), import via SAF `OpenDocument` with
+  preview-then-confirm (`AlertDialog` with backup date + record counts), last-backup
+  info, progress state, snackbars with per-row merge accounting. `feature:menu`
+  gains a `robolectric` test dependency (its ViewModel test touches `android.net.Uri`).
+
+**Why.** The generic merger is the heart: writing LWW once against the
+`SyncableEntity` contract (the exact reason ADR-002 exists) makes the merge
+provably uniform across entity types and trivially testable without Room, while the
+raw-upsert DAO keeps repositories' bump-on-write rule intact everywhere else.
+DTO decoupling + manifest versioning keep old backups importable forever and newer
+backups gracefully rejected, and the four-method `BackupManager` seam lets the Drive
+milestone land without touching the engine.
