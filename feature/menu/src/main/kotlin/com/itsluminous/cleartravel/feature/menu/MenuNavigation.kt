@@ -16,6 +16,7 @@ private const val HOME_ROUTE = "menu_home"
 private const val SETTINGS_ROUTE = "menu_settings"
 private const val PRESETS_ROUTE = "menu_presets"
 private const val PRESET_EDIT_ROUTE = "menu_preset_edit/{$PRESET_ID_ARG}"
+private const val BACKUP_ROUTE = "menu_backup"
 private const val ABOUT_ROUTE = "menu_about"
 
 private fun presetEditRoute(presetId: String) = "menu_preset_edit/$presetId"
@@ -44,8 +45,12 @@ internal fun MenuTabHost(modifier: Modifier = Modifier) {
             MenuRootScreen(
                 onOpenSettings = { navController.navigate(SETTINGS_ROUTE) },
                 onOpenPresets = { navController.navigate(PRESETS_ROUTE) },
+                onOpenBackup = { navController.navigate(BACKUP_ROUTE) },
                 onOpenAbout = { navController.navigate(ABOUT_ROUTE) },
             )
+        }
+        composable(BACKUP_ROUTE) {
+            BackupRestoreScreen(onBack = { navController.popBackStack() })
         }
         composable(SETTINGS_ROUTE) {
             SettingsScreen(onBack = { navController.popBackStack() })

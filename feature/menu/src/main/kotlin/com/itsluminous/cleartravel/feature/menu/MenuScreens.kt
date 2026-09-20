@@ -50,6 +50,7 @@ private data class MenuEntry(
 internal fun MenuRootScreen(
     onOpenSettings: () -> Unit,
     onOpenPresets: () -> Unit,
+    onOpenBackup: () -> Unit,
     onOpenAbout: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -57,6 +58,7 @@ internal fun MenuRootScreen(
         listOf(
             MenuEntry(R.string.menu_settings, R.string.menu_settings_subtitle, onOpenSettings),
             MenuEntry(R.string.menu_manage_presets, R.string.menu_manage_presets_subtitle, onOpenPresets),
+            MenuEntry(R.string.menu_backup_restore, R.string.menu_backup_restore_subtitle, onOpenBackup),
             MenuEntry(R.string.menu_about, R.string.menu_about_subtitle, onOpenAbout),
         )
     Column(
