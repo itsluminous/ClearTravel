@@ -4,6 +4,8 @@ import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassSource
+import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
+import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationSource
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedField
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import org.junit.Test
@@ -119,5 +121,57 @@ class FlightFormStateTest {
         assertThat(state.confidences[FlightField.DATE]).isEqualTo(ExtractionConfidence.LOW)
         // NONE-confidence fields carry no marker.
         assertThat(state.confidences).doesNotContainKey(FlightField.SEAT)
+    }
+
+    @Test
+    fun `fromBookingExtraction maps values, cabin confidence and the return-leg hint`() {
+        val extraction =
+            BookingConfirmationExtraction(
+                passengerName = ExtractedField.of("ARJUN NAIR", ExtractionConfidence.HIGH),
+                pnr = ExtractedField.of("T5K2M9", ExtractionConfidence.HIGH),
+                carrier = ExtractedField.of("ai", ExtractionConfidence.MEDIUM),
+                flightNumber = ExtractedField.of("503", ExtractionConfidence.MEDIUM),
+                fromAirport = ExtractedField.of("cok", ExtractionConfidence.MEDIUM),
+                toAirport = ExtractedField.of("del", ExtractionConfidence.MEDIUM),
+                flightDate = ExtractedField.of("2026-09-26", ExtractionConfidence.HIGH),
+                cabinClass = ExtractedField.of("BUSINESS", ExtractionConfidence.HIGH),
+                seat = ExtractedField.EMPTY,
+                additionalFlights = 1,
+                source = BookingConfirmationSource.OCR_TEXT,
+            )
+
+        val state = FlightFormState.fromBookingExtraction(extraction, bookingUri = "content://booking/1")
+
+        assertThat(state.airlineIata).isEqualTo("AI")
+        assertThat(state.flightNumber).isEqualTo("503")
+        assertThat(state.pnr).isEqualTo("T5K2M9")
+        assertThat(state.cabinClass).isEqualTo("BUSINESS")
+        assertThat(state.depAirport).isEqualTo("COK")
+        assertThat(state.arrAirport).isEqualTo("DEL")
+        assertThat(state.bookingSource).isEqualTo(BookingConfirmationSource.OCR_TEXT)
+        assertThat(state.pendingBookingUri).isEqualTo("content://booking/1")
+        assertThat(state.returnLegHint).isTrue()
+        assertThat(state.confidences[FlightField.CABIN]).isEqualTo(ExtractionConfidence.HIGH)
+        assertThat(state.confidences[FlightField.AIRLINE]).isEqualTo(ExtractionConfidence.MEDIUM)
+        // Seats are often absent on confirmations: no marker, no error.
+        assertThat(state.confidences).doesNotContainKey(FlightField.SEAT)
+        assertThat(FlightFormState.validate(state)).isEmpty()
+    }
+
+    @Test
+    fun `fromBookingExtraction of a single-flight confirmation carries no return hint`() {
+        val extraction =
+            BookingConfirmationExtraction(
+                carrier = ExtractedField.of("6E", ExtractionConfidence.MEDIUM),
+                flightNumber = ExtractedField.of("6114", ExtractionConfidence.MEDIUM),
+                flightDate = ExtractedField.of("2026-11-05", ExtractionConfidence.HIGH),
+                additionalFlights = 0,
+                source = BookingConfirmationSource.OCR_TEXT,
+            )
+
+        val state = FlightFormState.fromBookingExtraction(extraction, bookingUri = "content://booking/2")
+
+        assertThat(state.returnLegHint).isFalse()
+        assertThat(state.pendingPassUri).isNull() // never crosses into the pass slot
     }
 }

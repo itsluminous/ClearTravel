@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassSource
+import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationSource
 import com.itsluminous.cleartravel.feature.flights.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -41,14 +42,17 @@ fun FlightFormScreen(
     onSavedAndCheck: (flightId: String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: FlightFormViewModel = hiltViewModel(),
+    /** Picked booking-confirmation file (third add path, ADR-017); defaulted so existing call sites are untouched. */
+    bookingUri: String? = null,
 ) {
     val state by viewModel.formState.collectAsStateWithLifecycle()
     val busy by viewModel.isBusy.collectAsStateWithLifecycle()
 
-    LaunchedEffect(editId, importUri) {
+    LaunchedEffect(editId, importUri, bookingUri) {
         when {
             editId != null -> viewModel.startEdit(editId)
             importUri != null -> viewModel.startFromBoardingPass(importUri)
+            bookingUri != null -> viewModel.startFromBookingConfirmation(bookingUri)
             else -> viewModel.startBlank()
         }
     }
@@ -88,6 +92,12 @@ fun FlightFormScreen(
                 if (state.pendingPassUri != null && state.prefillSource == BoardingPassSource.NONE) {
                     Text(
                         text = stringResource(R.string.flights_form_importing),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                if (state.pendingBookingUri != null && state.bookingSource == BookingConfirmationSource.NONE) {
+                    Text(
+                        text = stringResource(R.string.flights_form_importing_booking),
                         style = MaterialTheme.typography.bodyMedium,
                     )
                 }
@@ -141,6 +151,7 @@ fun FlightFormScreen(
                     value = state.cabinClass,
                     onChange = { value -> viewModel.update { it.copy(cabinClass = value) } },
                     labelRes = R.string.flights_field_cabin,
+                    confidence = state.confidences[FlightField.CABIN],
                     modifier = Modifier.weight(1f),
                 )
             }
@@ -207,18 +218,39 @@ fun FlightFormScreen(
 /** Source indicator: barcode vs OCR vs nothing recognized (ADR-009 review-first). */
 @Composable
 private fun PrefillBanner(state: FlightFormState) {
-    if (state.pendingPassUri == null) return
-    val textRes =
-        when (state.prefillSource) {
-            BoardingPassSource.BARCODE -> R.string.flights_prefill_source_barcode
-            BoardingPassSource.OCR_TEXT -> R.string.flights_prefill_source_ocr
-            BoardingPassSource.NONE -> R.string.flights_prefill_source_none
+    if (state.pendingPassUri != null) {
+        val textRes =
+            when (state.prefillSource) {
+                BoardingPassSource.BARCODE -> R.string.flights_prefill_source_barcode
+                BoardingPassSource.OCR_TEXT -> R.string.flights_prefill_source_ocr
+                BoardingPassSource.NONE -> R.string.flights_prefill_source_none
+            }
+        Text(
+            text = stringResource(textRes),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+    if (state.pendingBookingUri != null) {
+        val textRes =
+            when (state.bookingSource) {
+                BookingConfirmationSource.BARCODE -> R.string.flights_booking_source_barcode
+                BookingConfirmationSource.OCR_TEXT -> R.string.flights_booking_source_ocr
+                BookingConfirmationSource.NONE -> R.string.flights_booking_source_none
+            }
+        Text(
+            text = stringResource(textRes),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        if (state.returnLegHint) {
+            Text(
+                text = stringResource(R.string.flights_booking_return_hint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
         }
-    Text(
-        text = stringResource(textRes),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.primary,
-    )
+    }
 }
 
 @Composable

@@ -5,6 +5,8 @@ import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassSource
+import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
+import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationSource
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -18,6 +20,7 @@ enum class FlightField {
     DATE,
     PNR,
     SEAT,
+    CABIN,
     DEP_AIRPORT,
     ARR_AIRPORT,
 }
@@ -53,6 +56,12 @@ data class FlightFormState(
     val prefillSource: BoardingPassSource = BoardingPassSource.NONE,
     val pendingPassUri: String? = null,
     val existingPassPath: String? = null,
+    /** Picked booking-confirmation file, stored as a FLIGHT attachment on save. */
+    val pendingBookingUri: String? = null,
+    /** How the booking-confirmation prefill was obtained (barcode/OCR/nothing). */
+    val bookingSource: BookingConfirmationSource = BookingConfirmationSource.NONE,
+    /** True when the confirmation described further segments (return trip). */
+    val returnLegHint: Boolean = false,
     val errors: Set<FlightFormError> = emptySet(),
 ) {
     val isEdit: Boolean get() = editingId != null
@@ -128,6 +137,52 @@ data class FlightFormState(
                     ).filterValues { it != ExtractionConfidence.NONE },
                 prefillSource = extraction.source,
                 pendingPassUri = passUri,
+            )
+        }
+
+        /**
+         * Prefill from a booking-confirmation extraction — confidence markers per
+         * field, first flight only; [FlightFormState.returnLegHint] surfaces further
+         * detected segments so the UI can suggest adding the return leg separately.
+         */
+        fun fromBookingExtraction(
+            extraction: BookingConfirmationExtraction,
+            bookingUri: String,
+        ): FlightFormState {
+            fun conf(field: com.itsluminous.cleartravel.core.ocr.model.ExtractedField) = field.confidence
+
+            return FlightFormState(
+                airlineIata =
+                    extraction.carrier.value
+                        .orEmpty()
+                        .uppercase(),
+                flightNumber = extraction.flightNumber.value.orEmpty(),
+                dateText = extraction.flightDate.value.orEmpty(),
+                pnr = extraction.pnr.value.orEmpty(),
+                seat = extraction.seat.value.orEmpty(),
+                cabinClass = extraction.cabinClass.value.orEmpty(),
+                depAirport =
+                    extraction.fromAirport.value
+                        .orEmpty()
+                        .uppercase(),
+                arrAirport =
+                    extraction.toAirport.value
+                        .orEmpty()
+                        .uppercase(),
+                confidences =
+                    mapOf(
+                        FlightField.AIRLINE to conf(extraction.carrier),
+                        FlightField.FLIGHT_NUMBER to conf(extraction.flightNumber),
+                        FlightField.DATE to conf(extraction.flightDate),
+                        FlightField.PNR to conf(extraction.pnr),
+                        FlightField.SEAT to conf(extraction.seat),
+                        FlightField.CABIN to conf(extraction.cabinClass),
+                        FlightField.DEP_AIRPORT to conf(extraction.fromAirport),
+                        FlightField.ARR_AIRPORT to conf(extraction.toAirport),
+                    ).filterValues { it != ExtractionConfidence.NONE },
+                bookingSource = extraction.source,
+                pendingBookingUri = bookingUri,
+                returnLegHint = extraction.additionalFlights > 0,
             )
         }
 

@@ -1,6 +1,7 @@
 package com.itsluminous.cleartravel.feature.flights.detail
 
 import android.content.Intent
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,10 +9,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -41,7 +46,9 @@ import com.itsluminous.cleartravel.feature.flights.status.FlightStatusFallbacks
 /**
  * Everything about one flight + the spec's MANDATORY manual trigger buttons:
  * "Check status" (scrape flow), "Open web check-in" (per-airline URL from the
- * check-in data file, web-search fallback), "View boarding pass".
+ * check-in data file, web-search fallback), "View boarding pass" — plus the
+ * documents row (boarding pass + attached booking confirmations, each opening the
+ * full-brightness viewer) and "Attach booking confirmation" (ADR-017).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,6 +63,12 @@ fun FlightDetailSheet(
     modifier: Modifier = Modifier,
     /** Transient last-attempt outcome (D2) — rendered under the fetched timestamp. */
     lastCheckOutcome: CheckOutcome? = null,
+    /** Documents list (boarding pass + attachments); see [buildFlightDocuments]. */
+    documents: List<FlightDocument> = emptyList(),
+    /** Opens a documents-row entry in the full-brightness viewer. */
+    onOpenDocument: (FlightDocument) -> Unit = {},
+    /** Launches the picker to attach a booking confirmation to THIS flight. */
+    onAttachBooking: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var confirmDelete by remember { mutableStateOf(false) }
@@ -163,6 +176,35 @@ fun FlightDetailSheet(
             flight.boardingPassPath?.let { path ->
                 FilledTonalButton(onClick = { onViewPass(path) }, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.flights_action_view_pass))
+                }
+            }
+            FilledTonalButton(onClick = onAttachBooking, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.flights_action_attach_booking))
+            }
+
+            if (documents.isNotEmpty()) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                Text(
+                    text = stringResource(R.string.flights_documents_title),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                documents.forEach { document ->
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                stringResource(
+                                    when (document.type) {
+                                        FlightDocumentType.BOARDING_PASS -> R.string.flights_doc_boarding_pass
+                                        FlightDocumentType.BOOKING_CONFIRMATION ->
+                                            R.string.flights_doc_booking_confirmation
+                                    },
+                                ),
+                            )
+                        },
+                        supportingContent = { Text(stringResource(R.string.flights_doc_open_hint)) },
+                        leadingContent = { Icon(Icons.Filled.Description, contentDescription = null) },
+                        modifier = Modifier.clickable { onOpenDocument(document) },
+                    )
                 }
             }
 

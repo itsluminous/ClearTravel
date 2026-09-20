@@ -14,6 +14,8 @@
     <string name="flights_add_manual_hint">Airline, flight number, date and booking details</string>
     <string name="flights_add_import">Import boarding pass</string>
     <string name="flights_add_import_hint">Scan the barcode of a boarding-pass image or PDF</string>
+    <string name="flights_add_booking">Import booking confirmation</string>
+    <string name="flights_add_booking_hint">Prefill from an e-ticket PDF or image — available from booking day</string>
     <string name="flights_card_route_separator">→</string>
     <string name="flights_card_dep_arr">Dep %1$s · Arr %2$s</string>
     <string name="flights_last_fetched">Checked %1$s</string>
@@ -44,6 +46,13 @@
     <string name="flights_action_check_status">Check status</string>
     <string name="flights_action_web_checkin">Open web check-in</string>
     <string name="flights_action_view_pass">View boarding pass</string>
+    <string name="flights_action_attach_booking">Attach booking confirmation</string>
+    <string name="flights_documents_title">Documents</string>
+    <string name="flights_doc_boarding_pass">Boarding pass</string>
+    <string name="flights_doc_booking_confirmation">Booking confirmation</string>
+    <string name="flights_doc_open_hint">Tap to view</string>
+    <string name="flights_booking_attached_snackbar">Booking confirmation attached</string>
+    <string name="flights_booking_attach_failed_snackbar">Couldn\'t read the picked file — nothing attached</string>
     <string name="flights_action_edit">Edit</string>
     <string name="flights_action_archive">Archive</string>
     <string name="flights_action_unarchive">Unarchive</string>
@@ -79,9 +88,14 @@
     <string name="flights_form_save_fetch">Save &amp; check status</string>
     <string name="flights_form_cancel">Cancel</string>
     <string name="flights_form_importing">Reading boarding pass…</string>
+    <string name="flights_form_importing_booking">Reading booking confirmation…</string>
     <string name="flights_prefill_source_barcode">Filled from the boarding-pass barcode — review and save</string>
     <string name="flights_prefill_source_ocr">Filled from scanned text — review carefully before saving</string>
     <string name="flights_prefill_source_none">Nothing recognized — fill the form in; the file stays attached</string>
+    <string name="flights_booking_source_barcode">Filled from an embedded barcode — review and save</string>
+    <string name="flights_booking_source_ocr">Filled from the scanned e-ticket — review carefully before saving</string>
+    <string name="flights_booking_source_none">Nothing recognized — fill the form in; the file stays attached</string>
+    <string name="flights_booking_return_hint">Return leg detected — save this flight, then add the return leg separately</string>
     <string name="flights_confidence_high">High confidence</string>
     <string name="flights_confidence_medium">Medium confidence — review</string>
     <string name="flights_confidence_low">Low confidence — review</string>
@@ -103,8 +117,9 @@
     <string name="flights_outcome_no_changes">Last check (%1$s): no changes found</string>
     <string name="flights_outcome_failed">Last check (%1$s): couldn\'t read the airline page — data unchanged</string>
 
-    <!-- Boarding pass viewer -->
+    <!-- Boarding pass / document viewer -->
     <string name="flights_pass_viewer_title">Boarding pass</string>
+    <string name="flights_booking_viewer_title">Booking confirmation</string>
     <string name="flights_pass_missing">The boarding-pass file is missing.</string>
     <string name="flights_pass_image_description">Boarding pass</string>
 

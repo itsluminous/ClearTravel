@@ -22,6 +22,8 @@ private sealed interface FlightsRoute {
     data class Form(
         val editId: String? = null,
         val importUri: String? = null,
+        /** Picked booking-confirmation file (third add path, ADR-017). */
+        val bookingUri: String? = null,
     ) : FlightsRoute
 
     data class StatusCheck(
@@ -30,6 +32,8 @@ private sealed interface FlightsRoute {
 
     data class PassViewer(
         val path: String,
+        /** Viewer reuse (ADR-017): booking confirmations carry their own title. */
+        val titleRes: Int = R.string.flights_pass_viewer_title,
     ) : FlightsRoute
 }
 
@@ -67,12 +71,16 @@ fun FlightsContent(
             FlightListScreen(
                 onAddManual = { route = FlightsRoute.Form() },
                 onImportPass = { uri -> route = FlightsRoute.Form(importUri = uri) },
+                onImportBooking = { uri -> route = FlightsRoute.Form(bookingUri = uri) },
                 onEdit = { id -> route = FlightsRoute.Form(editId = id) },
                 onCheckStatus = { id ->
                     checkOutcome = null
                     route = FlightsRoute.StatusCheck(id)
                 },
                 onViewPass = { path -> route = FlightsRoute.PassViewer(path) },
+                onViewBooking = { path ->
+                    route = FlightsRoute.PassViewer(path, titleRes = R.string.flights_booking_viewer_title)
+                },
                 modifier = modifier,
                 initialDetailFlightId = initialFlightId,
                 lastCheckOutcome = checkOutcome,
@@ -82,6 +90,7 @@ fun FlightsContent(
             FlightFormScreen(
                 editId = current.editId,
                 importUri = current.importUri,
+                bookingUri = current.bookingUri,
                 onClose = { route = FlightsRoute.Journeys },
                 onSavedAndCheck = { id ->
                     checkOutcome = null
@@ -103,6 +112,7 @@ fun FlightsContent(
         is FlightsRoute.PassViewer ->
             BoardingPassViewerScreen(
                 path = current.path,
+                titleRes = current.titleRes,
                 onClose = { route = FlightsRoute.Journeys },
                 modifier = modifier,
             )

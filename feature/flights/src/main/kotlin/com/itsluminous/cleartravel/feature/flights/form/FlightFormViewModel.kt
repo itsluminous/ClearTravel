@@ -17,6 +17,7 @@ class FlightFormViewModel
     constructor(
         private val repository: FlightRepository,
         private val importer: BoardingPassImporter,
+        private val bookingImporter: BookingConfirmationImporter,
         private val checkInRuleSource: CheckInRuleSource,
     ) : ViewModel() {
         private val state = MutableStateFlow(FlightFormState())
@@ -55,6 +56,22 @@ class FlightFormViewModel
             }
         }
 
+        /**
+         * Booking-confirmation import (third add path, ADR-017): barcode-first/OCR
+         * pipeline prefill with confidence markers + a "return leg detected" hint
+         * when the confirmation described further segments. The user reviews — never
+         * saved blind (ADR-009). The file is stored as a FLIGHT attachment on save.
+         */
+        fun startFromBookingConfirmation(uriString: String) {
+            state.value = FlightFormState(pendingBookingUri = uriString)
+            busy.value = true
+            viewModelScope.launch {
+                val extraction = bookingImporter.prefill(uriString)
+                state.value = FlightFormState.fromBookingExtraction(extraction, bookingUri = uriString)
+                busy.value = false
+            }
+        }
+
         fun update(transform: (FlightFormState) -> FlightFormState) {
             state.value = transform(state.value).copy(errors = emptySet())
         }
@@ -79,6 +96,10 @@ class FlightFormViewModel
                     current.pendingPassUri?.let { importer.store(it, journey.id) }
                         ?: journey.boardingPassPath
                 repository.save(journey.copy(boardingPassPath = passPath))
+                // Booking confirmations live as FLIGHT attachment rows (ADR-017), so
+                // Drive upload + backup bundling apply automatically; a failed copy
+                // simply saves the flight without the document.
+                current.pendingBookingUri?.let { bookingImporter.attach(it, journey.id) }
                 busy.value = false
                 onSaved(journey.id)
             }

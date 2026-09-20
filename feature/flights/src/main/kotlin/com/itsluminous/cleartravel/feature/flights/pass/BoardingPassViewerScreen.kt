@@ -49,6 +49,8 @@ fun BoardingPassViewerScreen(
     path: String,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Viewer reuse (ADR-017): booking confirmations pass their own title. */
+    titleRes: Int = R.string.flights_pass_viewer_title,
 ) {
     val context = LocalContext.current
 
@@ -76,7 +78,7 @@ fun BoardingPassViewerScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.flights_pass_viewer_title)) },
+                title = { Text(stringResource(titleRes)) },
                 navigationIcon = {
                     ExplainableIcon(
                         icon = Icons.Filled.Close,

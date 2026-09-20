@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.AirplaneTicket
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -51,6 +52,9 @@ import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.feature.flights.R
 import com.itsluminous.cleartravel.feature.flights.detail.FlightDetailSheet
+import com.itsluminous.cleartravel.feature.flights.detail.FlightDocumentType
+import com.itsluminous.cleartravel.feature.flights.detail.FlightDocumentsViewModel
+import com.itsluminous.cleartravel.feature.flights.detail.buildFlightDocuments
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcome
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcomeKind
 import kotlinx.coroutines.launch
@@ -65,6 +69,11 @@ fun FlightListScreen(
     onViewPass: (path: String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: FlightListViewModel = hiltViewModel(),
+    documentsViewModel: FlightDocumentsViewModel = hiltViewModel(),
+    /** Third add path (ADR-017): picked booking-confirmation file to prefill from. */
+    onImportBooking: (uriString: String) -> Unit = {},
+    /** Opens an attached booking confirmation in the full-brightness viewer. */
+    onViewBooking: (path: String) -> Unit = {},
     /** Deep-link hook: opens this flight's detail sheet on first composition. */
     initialDetailFlightId: String? = null,
     /**
@@ -102,6 +111,30 @@ fun FlightListScreen(
     val passPicker =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             uri?.let { onImportPass(it.toString()) }
+        }
+    val bookingImportPicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            uri?.let { onImportBooking(it.toString()) }
+        }
+
+    // Attach-to-existing-flight flow (ADR-017): the picker result lands after the
+    // detail sheet may have moved, so the target flight id is captured up front.
+    val bookingAttachedSnackbar = stringResource(R.string.flights_booking_attached_snackbar)
+    val bookingAttachFailedSnackbar = stringResource(R.string.flights_booking_attach_failed_snackbar)
+    var attachTargetFlightId by remember { mutableStateOf<String?>(null) }
+    val bookingAttachPicker =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            val target = attachTargetFlightId
+            attachTargetFlightId = null
+            if (uri != null && target != null) {
+                documentsViewModel.attachBookingConfirmation(target, uri.toString()) { attached ->
+                    scope.launch {
+                        snackbarHostState.showSnackbar(
+                            if (attached) bookingAttachedSnackbar else bookingAttachFailedSnackbar,
+                        )
+                    }
+                }
+            }
         }
 
     val archivedSnackbar = stringResource(R.string.flights_archived_snackbar)
@@ -191,15 +224,41 @@ fun FlightListScreen(
                         passPicker.launch(arrayOf("image/*", "application/pdf"))
                     },
             )
+            HorizontalDivider()
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.flights_add_booking)) },
+                supportingContent = { Text(stringResource(R.string.flights_add_booking_hint)) },
+                leadingContent = { Icon(Icons.Filled.Description, contentDescription = null) },
+                modifier =
+                    Modifier.clickable {
+                        showAddOptions = false
+                        bookingImportPicker.launch(arrayOf("image/*", "application/pdf"))
+                    },
+            )
             Spacer(modifier = Modifier.padding(bottom = 24.dp))
         }
     }
 
     val detailFlight = uiState.flights.firstOrNull { it.id == detailFlightId }
     if (detailFlight != null) {
+        val attachments by remember(detailFlight.id) {
+            documentsViewModel.observeAttachments(detailFlight.id)
+        }.collectAsStateWithLifecycle(initialValue = emptyList())
         FlightDetailSheet(
             flight = detailFlight,
             lastCheckOutcome = lastCheckOutcome?.takeIf { it.flightId == detailFlight.id },
+            documents = buildFlightDocuments(detailFlight, attachments),
+            onOpenDocument = { document ->
+                detailFlightId = null
+                when (document.type) {
+                    FlightDocumentType.BOARDING_PASS -> onViewPass(document.path)
+                    FlightDocumentType.BOOKING_CONFIRMATION -> onViewBooking(document.path)
+                }
+            },
+            onAttachBooking = {
+                attachTargetFlightId = detailFlight.id
+                bookingAttachPicker.launch(arrayOf("image/*", "application/pdf"))
+            },
             onDismiss = { detailFlightId = null },
             onCheckStatus = {
                 detailFlightId = null
