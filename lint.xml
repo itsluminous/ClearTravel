@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Shared lint config for every module (referenced via lintConfig in each build file).
+  User-visible string literals are CI-blocking errors: all UI text lives in strings.xml.
+-->
+<lint>
+    <issue id="HardcodedText" severity="error" />
+    <issue id="SetTextI18n" severity="error" />
+</lint>
