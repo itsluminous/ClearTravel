@@ -1,0 +1,34 @@
+{
+  "id": "airindia",
+  "displayName": "Air India Flight Status",
+  "version": 1,
+  "kind": "flight",
+  "iataCodes": ["AI"],
+  "verified": true,
+  "notes": "Selectors from a REAL result capture (docs/recon/airindia.html, 2026-09-20). The page reads ?fno=&on= query params directly (on = yyyyMMdd — feature code formats {date} accordingly), so no prefill/submit is needed; submitSelector stays null and the visible WebView lets the user dismiss the OneTrust cookie overlay (#onetrust-accept-btn-handler) that intercepts POINTER events — DOM extraction is unaffected by it. One query can return MULTIPLE .flight-status-card rows (one per leg); the feature-side mapper disambiguates against the saved journey. Date window is today +/- 2 days only.",
+  "urlTemplate": "https://www.airindia.com/in/en/manage/flight-status.html?fno={flightNumber}&on={date}",
+  "prefill": [],
+  "submitSelector": null,
+  "readySignal": { "selector": ".flight-status-card" },
+  "rows": {
+    "rowSelector": ".flight-status-card",
+    "minRows": 1,
+    "fields": {
+      "flightLabel": { "selector": ".flight-details-ar .list-inline-item" },
+      "status": { "selector": ".ontime-check-state" },
+      "aircraftType": { "selector": ".airCraftTypeName" },
+      "depAirport": { "selector": ".departure .aiport-name span" },
+      "depDate": { "selector": ".departure .sch-dep-date-status-time" },
+      "depTimeSched": { "selector": ".departure .fsm-scheduled-time" },
+      "depTimeEst": { "selector": ".departure .fsm-estimated-time" },
+      "depTerminalGate": { "selector": ".departure .terminal" },
+      "arrAirport": { "selector": ".arrival .aiport-name span" },
+      "arrDate": { "selector": ".arrival .sch-dep-date-status-time" },
+      "arrTimeSched": { "selector": ".arrival .fsm-scheduled-time" },
+      "arrTimeEst": { "selector": ".arrival .fsm-estimated-time" },
+      "arrTerminalGate": { "selector": ".arrival .terminal" },
+      "duration": { "selector": ".duration" },
+      "lastUpdated": { "selector": ".last-updated span" }
+    }
+  }
+}

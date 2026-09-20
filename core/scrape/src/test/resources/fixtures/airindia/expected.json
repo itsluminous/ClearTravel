@@ -1,0 +1,39 @@
+{
+  "fields": {},
+  "rows": [
+    {
+      "flightLabel": "AI 101",
+      "status": "Scheduled",
+      "aircraftType": "Airbus A350-900",
+      "depAirport": "Indira Gandhi International Airport (DEL)",
+      "depDate": "20 Sep 2026",
+      "depTimeSched": "",
+      "depTimeEst": "22:55",
+      "depTerminalGate": "Terminal 3 | Gate 24",
+      "arrAirport": "Rome Fiumicino Airport (FCO)",
+      "arrDate": "21 Sep 2026",
+      "arrTimeSched": "04:40",
+      "arrTimeEst": "04:18",
+      "arrTerminalGate": "Terminal 3 | Gate N/A",
+      "duration": "8 h 53 m",
+      "lastUpdated": "21:15:01 20 Sep 2026"
+    },
+    {
+      "flightLabel": "AI 101",
+      "status": "Scheduled",
+      "aircraftType": "Airbus A350-900",
+      "depAirport": "Rome Fiumicino Airport (FCO)",
+      "depDate": "21 Sep 2026",
+      "depTimeSched": "",
+      "depTimeEst": "06:30",
+      "depTerminalGate": "Terminal 3 | Gate N/A",
+      "arrAirport": "John F. Kennedy International Airport (JFK)",
+      "arrDate": "21 Sep 2026",
+      "arrTimeSched": "",
+      "arrTimeEst": "10:35",
+      "arrTerminalGate": "Terminal 4 | Gate N/A",
+      "duration": "10 h 5 m",
+      "lastUpdated": "21:15:01 20 Sep 2026"
+    }
+  ]
+}
