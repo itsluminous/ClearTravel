@@ -30,6 +30,7 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,12 +63,18 @@ fun FlightListScreen(
     onViewPass: (path: String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: FlightListViewModel = hiltViewModel(),
+    /** Deep-link hook: opens this flight's detail sheet on first composition. */
+    initialDetailFlightId: String? = null,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showAddOptions by remember { mutableStateOf(false) }
     var detailFlightId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(initialDetailFlightId) {
+        if (initialDetailFlightId != null) detailFlightId = initialDetailFlightId
+    }
 
     val passPicker =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->

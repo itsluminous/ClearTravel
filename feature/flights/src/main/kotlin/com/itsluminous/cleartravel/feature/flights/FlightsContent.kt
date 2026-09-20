@@ -36,15 +36,26 @@ private sealed interface FlightsRoute {
  * The Flights segment of the Journeys tab. The app module places this next to the
  * Trains segment under a segmented control; this module never references
  * `feature:trains`.
+ *
+ * [initialFlightId] is the notification deep-link hook (integration contract): when
+ * non-null the list opens with that flight's detail sheet expanded. Defaulted so
+ * existing call sites are untouched.
  */
 @Composable
-fun FlightsContent(modifier: Modifier = Modifier) {
+fun FlightsContent(
+    modifier: Modifier = Modifier,
+    initialFlightId: String? = null,
+) {
     var route by remember { mutableStateOf<FlightsRoute>(FlightsRoute.Journeys) }
     val context = LocalContext.current
 
     // Feature-local WorkManager wiring: make sure a poll chain exists (ADR-013).
     LaunchedEffect(Unit) {
         FlightPollScheduler.ensureScheduled(context, nextDeparture = null)
+    }
+
+    LaunchedEffect(initialFlightId) {
+        if (initialFlightId != null) route = FlightsRoute.Journeys
     }
 
     when (val current = route) {
@@ -56,6 +67,7 @@ fun FlightsContent(modifier: Modifier = Modifier) {
                 onCheckStatus = { id -> route = FlightsRoute.StatusCheck(id) },
                 onViewPass = { path -> route = FlightsRoute.PassViewer(path) },
                 modifier = modifier,
+                initialDetailFlightId = initialFlightId,
             )
 
         is FlightsRoute.Form ->

@@ -64,11 +64,25 @@ private sealed interface TrainsScreen {
  * Flights segment under a segmented control; this module never references
  * `feature:flights`. Hosts the ticket list, add/edit form, detail bottom sheet and
  * the interactive PNR-check WebView screen behind an internal navigation state.
+ *
+ * [initialTicketId] is the notification deep-link hook (integration contract): when
+ * non-null the list opens with that ticket's detail sheet expanded. Defaulted so
+ * existing call sites are untouched.
  */
 @Composable
-fun TrainsContent(modifier: Modifier = Modifier) {
+fun TrainsContent(
+    modifier: Modifier = Modifier,
+    initialTicketId: String? = null,
+) {
     var screen by remember { mutableStateOf<TrainsScreen>(TrainsScreen.List) }
     var detailTicketId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(initialTicketId) {
+        if (initialTicketId != null) {
+            screen = TrainsScreen.List
+            detailTicketId = initialTicketId
+        }
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current

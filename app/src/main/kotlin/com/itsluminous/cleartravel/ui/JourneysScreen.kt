@@ -9,6 +9,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -19,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import com.itsluminous.cleartravel.R
+import com.itsluminous.cleartravel.core.notifications.DeepLinkContract
 import com.itsluminous.cleartravel.feature.flights.FlightsContent
 import com.itsluminous.cleartravel.feature.trains.TrainsContent
 
@@ -28,11 +30,16 @@ const val JOURNEYS_ROUTE = "journeys"
 /**
  * Journeys tab graph. This screen lives in the app module because it is the ONE place
  * `feature:trains` and `feature:flights` are composed side by side — the features
- * themselves never depend on each other.
+ * themselves never depend on each other. [deepLink] carries a pending notification
+ * deep link; the screen selects the matching segment, forwards the entity id to the
+ * feature's detail hook, and reports consumption via [onDeepLinkConsumed].
  */
-fun NavGraphBuilder.journeysGraph() {
+fun NavGraphBuilder.journeysGraph(
+    deepLink: JourneysDeepLink? = null,
+    onDeepLinkConsumed: () -> Unit = {},
+) {
     composable(JOURNEYS_ROUTE) {
-        JourneysScreen()
+        JourneysScreen(deepLink = deepLink, onDeepLinkConsumed = onDeepLinkConsumed)
     }
 }
 
@@ -42,8 +49,30 @@ private enum class JourneysSegment {
 }
 
 @Composable
-private fun JourneysScreen(modifier: Modifier = Modifier) {
+private fun JourneysScreen(
+    deepLink: JourneysDeepLink?,
+    onDeepLinkConsumed: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     var segment by rememberSaveable { mutableStateOf(JourneysSegment.TRAINS) }
+    var trainDeepLinkId by rememberSaveable { mutableStateOf<String?>(null) }
+    var flightDeepLinkId by rememberSaveable { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(deepLink) {
+        if (deepLink != null) {
+            when (deepLink.target) {
+                DeepLinkContract.TARGET_TRAIN -> {
+                    segment = JourneysSegment.TRAINS
+                    trainDeepLinkId = deepLink.entityId
+                }
+                DeepLinkContract.TARGET_FLIGHT -> {
+                    segment = JourneysSegment.FLIGHTS
+                    flightDeepLinkId = deepLink.entityId
+                }
+            }
+            onDeepLinkConsumed()
+        }
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         SingleChoiceSegmentedButtonRow(
@@ -75,8 +104,8 @@ private fun JourneysScreen(modifier: Modifier = Modifier) {
             }
         }
         when (segment) {
-            JourneysSegment.TRAINS -> TrainsContent()
-            JourneysSegment.FLIGHTS -> FlightsContent()
+            JourneysSegment.TRAINS -> TrainsContent(initialTicketId = trainDeepLinkId)
+            JourneysSegment.FLIGHTS -> FlightsContent(initialFlightId = flightDeepLinkId)
         }
     }
 }

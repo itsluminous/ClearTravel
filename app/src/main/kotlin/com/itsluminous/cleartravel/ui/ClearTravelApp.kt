@@ -15,6 +15,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -50,13 +51,30 @@ private val topLevelDestinations =
 /**
  * App shell: the four-tab bottom-navigation scaffold hosting each feature's nav graph.
  * Tab switches follow the Material guidance — state is saved/restored per tab and
- * re-selecting pops to the tab root.
+ * re-selecting pops to the tab root. A pending notification [journeysDeepLink]
+ * navigates to the Journeys tab and is forwarded into the tab's graph.
  */
 @Composable
-fun ClearTravelApp(modifier: Modifier = Modifier) {
+fun ClearTravelApp(
+    modifier: Modifier = Modifier,
+    journeysDeepLink: JourneysDeepLink? = null,
+    onJourneysDeepLinkConsumed: () -> Unit = {},
+) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
+
+    LaunchedEffect(journeysDeepLink) {
+        if (journeysDeepLink != null) {
+            navController.navigate(JOURNEYS_ROUTE) {
+                popUpTo(navController.graph.findStartDestination().id) {
+                    saveState = true
+                }
+                launchSingleTop = true
+                restoreState = true
+            }
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -94,7 +112,10 @@ fun ClearTravelApp(modifier: Modifier = Modifier) {
                     .consumeWindowInsets(padding),
         ) {
             tripsGraph()
-            journeysGraph()
+            journeysGraph(
+                deepLink = journeysDeepLink,
+                onDeepLinkConsumed = onJourneysDeepLinkConsumed,
+            )
             checklistGraph()
             menuGraph()
         }
