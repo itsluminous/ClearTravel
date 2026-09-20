@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: Lint, unit tests & debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Verifies gradle-wrapper.jar against the official checksums so a tampered
+      # wrapper can never execute in CI.
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      # Bake the Maps/Google config from repo secrets (never committed). On forks the
+      # secrets are empty and the app still builds and runs fully offline — empty
+      # values are safe defaults. sdk.dir is intentionally omitted: the runner's
+      # ANDROID_HOME is used.
+      - name: Write local.properties from secrets
+        env:
+          MAPS_API_KEY: ${{ secrets.MAPS_API_KEY }}
+          GOOGLE_WEB_CLIENT_ID: ${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+        run: |
+          {
+            echo "MAPS_API_KEY=$MAPS_API_KEY"
+            echo "GOOGLE_WEB_CLIENT_ID=$GOOGLE_WEB_CLIENT_ID"
+          } > local.properties
+
+      - name: ktlint, Android Lint, unit tests, assemble
+        run: ./gradlew ktlintCheck lintDebug testDebugUnitTest assembleDebug
+
+      # Every PR carries an installable debug APK for review.
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleartravel-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Upload test & lint reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            **/build/reports/
+          retention-days: 7
