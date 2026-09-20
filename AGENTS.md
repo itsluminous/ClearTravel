@@ -17,21 +17,21 @@ Package root: `com.itsluminous.cleartravel`.
 
 | Module | Contents | Status |
 |---|---|---|
-| `app` | Hilt application, MainActivity (single-activity Compose), bottom bar (Trips / Journeys / Checklist / Menu), NavHost, Journeys Trains\|Flights segmented composition, launcher icon, manifest (Maps key placeholder), androidTest e2e suite | skeleton |
-| `core:designsystem` | `ClearTravelTheme` (dynamic color + #0B57D0 seed fallback), typography ≥16sp body, `EmptyState`, `ChipRow`, `ExplainableIcon`, `ClearTravelCard`, `ClearTravelFab` | done (skeleton scope) |
-| `core:model` | `SyncableEntity` (UUID + updatedAt + tombstone, ADR-002), `EntityIds`, `ThemeMode`, future domain models/enums — **contract: changes need an ADR** | skeleton |
-| `core:database` | Room entities/DAOs/converters; `ClearTravelDatabase` lands with the first entity — **contract: changes need an ADR** | stub |
-| `core:data` | Repository interfaces + Room-backed impls, `TrainStatusProvider`/`FlightStatusProvider` contracts (Hilt-bound), settings DataStore | stub |
-| `core:notifications` | Channels (trains/flights/reminders), builders, deep links, POST_NOTIFICATIONS permission gate | stub |
-| `core:google` | Google linking (Credential Manager), Calendar sync (dedicated "ClearTravel" calendar), Drive uploads/backups | stub |
-| `core:scrape` | Rule-driven WebView scraper engine; per-site JSON rule files in assets + HTML fixtures (ADR-003) | stub |
-| `core:ocr` | PDF→bitmap→preprocess→ML Kit text recognition + BCBP barcode decode; pure extraction functions + OCR-text fixtures | stub |
-| `core:testing` | `MainDispatcherRule`, generic `inMemoryDatabase<T>()`, `Fixtures` builders — exposed as MAIN source | done (skeleton scope) |
-| `feature:trains` | Train tickets CRUD, detail sheet, PNR refresh (foreground WebView), SMS/OCR prefill, archive | stub (`TrainsContent`) |
-| `feature:flights` | Flight CRUD, boarding-pass import, status providers, WorkManager polling + notifications | stub (`FlightsContent`) |
-| `feature:itinerary` | Trips tab: trips, day-grouped items, timeline + Google Maps view | stub (route + empty state) |
-| `feature:checklist` | Checklist tab: per-trip checklists, preset templates + manager | stub (route + empty state) |
-| `feature:menu` | Menu tab: Settings (theme, presets, API keys, Google), Backup/Restore, About | stub (route + empty state) |
+| `app` | Hilt application, MainActivity (single-activity Compose), bottom bar (Trips / Journeys / Checklist / Menu), NavHost, Journeys Trains\|Flights segmented composition, deep links, launcher icon, manifest (Maps key placeholder), androidTest e2e suite (4 classes, Hilt test modules) | done |
+| `core:designsystem` | `ClearTravelTheme` (dynamic color + #0B57D0 seed fallback), typography ≥16sp body, `EmptyState`, `ChipRow`, `ExplainableIcon`, `ClearTravelCard`, `ClearTravelFab` | done |
+| `core:model` | `SyncableEntity` (UUID + updatedAt + tombstone, ADR-002), `EntityIds`, `ThemeMode`, domain models/enums — **contract: changes need an ADR** | done |
+| `core:database` | Room entities/DAOs/converters, `ClearTravelDatabase` — **contract: changes need an ADR** | done |
+| `core:data` | Repository interfaces + Room-backed impls, `TrainStatusProvider`/`FlightStatusProvider` contracts (Hilt-bound), settings DataStore, backup export/merge (ADR-002, `docs/backup-format.md`) | done |
+| `core:notifications` | Channels (trains/flights/reminders), builders, deep links, POST_NOTIFICATIONS permission gate | done |
+| `core:google` | Google linking (Credential Manager), Calendar sync (dedicated "ClearTravel" calendar), Drive uploads/backups + restore ladder, sync workers | done (needs-user-setup: `GOOGLE_WEB_CLIENT_ID`, see `docs/google-setup.md`) |
+| `core:scrape` | Rule-driven WebView scraper engine (DOM storage on, `dismissSelectors`, ready-signal timeout → raw-page fallback); per-site JSON rule files in assets + HTML fixtures (ADR-003) | done |
+| `core:ocr` | PDF→bitmap→preprocess→ML Kit text recognition + BCBP barcode decode; pure extraction functions + OCR-text fixtures | done |
+| `core:testing` | `MainDispatcherRule`, generic `inMemoryDatabase<T>()`, `Fixtures` builders — exposed as MAIN source | done |
+| `feature:trains` | Train tickets CRUD, detail sheet, PNR refresh (foreground WebView, user-solved captcha), SMS/OCR prefill, archive | done (on-device validated, `docs/validation-report.md`) |
+| `feature:flights` | Flight CRUD, boarding-pass import, status check WebView + failure banner/retry + outcome line, check-in windows data, WorkManager polling + notifications | done (on-device validated; Air India rule verified live) |
+| `feature:itinerary` | Trips tab: trips, day-grouped items, timeline + Google Maps view | done (map needs-user-setup: `MAPS_API_KEY` + Play-services device) |
+| `feature:checklist` | Checklist tab: per-trip checklists, preset templates + manager | done |
+| `feature:menu` | Menu tab: Settings (theme, presets, Google account), Backup/Restore (local + Drive), About | done |
 
 **Ownership boundaries:** feature modules depend ONLY on `core:*`, NEVER on each other;
 cross-feature interaction goes through `core:data` contracts. The app module is the
