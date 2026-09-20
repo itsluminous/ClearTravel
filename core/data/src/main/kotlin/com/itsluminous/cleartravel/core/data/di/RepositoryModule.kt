@@ -1,5 +1,7 @@
 package com.itsluminous.cleartravel.core.data.di
 
+import com.itsluminous.cleartravel.core.data.backup.BackupManager
+import com.itsluminous.cleartravel.core.data.backup.DefaultBackupManager
 import com.itsluminous.cleartravel.core.data.preset.AssetBuiltInPresetSource
 import com.itsluminous.cleartravel.core.data.preset.BuiltInPresetSource
 import com.itsluminous.cleartravel.core.data.repository.AttachmentRepository
@@ -63,4 +65,8 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindBuiltInPresetSource(impl: AssetBuiltInPresetSource): BuiltInPresetSource
+
+    @Binds
+    @Singleton
+    abstract fun bindBackupManager(impl: DefaultBackupManager): BackupManager
 }
