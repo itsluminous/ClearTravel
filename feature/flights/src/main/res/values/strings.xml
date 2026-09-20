@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="flights_empty_title">No flight journeys yet</string>
+    <string name="flights_empty_message">Add a flight or import a boarding pass to track status, gate and baggage belt here.</string>
+</resources>

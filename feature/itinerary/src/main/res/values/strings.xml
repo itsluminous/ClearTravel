@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="itinerary_empty_title">No trips yet</string>
+    <string name="itinerary_empty_message">Create a trip to plan a day-wise itinerary and see it on a map.</string>
+</resources>
