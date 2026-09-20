@@ -335,3 +335,74 @@ dependency rule intact.
 makes the grouping/marker/reorder behavior unit-testable without Robolectric or Play
 services, and honors the spec requirement that everything except live map tiles works
 offline.
+
+## ADR-010: Flights milestone — interactive-only scrape, data-driven check-in windows, EntryPoint worker
+
+**What.** `feature:flights` + `core:notifications` land with these choices:
+
+- **Status refresh is interactive-only; background polling does NOT scrape.** The
+  "Check status" flow hosts a VISIBLE WebView driven by the ADR-008 engine
+  (`RuleRegistry.flightRuleFor` → `RuleDrivenScrapeSession` →
+  `AirlineStatusMapper` → `FlightRepository.applyStatusResult`). A headless
+  WorkManager-hosted WebView variant was considered and rejected for this wave:
+  WebViews demand main-thread lifecycles inside a worker, the recon showed
+  consent-overlay/anti-bot postures that want a human present, and the spec
+  explicitly sanctions the fallback of notifying "status may have changed — tap to
+  check". `FlightStatusWorker` therefore computes only what is knowable offline:
+  check-in-window crossings (from the data file below) and proximity nudges
+  (dedupe-keyed per 12h/3h bucket). `FlightChangeDetector` (pure old-vs-new diff →
+  gate assigned/changed, delay, cancellation, belt) runs on the interactive refresh
+  path and feeds the same `FlightNotifier` calls, so notification behavior is
+  identical whenever a headless fetch path appears later.
+- **Escalating cadence via a self-chaining unique OneTimeWork** (`flights-status-poll`,
+  REPLACE) instead of PeriodicWork: WorkManager cannot vary a periodic interval, and
+  the spec requires >48h→6h, 48–12h→3h, 12–3h→30min, <3h→15min (pure `NextPollDelay`,
+  floor = WorkManager's 15-min minimum; polling stops 6h after departure).
+- **Worker dependencies via a Hilt `@EntryPoint`, not `@HiltWorker`**: `@HiltWorker`
+  requires the app module to install `Configuration.Provider`/`HiltWorkerFactory`;
+  the EntryPoint keeps the milestone app-module-free (parallel-agent boundary). The
+  app shell owes no wiring; `FlightPollScheduler.ensureScheduled` runs from the
+  flights UI.
+- **Notification dedupe state lives in feature-local SharedPreferences**
+  (`flights_poll_state`), NOT a Room column: it is device-local bookkeeping that must
+  never enter the backup/merge surface (ADR-002 covers synced entities only).
+- **Deep-link intent contract** (`core:notifications` `DeepLinkContract`): every
+  notification's content intent is the package LAUNCH intent + extras
+  `com.itsluminous.cleartravel.deeplink.TARGET` (`flight`/`train`) and
+  `...deeplink.ENTITY_ID` (entity UUID). Resolving the extras into navigation inside
+  `MainActivity` is deferred to integration; `core:notifications` cannot reference the
+  activity class across module boundaries. POST_NOTIFICATIONS is declared in the
+  `core:notifications` manifest; every post is gated on `NotificationPermissions.canPost`
+  (silent no-op without permission).
+- **Check-in windows are behavior-as-data** (ADR-003):
+  `feature/flights/src/main/assets/checkin-windows.json` carries the default 48h→1h
+  window, per-airline overrides, the airline display name, AND the airline's web
+  check-in URL (the detail sheet's "Open web check-in" deep link; web-search
+  fallback when absent). Pure `computeCheckInWindow`; `CheckInWindowsAssetTest` is
+  the file's fixture test (all 13 spec airlines present, sane hours, https URLs).
+- **Canonical scrape field vocabulary for flight rules** (consumed by the pure
+  `AirlineStatusMapper`): `status`, `aircraftType`, `dep/arrAirport` (IATA in
+  parentheses), `dep/arrDate`, `dep/arrTimeSched|Est`, `dep/arrTerminalGate`
+  (pipe-separated), `baggageBelt` — emitted as `rows` (one map per result card;
+  Air India returns MULTIPLE cards per query, disambiguated against the saved
+  journey by departure airport, then date). Scraped times are airport-local with no
+  timezone info; the mapper interprets them in the device zone as a documented
+  best-effort. The frozen `ScrapeRule` schema has no `{date}`-format field, so the
+  per-rule URL date format lives in feature code (`FlightStatusFallbacks.formatDateForRule`,
+  default ISO; `airindia` → `yyyyMMdd`).
+- **Airline rule inventory (quality over quantity).** Only `airindia` ships (v1,
+  verified=true — selectors from the real captured result DOM in
+  `docs/recon/airindia.html`, multi-card fixture). IndiGo (PNR-only search, result
+  DOM never observed, submit-enable condition unresolved), Akasa (form recon'd but
+  result DOM never observed) and all probed international airlines (JS shells over
+  curl — no server-rendered result markup) have NO credible extraction basis, and
+  SpiceJet is structurally unscrapeable (React-Native-Web atomic CSS) — all fall
+  back to the registry-returns-null web-search path, which is unit-tested.
+  `RuleRegistry` is currently Hilt-provided from `feature:flights`
+  (`FlightsProvidersModule`); if `feature:trains` needs it too, integration should
+  hoist that single `@Provides` into a shared module.
+
+**Why.** Keeps the scope honest (interactive scrape is the only recon-validated
+path), keeps every "brain" pure and unit-tested (mapper, window, cadence, diff,
+evaluator — 70 tests in `feature:flights` alone), and keeps all cross-module seams
+(worker wiring, deep links, rule provisioning) additive for the integration wave.

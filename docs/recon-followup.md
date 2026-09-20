@@ -41,3 +41,25 @@ first and returns MULTIPLE `.flight-status-card` results (use `rows` extraction)
 SpiceJet has no stable selectors (React-Native-Web atomic CSS) — treat as
 WebView-manual-only; Akasa's date widget id (`#phoneCode`) is a recycled generic id —
 anchor on `aria-label="Departure date"`.
+
+## Airline rules — flights milestone status (2026-09-20, flights agent)
+
+Rule inventory decision recorded in ADR-010; per-airline status:
+
+| Airline | IATA | Rule file | Basis / reason |
+|---|---|---|---|
+| Air India | AI | `airindia.json` v1 ✅ **verified** | Selectors from the REAL captured result DOM (`docs/recon/airindia.html`). Uses `?fno={flightNumber}&on={date}` (yyyyMMdd) query params directly — no prefill/submit, so the OneTrust pointer-blocking overlay can't break automation (JS/DOM extraction is unaffected; the user can dismiss the banner in the visible WebView). Fixture covers the MULTI-CARD result shape (2 cards for one query); the feature mapper disambiguates by dep airport → dep date → first. |
+| IndiGo | 6E | ❌ skipped | Status search is PNR-only AND the submit button stayed `disabled` in recon with the enable condition unresolved; the result DOM was never observed, so there is no credible extraction basis. Falls back to web search. Revisit with a real PNR run. |
+| SpiceJet | SG | ❌ none BY DESIGN | React-Native-Web atomic CSS, zero stable selectors — registry returns null → web-search fallback (path unit-tested in `FlightStatusCheckViewModelTest`). |
+| Akasa Air | QP | ❌ skipped | Form selectors recon'd (`#flightNumber` stable, date picker is a react-select portal with a recycled `#phoneCode` id) but submission never completed — result DOM never observed, no extraction basis. |
+| Air India Express / Emirates / Qatar / Singapore / Etihad / Delta / American / Lufthansa / Cathay | IX EK QR SQ EY DL AA LH CX | ❌ skipped | curl probes (2026-09-20) returned JS app shells (8–14 KB, no result markup; only Delta exposes even a `flight-status` class on the shell) — no server-rendered structure to base research-based selectors on. Need live-browser recon with a submitted query each; until then registry returns null → web-search fallback. |
+
+All 13 airlines DO ship check-in-window entries + web check-in URLs in
+`feature/flights/src/main/assets/checkin-windows.json` (best-effort researched URLs,
+data-file updatable).
+
+### TODO — needs live result captures
+- [ ] Re-recon IndiGo with a real PNR (resolve the submit-enable condition; capture the result container under `aria-label="Flight Status Result"`).
+- [ ] Akasa: complete a submission in a mobile viewport; capture result DOM.
+- [ ] Live-browser captures for the 9 JS-shell airlines, one rule + fixture each.
+- [ ] Air India: confirm the `on=` param accepts all 5 dates of the ±2-day window and capture a DELAYED-status card (fixture currently has the early-arrival shape from the live capture).
