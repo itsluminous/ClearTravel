@@ -16,6 +16,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -88,7 +90,7 @@ internal fun MenuRootScreen(
     }
 }
 
-/** Settings: the System/Light/Dark theme picker, persisted via [SettingsViewModel]. */
+/** Settings: theme picker + the Google account section (spec feature 5). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsScreen(
@@ -97,6 +99,7 @@ internal fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -112,6 +115,7 @@ internal fun SettingsScreen(
                 },
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
     ) { padding ->
         Column(
             modifier =
@@ -141,6 +145,7 @@ internal fun SettingsScreen(
                 selected = themeMode == ThemeMode.DARK,
                 onSelect = { viewModel.setThemeMode(ThemeMode.DARK) },
             )
+            GoogleAccountSection(snackbarHostState = snackbarHostState)
         }
     }
 }

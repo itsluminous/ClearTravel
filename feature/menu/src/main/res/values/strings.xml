@@ -66,6 +66,40 @@
     <string name="menu_backup_error_io">Couldn’t read or write the backup file. Try again.</string>
     <string name="menu_backup_in_progress">Working…</string>
 
+    <string name="menu_google_section">Google account</string>
+    <string name="menu_google_not_configured">Google features are not set up in this build. A Google Cloud OAuth web client id is required — see docs/google-setup.md in the project repository.</string>
+    <string name="menu_google_not_linked">Link a Google account to sync your itinerary to Google Calendar and keep attachments and backups in Google Drive. Everything keeps working without it.</string>
+    <string name="menu_google_link_action">Connect Google account</string>
+    <string name="menu_google_linked_as">Connected as %1$s</string>
+    <string name="menu_google_disconnect_action">Disconnect</string>
+    <string name="menu_google_disconnect_title">Disconnect Google account?</string>
+    <string name="menu_google_disconnect_message">Syncing stops and the saved link is removed from this device. You can also delete the ClearTravel calendar from your Google account — your local data is never touched.</string>
+    <string name="menu_google_disconnect_keep">Disconnect</string>
+    <string name="menu_google_disconnect_delete">Also delete calendar</string>
+    <string name="menu_google_calendar_sync">Calendar sync</string>
+    <string name="menu_google_calendar_sync_subtitle">Keep trips and journeys in a dedicated “ClearTravel” Google Calendar</string>
+    <string name="menu_google_drive_uploads">Drive uploads</string>
+    <string name="menu_google_drive_uploads_subtitle">Copy boarding passes and ticket attachments to a “ClearTravel” Drive folder</string>
+    <string name="menu_google_drive_backup">Backup to Drive</string>
+    <string name="menu_google_drive_backup_subtitle">Upload every backup to Drive and keep the last five</string>
+    <string name="menu_google_linked_snackbar">Connected as %1$s</string>
+    <string name="menu_google_disconnected">Google account disconnected</string>
+    <string name="menu_google_link_failed">Couldn’t connect the Google account. Try again.</string>
+    <string name="menu_google_scope_denied">Permission wasn’t granted, so the feature stays off.</string>
+
+    <string name="menu_backup_drive_title">Google Drive</string>
+    <string name="menu_backup_drive_not_linked">Link a Google account in Settings to keep backups in Drive and restore them on a new device.</string>
+    <string name="menu_backup_drive_last">Last Drive backup: %1$s (%2$s)</string>
+    <string name="menu_backup_drive_none">No backups in Drive yet</string>
+    <string name="menu_backup_drive_restore_action">Restore from Drive</string>
+    <string name="menu_backup_drive_list_title">Drive backups</string>
+    <string name="menu_backup_drive_list_empty">No ClearTravel backups were found in your Drive.</string>
+    <string name="menu_backup_drive_download_failed">Couldn’t download the backup from Drive. Try again.</string>
+    <string name="menu_backup_fresh_restore_title">Restore your data from Drive?</string>
+    <string name="menu_backup_fresh_restore_message">A ClearTravel backup from %1$s (%2$s) was found in your Google Drive. Import it to bring your trips, journeys and checklists onto this device — or start fresh.</string>
+    <string name="menu_backup_fresh_restore_confirm">Import</string>
+    <string name="menu_backup_fresh_restore_decline">Start fresh</string>
+
     <string name="menu_about_title">About</string>
     <string name="menu_about_app_name">ClearTravel</string>
     <string name="menu_about_version">Version %1$s</string>
