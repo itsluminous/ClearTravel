@@ -1,0 +1,12 @@
+Electronic Reservation Slip - Normal User
+PNR: 4123456789    Train No./Name: 12626 / KERALA EXPRESS
+Quota: TATKAL (TQ)
+Class: SL (SLEEPER)
+Boarding At: H NIZAMUDDIN(NZM)    To: ERNAKULAM JN(ERS)
+Date of Journey: 05-Oct-2025    Scheduled Departure: 11:25
+Distance: 2846 KM
+Passenger Details
+1) ARJUN MENON 28 M RAC/S6/12/SL RAC/S6/12/SL
+2) DIVYA MENON 26 F WL/15 WL/12
+This ticket is booked on a personal user ID, its sale/purchase is an offence u/s 143 of the Railways Act 1989.
+Prescribed original ID proof is required while travelling along with SMS/VRM/ERS otherwise will be treated as without ticket and penalized as per Railway Rules.

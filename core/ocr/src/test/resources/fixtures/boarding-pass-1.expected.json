@@ -1,0 +1,12 @@
+{
+  "passengerName": { "value": "RAHUL SHARMA", "confidence": "HIGH" },
+  "pnr": { "value": "X8B2Q4", "confidence": "HIGH" },
+  "carrier": { "value": "6E", "confidence": "HIGH" },
+  "flightNumber": { "value": "2345", "confidence": "HIGH" },
+  "fromAirport": { "value": "DEL", "confidence": "HIGH" },
+  "toAirport": { "value": "BOM", "confidence": "HIGH" },
+  "flightDate": { "value": "2025-09-20", "confidence": "HIGH" },
+  "seat": { "value": "12A", "confidence": "HIGH" },
+  "sequenceNumber": { "value": "25", "confidence": "HIGH" },
+  "source": "OCR_TEXT"
+}

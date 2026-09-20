@@ -1,0 +1,12 @@
+{
+  "passengerName": { "value": "DIVYA MENON", "confidence": "HIGH" },
+  "pnr": { "value": "PQ7R2S", "confidence": "HIGH" },
+  "carrier": { "value": "AI", "confidence": "MEDIUM" },
+  "flightNumber": { "value": "865", "confidence": "MEDIUM" },
+  "fromAirport": { "value": "DEL", "confidence": "MEDIUM" },
+  "toAirport": { "value": "COK", "confidence": "MEDIUM" },
+  "flightDate": { "value": "2025-10-05", "confidence": "HIGH" },
+  "seat": { "value": "34C", "confidence": "HIGH" },
+  "sequenceNumber": { "value": "112", "confidence": "HIGH" },
+  "source": "OCR_TEXT"
+}

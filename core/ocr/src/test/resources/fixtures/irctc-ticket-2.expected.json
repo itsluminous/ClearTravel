@@ -1,0 +1,22 @@
+{
+  "pnr": { "value": "4123456789", "confidence": "HIGH" },
+  "trainNumber": { "value": "12626", "confidence": "HIGH" },
+  "trainName": { "value": "KERALA EXPRESS", "confidence": "HIGH" },
+  "journeyDate": { "value": "2025-10-05", "confidence": "HIGH" },
+  "fromStation": { "value": "NZM", "confidence": "HIGH" },
+  "toStation": { "value": "ERS", "confidence": "HIGH" },
+  "travelClass": { "value": "SL", "confidence": "HIGH" },
+  "quota": { "value": "TQ", "confidence": "HIGH" },
+  "passengers": [
+    {
+      "name": { "value": "ARJUN MENON", "confidence": "HIGH" },
+      "coach": { "value": "S6", "confidence": "MEDIUM" },
+      "berth": { "value": "12", "confidence": "MEDIUM" },
+      "bookingStatus": { "value": "RAC/S6/12/SL", "confidence": "HIGH" }
+    },
+    {
+      "name": { "value": "DIVYA MENON", "confidence": "HIGH" },
+      "bookingStatus": { "value": "WL/15", "confidence": "HIGH" }
+    }
+  ]
+}

@@ -97,3 +97,38 @@ without `src/test/resources/fixtures/<ruleId>/{page.html,expected.json}` — add
 airline without a recorded fixture cannot pass CI (ADR-003), and the enforcement
 mechanism itself is self-tested. Parse failures carry the raw HTML because the spec's
 fallback is showing the user the raw page, never a crash or a blocked UI.
+
+## ADR-009: OCR pipeline design — staged classes, pure extractors, per-field confidence, fixture discipline
+
+**What.** `core:ocr` splits the on-device import pipeline into small single-purpose
+stages: `PdfPageRasterizer` (platform `PdfRenderer` → Bitmap, white background, fixed
+target width), `BitmapPreprocessor` (grayscale + linear contrast stretch via
+`ColorMatrix` only — **no OpenCV dependency; deskew deliberately skipped** since
+tickets/passes are axis-aligned scans in practice and grayscale+contrast is the main
+accuracy win), `OcrTextRecognizer` / `BcbpBarcodeDecoder` (thin suspend wrappers over
+ML Kit text recognition and barcode scanning restricted to PDF417/Aztec/QR; both
+degrade to empty output on failure, never throw). Everything that interprets text is
+**pure Kotlin, plain-JUnit testable**: `BcbpParser` (IATA Resolution 792 type-M
+mandatory 60-char block, multi-leg tolerant, Julian date resolved to the year nearest
+"today"), `IrctcTicketExtractor`, `IrctcSmsParser` and `BoardingPassTextExtractor`.
+The single Android-facing entry point is `OcrPrefillService`
+(`prefillTrainTicket(Uri)`, `prefillTrainTicketFromText(String)`,
+`prefillBoardingPass(Uri)` — barcode first, OCR-text heuristics as fallback); Hilt
+provides the ML Kit clients (`di/OcrModule`).
+
+**Confidence model.** Every field is an `ExtractedField(value, confidence)` with a
+fixed ladder: BCBP barcode content and label-anchored text matches ("PNR:", "Date of
+Journey:") are HIGH; strong unlabeled structural matches (a `NDLS-BCT` station pair, a
+bare `AI 0865` flight token) are MEDIUM; weak heuristics (a bare 6-char alphanumeric
+as PNR) are LOW; absent is NONE with a null value. Extractors **always succeed
+structurally** — garbage input returns the typed EMPTY result (blank form + file
+attached), never an exception — so feature UIs need no error paths, only the review
+form.
+
+**Fixture discipline (extends ADR-003).** Recorded OCR-text fixtures live in
+`core/ocr/src/test/resources/fixtures/` as `<name>.txt` + `<name>.expected.json`
+pairs; parameterized tests run every fixture through its extractor and compare the
+full serialized result (extraction models are `@Serializable` precisely to enable
+this). The set ships with two IRCTC ERS layouts, two boarding-pass layouts, one IRCTC
+SMS, and one garbage fixture asserting the EMPTY fallback — adding an extraction
+behavior without a fixture is a review-blocking omission, same as scrape rules.

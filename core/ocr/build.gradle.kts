@@ -1,6 +1,9 @@
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
 }
 
 android {
@@ -24,14 +27,33 @@ android {
         lintConfig = rootProject.file("lint.xml")
         abortOnError = true
     }
+
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
     implementation(libs.kotlinx.coroutines.core)
+    // Bridges ML Kit's Task API into suspend functions (Task.await()).
+    implementation(libs.kotlinx.coroutines.play.services)
+    // Extraction results are @Serializable so fixture tests can compare against expected JSON.
+    implementation(libs.kotlinx.serialization.json)
 
-    // ML Kit wiring lands with the Trains/Flights import milestones:
-    // libs.mlkit.text.recognition and libs.mlkit.barcode.scanning are catalogued.
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+
+    // On-device only: text OCR + BCBP barcode decoding. Files never leave the device.
+    implementation(libs.mlkit.text.recognition)
+    implementation(libs.mlkit.barcode.scanning)
 
     testImplementation(libs.junit)
     testImplementation(libs.truth)
+    testImplementation(libs.kotlinx.coroutines.test)
+    // Thin Robolectric coverage only where Bitmap forces it (preprocessor); everything
+    // else in this module is pure Kotlin tested as plain JUnit.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core.ktx)
 }

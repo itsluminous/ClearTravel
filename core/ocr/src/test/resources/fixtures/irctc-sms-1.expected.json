@@ -1,0 +1,21 @@
+{
+  "pnr": { "value": "8524167890", "confidence": "HIGH" },
+  "trainNumber": { "value": "12951", "confidence": "HIGH" },
+  "journeyDate": { "value": "2025-09-20", "confidence": "HIGH" },
+  "fromStation": { "value": "NDLS", "confidence": "MEDIUM" },
+  "toStation": { "value": "BCT", "confidence": "MEDIUM" },
+  "travelClass": { "value": "3A", "confidence": "MEDIUM" },
+  "passengers": [
+    {
+      "name": { "value": "RAHUL SHARMA", "confidence": "MEDIUM" },
+      "coach": { "value": "B4", "confidence": "MEDIUM" },
+      "berth": { "value": "32", "confidence": "MEDIUM" },
+      "bookingStatus": { "value": "CNF", "confidence": "MEDIUM" }
+    },
+    {
+      "coach": { "value": "B4", "confidence": "MEDIUM" },
+      "berth": { "value": "33", "confidence": "MEDIUM" },
+      "bookingStatus": { "value": "CNF", "confidence": "MEDIUM" }
+    }
+  ]
+}
