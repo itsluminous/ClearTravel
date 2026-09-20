@@ -613,3 +613,64 @@ lean and the fake seams honest; menu-hosted hooks keep the app module untouched
 (parallel-agent boundary); and every brain (mapper, engine diff, prune, ladder,
 heuristic, scope gating, link state machine, worker verdicts) is pure enough to be
 covered by the ~70 fake-backed unit tests this milestone ships.
+
+## ADR-018: Train route fetch — erail.in rule, hands-free auto-flow, pure RouteMapper
+
+**What.** The trains feature gains a 'Fetch route' action (ticket detail sheet, next
+to Check PNR status) that loads the train's COMPLETE station schedule into the
+ticket's `train_route_stops`:
+
+- **Source: erail.in** (`erail-route` rule v1,
+  `https://erail.in/train-enquiry/{trainNumber}`), chosen by live recon 2026-09-21
+  (`docs/recon/train-route-NOTES.md`): bare train number in the URL (no slug, GET
+  only), NO captcha, NO login, NO cookie/consent banner (`dismissSelectors` empty),
+  route table (`#divRouteList table.RouteList`) server-rendered with a fixed column
+  order — verified identical across a single-day (22346) and an overnight (12951)
+  train. Rejected: NTES (JS SPA, navigation failed outright from a plain session)
+  and the official form-driven schedule page (no deep link, prefill+submit for no
+  benefit); trainman/confirmtkt untested fallbacks. Rule + fixture are built from
+  the REAL captured DOM of train 22346.
+- **ScrapeParams gains `trainNumber`** (additive fourth field, default null) with a
+  `{trainNumber}` placeholder — the first `kind: "train"` rule addressed by train
+  number rather than PNR. Trains rules keep being looked up by `ruleById` (the
+  registry's kind-based selection only exists for flights' IATA dispatch).
+- **Hands-free auto-flow, same WebView host pattern as the PNR check** (ADR-011):
+  visible WebView → load → readySignal (`tr` count > 1 under the route table) →
+  dump → pure `RouteMapper` → `TrainRepository.replaceRouteStops` → auto-close +
+  "N stations loaded" snackbar, reopening the detail sheet so the new route is
+  immediately visible. No user interaction is needed, but the page stays visible
+  (progress is self-evident, and it matches the engine's foreground-only posture,
+  ADR-013). The session's `NeedsUserAction` event — emitted mechanically because
+  the rule has no `submitSelector` — is deliberately ignored by the route screen:
+  a direct-GET page has nothing for the user to do, and changing the engine's
+  event semantics for this case was rejected as a non-additive behavior change.
+  `ParseFailed` (or a mapper null) keeps the raw page + banner + retry, exactly
+  like the PNR flow; stored data is never touched on failure.
+- **`RouteMapper` is a pure function** (`map(ticketId, ScrapedData):
+  List<TrainRouteStop>?`) owning the erail quirks — `RuleExtractor.postProcess`
+  only applies to single-value fields, not rows, so row-level normalization
+  belongs in the mapper: dot times `HH.MM` → `HH:mm` (zero-padded, also accepts
+  `H:MM`), the `First`/`Last` origin/terminus literals → "" (the model's "no time
+  at this end" convention), non-numeric day → 1, station name falls back to the
+  station code, `sortOrder` = extraction order. Fewer than two usable stops →
+  null → parse-failure path. The rule extracts `halt` and `distance` too, but the
+  frozen `TrainRouteStop` (ADR-004) has no such columns — they are captured in the
+  rule/fixture for a future ADR + schema migration, not persisted or rendered now.
+  Detail-sheet rendering gains only a "Day N" line on stops with `day > 1`.
+- **PNR re-check affordance**: verification (this wave) confirmed the Check PNR
+  status flow has NO one-shot guard anywhere — the button is always visible,
+  every `start()` builds a fresh session/WebView, and
+  `applyStatusResult` re-merges per-passenger current status by position on every
+  apply — so re-checking already worked indefinitely. The gap was discoverability:
+  the detail sheet now shows a hint ("Seats not confirmed yet — check again closer
+  to your journey", pure `hasUnconfirmedSeat` predicate: any passenger whose
+  current-else-booking status is non-blank and not `CNF*`) next to the Check
+  button.
+
+**Why.** erail.in is the only recon'd source that makes the flow fully hands-free —
+which is what makes a "route" feature worth one tap. Keeping every quirk in the
+pure mapper (not the rule's postProcess, not the engine) preserves ADR-008's
+layering: the rule stays a faithful selector map of the real DOM (fixture-pinned),
+the engine stays generic, and the one function that interprets erail's conventions
+is trivially unit-testable (12 tests) and swappable per-source if a different
+schedule site ever ships as a fallback rule.

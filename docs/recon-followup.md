@@ -107,3 +107,39 @@ attempt that changed nothing must not masquerade as fresh data; the durable
   composition state, reopens the flight's detail sheet, shows a snackbar, and renders
   a timestamped outcome line on the sheet (error-colored for FAILED). Lost on process
   death by design.
+
+## Train route fetch — erail-route rule (2026-09-21, route agent)
+
+`erail-route` v1 shipped (ADR-018), built EXACTLY from the recon capture
+(`docs/recon/train-route-NOTES.md` + `train-route-22346.html`, both git-ignored):
+
+- URL `https://erail.in/train-enquiry/{trainNumber}` — new additive
+  `ScrapeParams.trainNumber` + placeholder; no prefill, no submit, no
+  `dismissSelectors` (recon found no consent banner on erail.in).
+- readySignal `jsCondition`: `#divRouteList table.RouteList` `tr` count > 1 (header +
+  at least one data row) — the recon's "count > 1" recommendation, since a bare
+  visible-selector check would pass on the header row alone.
+- Fixture pair `fixtures/erail-route/{page.html,expected.json}`: page.html is the
+  recon capture verbatim (full unmodified `#divRouteList` subtree, all 7 rows of
+  train 22346); expected.json hand-verified against the table (all 7 stations,
+  including the `First`/`Last` literals and dot-times kept RAW — normalization is
+  the feature-side `RouteMapper`'s job).
+- `halt`/`distance` ARE extracted (rule + fixture cover them) but not persisted —
+  `TrainRouteStop` is contract-frozen; noted in ADR-018 for a future schema wave.
+
+### TODO — live-device verification (route fetch)
+- [ ] Run 'Fetch route' on-device against live erail.in for a single-day AND an
+      overnight train (12951 — day column reaching 2 was recon-verified in-browser
+      but not captured as a second fixture).
+- [ ] Watch for a regional cookie/consent variant; if one appears, add its
+      `dismissSelectors` entry and bump the rule to v2.
+- [ ] If erail.in breaks, trainman.in/confirmtkt are UNTESTED fallback candidates
+      (recon deliberately stopped at erail — not rejected, just not evaluated).
+
+### PNR re-check verification (same wave)
+Confirmed by code reading: NO one-shot guard exists — `PnrCheckViewModel.start()`
+is freely repeatable (attempt counter recreates the WebView), the detail sheet's
+Check button is unconditional, and `applyStatusResult` re-merges passenger
+current-status by position on every apply. No code removal was needed; the detail
+sheet gained the unconfirmed-seat hint (`hasUnconfirmedSeat`) to make re-checking
+discoverable for WL/RAC tickets.
