@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Channel names/descriptions (user-visible in system settings). -->
+    <string name="notifications_channel_trains_name">Train journeys</string>
+    <string name="notifications_channel_trains_description">PNR and running-status updates for your train tickets</string>
+    <string name="notifications_channel_flights_name">Flight journeys</string>
+    <string name="notifications_channel_flights_description">Gate, delay, cancellation and baggage-belt updates for your flights</string>
+    <string name="notifications_channel_reminders_name">Reminders</string>
+    <string name="notifications_channel_reminders_description">Check-in windows and travel reminders</string>
+
+    <!-- Flight notification content. %1$s is always the flight label (e.g. "AI 101"). -->
+    <string name="notifications_flight_check_in_open_title">Web check-in open for %1$s</string>
+    <string name="notifications_flight_check_in_open_text">Check in now to pick your seat before the airport rush.</string>
+    <string name="notifications_flight_gate_assigned_title">Gate assigned for %1$s</string>
+    <string name="notifications_flight_gate_assigned_text">Departure gate %1$s</string>
+    <string name="notifications_flight_gate_changed_title">Gate changed for %1$s</string>
+    <string name="notifications_flight_gate_changed_text">New departure gate %1$s (was %2$s)</string>
+    <string name="notifications_flight_delayed_title">%1$s is delayed</string>
+    <string name="notifications_flight_delayed_text">New estimated departure %1$s</string>
+    <string name="notifications_flight_delayed_text_no_time">Open the flight for the latest times.</string>
+    <string name="notifications_flight_cancelled_title">%1$s is cancelled</string>
+    <string name="notifications_flight_cancelled_text">Contact the airline about rebooking or a refund.</string>
+    <string name="notifications_flight_belt_title">Baggage belt for %1$s</string>
+    <string name="notifications_flight_belt_text">Collect your bags at belt %1$s</string>
+    <string name="notifications_flight_status_check_title">%1$s status may have changed</string>
+    <string name="notifications_flight_status_check_text">Tap to check the latest status.</string>
+</resources>

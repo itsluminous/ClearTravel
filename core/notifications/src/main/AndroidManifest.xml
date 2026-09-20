@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Android 13+ runtime notification permission — declared here so every consumer
+         of core:notifications inherits it via manifest merge; the runtime request is
+         gated through NotificationPermissions. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+</manifest>
