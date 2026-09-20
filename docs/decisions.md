@@ -534,3 +534,82 @@ raw-upsert DAO keeps repositories' bump-on-write rule intact everywhere else.
 DTO decoupling + manifest versioning keep old backups importable forever and newer
 backups gracefully rejected, and the four-method `BackupManager` seam lets the Drive
 milestone land without touching the engine.
+
+## ADR-016: Google integration — plain REST clients, state-store reconciliation, menu-hosted hooks
+
+**What.** Milestone 7 implements spec feature 5 (+ the Drive halves of feature 6) in
+`core:google` and `feature:menu`, everything OFF by default and fully degraded when
+`GOOGLE_WEB_CLIENT_ID` is empty:
+
+- **No Google API client libraries.** Calendar v3 and Drive v3 are called through a
+  tiny `HttpURLConnection` wrapper (`rest/GoogleApiHttp`) + kotlinx-serialization
+  JSON builders, behind fake-able seams `CalendarClient`/`DriveClient`. The planned
+  `google-api-services-calendar/drive` + `google-api-client-android` +
+  `google-http-client-gson` dependencies were dropped: the integration needs four
+  HTTP verbs and one multipart upload, and the API-client stack (Guava, transport,
+  gson) buys APK size and version pinning risk for zero testability — every test
+  runs against fakes either way. **No version-catalog changes** — credentials,
+  googleid and play-services-auth were already catalogued.
+- **Linking** (`auth/`): `GoogleAccountManager` (Hilt-bound facade) over
+  `GoogleAuthorizer` (Credential Manager account pick + Play services
+  `AuthorizationClient` scopes/tokens) and `GoogleLinkStore` (Preferences DataStore
+  `google_link`: email, granted scopes, cached calendar/folder ids, the three
+  feature toggles — device-local by design, never in Room/backup). Linking grants
+  NO scopes; each Settings toggle requests its own **incremental** scope
+  (`calendar.app.created` for Calendar — least privilege that can create the
+  dedicated calendar; `drive.file` shared by Drive uploads + Drive backup). A
+  consent resolution surfaces as a typed `NeedsScopeConsent(pendingIntent)` the UI
+  launches. Blank client id → `GoogleLinkState.NotConfigured` → explanatory
+  disabled UI (an ANDROID client id fails with console error `[28444]`;
+  docs/google-setup.md).
+- **Calendar sync = periodic + on-demand reconciliation, not per-write triggers.**
+  `CalendarSyncEngine.reconcile()` diffs current live rows (itinerary items, train
+  tickets, flight journeys) against a device-local `CalendarSyncStateStore`
+  (rowId → eventId + content fingerprint, SharedPreferences): unknown row → insert
+  (event id recorded on the row via the normal repository `save` — the `updatedAt`
+  bump is acceptable and keeps the ADR-002 write discipline intact — AND in the
+  store), changed fingerprint → PATCH, store entry with no live row → DELETE. This
+  makes deletions and trip cascades detectable **without tombstone queries** (no
+  `core:data` interface changes — repositories are consumed as-is), and rows
+  restored from a backup with a `googleEventId` are ADOPTED (update, never a
+  duplicate insert). The dedicated "ClearTravel" calendar is created once (id
+  cached), verified per pass, recreated if deleted server-side; disconnect
+  optionally deletes it via a cleanup worker. Trigger = one-shot work on
+  enable/link + a 6-hourly periodic catch-up (`WorkManagerGoogleSyncScheduler`);
+  per-write triggers can be added later by calling `scheduleCalendarSync()` after
+  saves — deliberately not wired into repositories this wave to keep `core:data`
+  frozen.
+- **Drive uploads**: `DriveUploadEngine` drains
+  `AttachmentRepository.getPendingDriveUploads()` into the "ClearTravel" folder,
+  persisting `driveFileId` via the repository. Boarding passes (a path on the
+  flight row, no attachment row) are REGISTERED as FLIGHT `Attachment` rows keyed
+  by local path exactly once, so one queue and one `driveFileId` column cover
+  them. Failures leave rows pending (worker retry w/ exponential backoff, max 5;
+  periodic catch-up). Missing local files are skipped, not retried forever. The
+  **restore ladder** `AttachmentFileResolver.resolve()` (local file → Drive
+  download into `filesDir/attachments/<id>` + `localPath` re-point → placeholder)
+  is the integration point features should call where attachment bytes are read —
+  wiring the train/flight sheets onto it is follow-up integration work.
+- **Backup-to-Drive**: the `BackupManager` contract is untouched; the hook lives in
+  `feature:menu`'s `BackupRestoreViewModel` — after every successful export it
+  calls `GoogleSyncScheduler.scheduleBackupUpload()` (worker self-skips when
+  disabled/unlinked, so the call is unconditional). `DriveBackupService` uploads
+  the newest `filesDir/backups` ZIP (deduped by name), prunes Drive to the **5
+  newest**, lists backups (never creating the folder on a read) and downloads one
+  to cache. **Fresh-install restore** is hosted entirely in the Backup & Restore
+  screen (no app-module edits): when linked and `FreshInstallDetector` reports zero
+  trips+journeys+checklists and Drive holds a backup, a one-time prompt offers the
+  newest backup (date + size) → download + `importApply`; a manual "Restore from
+  Drive" list feeds `importPreview` → confirm → `importApply`.
+- **Workers** all use the ADR-013 EntryPoint pattern (no `:app` edits, no
+  `@HiltWorker`); `GoogleNotAvailableException` (no link/token) resolves as quiet
+  SUCCESS, never retry noise. Calendar event text is built from `core:google`
+  string resources through the pure `CalendarEventStrings` value (hard rule 1 —
+  calendar events are user-visible text).
+
+**Why.** Reconciliation-by-state-store is the only deletion-safe design that needs
+zero contract changes in frozen `core:data`; plain REST keeps the dependency set
+lean and the fake seams honest; menu-hosted hooks keep the app module untouched
+(parallel-agent boundary); and every brain (mapper, engine diff, prune, ladder,
+heuristic, scope gating, link state machine, worker verdicts) is pure enough to be
+covered by the ~70 fake-backed unit tests this milestone ships.
