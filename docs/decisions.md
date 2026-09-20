@@ -406,3 +406,72 @@ offline.
 path), keeps every "brain" pure and unit-tested (mapper, window, cadence, diff,
 evaluator — 70 tests in `feature:flights` alone), and keeps all cross-module seams
 (worker wiring, deep links, rule provisioning) additive for the integration wave.
+
+## ADR-014: App-shell integration — theme, deep links, share sheet, RuleRegistry hoist, startup housekeeping, hermetic e2e
+
+**What.** The integration wave wires everything the feature milestones deferred to
+app/ ownership:
+
+- **Theme.** `ThemeViewModel` (app module) exposes `SettingsRepository.themeMode` as
+  a `StateFlow` with initial `ThemeMode.SYSTEM`; `MainActivity` collects it via
+  `collectAsStateWithLifecycle` and resolves it to `ClearTravelTheme(darkTheme=…)`
+  (`SYSTEM → isSystemInDarkTheme()`). The SYSTEM initial value matches the splash
+  theme, so the splash→content handoff never flashes the wrong theme while DataStore
+  loads.
+- **Notifications.** `NotificationChannelRegistrar.registerAll()` runs in
+  `MainActivity.onCreate` (idempotent). POST_NOTIFICATIONS is requested exactly ONCE
+  per install (`app_shell_state` SharedPreferences flag) via the activity-result
+  API; a denial is never re-prompted — posting stays a silent no-op through
+  `NotificationPermissions.canPost`, and the user can grant later from Settings.
+  Device-local flag deliberately outside Room/backup (same reasoning as ADR-013's
+  poll-state store).
+- **Deep links.** `MainActivity` (already `singleTask`) parses the ADR-013
+  `DeepLinkContract` extras in `onCreate` + `onNewIntent` into a `JourneysDeepLink`
+  Compose state (a `nonce` field makes repeat links to the same entity distinct).
+  `ClearTravelApp` navigates to the Journeys tab; `journeysGraph(deepLink,
+  onDeepLinkConsumed)` selects the Trains/Flights segment and forwards the entity id
+  into the features through NEW additive hooks: `TrainsContent(initialTicketId=…)`
+  and `FlightsContent(initialFlightId=…)` → `FlightListScreen(initialDetailFlightId=…)`
+  — all defaulted, so existing call sites are untouched.
+- **Share sheet.** The app manifest adds the deferred `ACTION_SEND` `text/plain`
+  intent filter; `MainActivity` routes `EXTRA_TEXT` to `feature:trains`'
+  `TrainsSharedTextEntry` rendered over the shell; `onDone` (save or cancel) returns
+  to the normal UI.
+- **RuleRegistry hoist.** The single `RuleRegistry` `@Provides` moved from
+  `feature:flights` (`FlightsProvidersModule`, deleted; file renamed to
+  `FlightsBindingsModule.kt`) into `core:scrape`'s new `di/ScrapeModule` — the
+  registry serves both trains and flights (ADR-013 note). This required adding the
+  ksp+hilt plugin pair and `hilt-android` to `core:scrape` (a `@InstallIn` module is
+  only aggregated when its defining module runs the Hilt compiler) — the only
+  build-file change of the wave; no version-catalog changes. `feature:trains`'
+  `PnrCheckViewModel` still constructs its registry directly (unchanged, works);
+  migrating it to injection is optional follow-up.
+- **Startup housekeeping** (`app` `startup/AppStartupTasks`, launched from
+  `MainActivity.onCreate` on `Dispatchers.IO`): (1) auto-archive — train tickets
+  past `feature:trains`' `isPastJourney` and flights past the app-level
+  `isPastFlight` (journey day strictly before today; falls back to `schedDep`'s
+  local date when `date` is null; lives in app because it composes both feature
+  aggregates) are `setArchived(true)`; idempotent since archived rows leave
+  `observeActive`. (2) flight-poll kick — computes the soonest `schedDep` across
+  active flights and calls `FlightPollScheduler.ensureScheduled` (KEEP policy).
+  This kick is what actually STARTS the ADR-013 self-chaining WorkManager chain:
+  the in-feature `ensureScheduled(context, null)` call is a documented no-op
+  (`NextPollDelay.compute(null) == null`), and nothing scheduled on save — without
+  the app-open kick, polling stayed dormant after reboot/force-stop or when a
+  flight was saved without revisiting the tab.
+- **Hermetic e2e suite** (`app/src/androidTest`): `HiltTestRunner` swaps in
+  `HiltTestApplication`; `TestDatabaseModule` (`@TestInstallIn`, replaces
+  `DatabaseModule`) provides an in-memory Room with the same async preset-seeding
+  callback. One happy path per feature — checklist-from-preset + second-preset
+  append snackbar, trip creation, manual train ticket → PNR in detail sheet, manual
+  flight → route in detail sheet. No network, providers, scraping or OCR paths are
+  reachable from these flows; POST_NOTIFICATIONS is pre-granted via UiAutomation so
+  the one-time permission dialog never overlays the UI under test. The suite is
+  compiled by the quality gate (`assembleDebugAndroidTest`) and executed on the
+  emulator in a later validation stage.
+
+**Why.** Every seam used here was pre-declared by the feature ADRs (deep-link
+contract, scheduler contract, shared-text entry, hoist note) — the integration wave
+only composes them in the app module, keeping the feature ownership boundaries
+intact (the sole feature-module edits are the defaulted deep-link hook parameters
+and the DI deletion the hoist note prescribed).
