@@ -106,3 +106,64 @@ are stable) to make the flow hands-free. Recorded for rule refinement.
 
 - `connected.log` (git-ignored) — final `connectedDebugAndroidTest` run, BUILD SUCCESSFUL.
 - `docs/validation/*.png` — 15 screenshots referenced above.
+
+## Re-verification after fixes — 2026-09-21 (final-verify agent)
+
+Same AVD (`Android_16_AOSP_Medium`, resumed from the interrupted session), current
+build re-installed via `installDebug`, app relaunched fresh (data was clean — flows
+re-driven from scratch via adb, all commands timeout-wrapped).
+
+### D1 (domStorageEnabled) — **FIXED, verified on device**
+
+Flight AI 101 / 2026-09-21 → "Save & check status": the Air India FLIGHT STATUS page
+fully rendered its form within ~12 s of load — heading, radio group, and inputs
+prefilled `AI - 101` / `21 Sep 2026` from the query params. No "LOADING" stall, no
+localStorage crash. `21-ai-webview-rendered.png`.
+
+### D3 (dismissSelectors / OneTrust) — **FIXED, verified on device**
+
+The OneTrust consent wall never blocked the page at any point in the run — no dark
+filter, no dialog visible in any screenshot (the `#onetrust-accept-btn-handler`
+dismiss fires on page-finish and on every poll tick). The flow was fully hands-free.
+
+### D2 (failure banner + outcome line) — **FIXED, verified on device**
+
+The real site had no data for AI 101 on this date ("THIS INFORMATION IS NOT
+AVAILABLE" — zero `.flight-status-card` nodes), so the ready signal never fired and
+the 5-minute timeout produced the new `ParseFailed` path:
+
+- Error banner over the still-visible raw page: "Couldn't read the results — your
+  saved data is unchanged. Retry, or read the page below and update the flight
+  manually." with **Retry** and **Close** actions. `22-ai-parsefail-banner.png`.
+- Close → detail sheet reopens showing the error-colored transient outcome line
+  "Last check (21 Sep, 01:44): couldn't read the airline page — data unchanged",
+  while the durable status stays "Status never checked" (data genuinely unchanged).
+  `23-flight-sheet-failed-outcome.png`.
+
+### FULL end-to-end extraction success (bonus)
+
+A second flight AI 2425 / same day (a route the site had live data for) extracted
+successfully in ~30 s: "Status updated" confirmation, then the detail sheet and list
+card show status **Cancelled**, Estimated dep 10:30 / arr 12:50, durable "Checked
+21 Sep, 01:49" line plus outcome line "Last check (21 Sep, 01:49): status updated".
+The rule pipeline (query-param load → OneTrust dismissal → ready signal → rows
+extraction → mapper → Room) works end to end against the live site.
+`24-flight-sheet-updated.png`.
+
+### Trains PNR spot-check post-D1
+
+Ticket PNR 8524567890 → "Check PNR status": indianrail.gov.in enquiry page renders
+normally with the DOM-storage change, PNR injected into the form, instruction banner
+"Tap Submit on the page and solve the captcha" shown. Captcha untouched, closed.
+`25-pnr-webview-post-fix.png`.
+
+### Instrumented suite re-run on the fixed build
+
+`connectedDebugAndroidTest`: **4/4 PASS** (Checklist / Flights / Trains / Trips e2e),
+BUILD SUCCESSFUL. Emulator killed and confirmed gone afterwards.
+
+| Defect | Verdict |
+|---|---|
+| D1 domStorageEnabled | FIXED — form renders, prefill works |
+| D2 failure banner + outcome | FIXED — banner w/ Retry over raw page + timestamped sheet line |
+| D3 OneTrust dismissal | FIXED — wall never blocks, flow hands-free |
