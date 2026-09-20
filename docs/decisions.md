@@ -297,7 +297,7 @@ the active provider first — on success call `applyStatusResult` with its resul
 WebView screen. No UI or repository changes are needed; only the action's dispatch
 logic grows one branch.
 
-## ADR-010: Itinerary feature — nested NavHost, pure map/day logic, map degradation, maps-compose version pin
+## ADR-012: Itinerary feature — nested NavHost, pure map/day logic, map degradation, maps-compose version pin
 
 **What.** `feature:itinerary` (milestone 3) is structured around four decisions:
 
