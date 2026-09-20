@@ -1,0 +1,307 @@
+package com.itsluminous.cleartravel.feature.trains.list
+
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Train
+import androidx.compose.material.icons.filled.UploadFile
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
+import com.itsluminous.cleartravel.core.designsystem.component.ChipRow
+import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
+import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
+import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
+import com.itsluminous.cleartravel.core.model.TrainPassenger
+import com.itsluminous.cleartravel.core.model.TrainTicket
+import com.itsluminous.cleartravel.feature.trains.R
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+
+private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+private val TIMESTAMP_FORMAT: DateTimeFormatter =
+    DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+
+/** How the user wants to start a new ticket (FAB → add-options sheet). */
+internal sealed interface AddChoice {
+    data object Manual : AddChoice
+
+    data class FromText(
+        val text: String,
+    ) : AddChoice
+
+    data class FromFile(
+        val uri: Uri,
+    ) : AddChoice
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun TrainListScreen(
+    state: TrainListUiState,
+    onFilterChange: (TrainListFilter) -> Unit,
+    onTicketClick: (TrainTicket) -> Unit,
+    onAdd: (AddChoice) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var showAddSheet by rememberSaveable { mutableStateOf(false) }
+    var showPasteDialog by rememberSaveable { mutableStateOf(false) }
+    val importLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) onAdd(AddChoice.FromFile(uri))
+        }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            ChipRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
+                FilterChip(
+                    selected = state.filter == TrainListFilter.ACTIVE,
+                    onClick = { onFilterChange(TrainListFilter.ACTIVE) },
+                    label = { Text(stringResource(R.string.trains_filter_active)) },
+                )
+                FilterChip(
+                    selected = state.filter == TrainListFilter.ARCHIVED,
+                    onClick = { onFilterChange(TrainListFilter.ARCHIVED) },
+                    label = { Text(stringResource(R.string.trains_filter_archived)) },
+                )
+            }
+            if (state.isEmpty) {
+                val archived = state.filter == TrainListFilter.ARCHIVED
+                EmptyState(
+                    icon = Icons.Filled.Train,
+                    title =
+                        stringResource(
+                            if (archived) R.string.trains_empty_archive_title else R.string.trains_empty_title,
+                        ),
+                    message =
+                        stringResource(
+                            if (archived) R.string.trains_empty_archive_message else R.string.trains_empty_message,
+                        ),
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 88.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(state.cards, key = { it.ticket.id }) { card ->
+                        TrainTicketCardItem(card = card, onClick = { onTicketClick(card.ticket) })
+                    }
+                }
+            }
+        }
+        ClearTravelFab(
+            onClick = { showAddSheet = true },
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = stringResource(R.string.trains_add_ticket),
+            )
+        }
+    }
+
+    if (showAddSheet) {
+        ModalBottomSheet(onDismissRequest = { showAddSheet = false }) {
+            AddOptionRow(
+                icon = Icons.Filled.Edit,
+                titleRes = R.string.trains_add_manual,
+                hintRes = R.string.trains_add_manual_hint,
+                onClick = {
+                    showAddSheet = false
+                    onAdd(AddChoice.Manual)
+                },
+            )
+            AddOptionRow(
+                icon = Icons.Filled.ContentPaste,
+                titleRes = R.string.trains_add_paste,
+                hintRes = R.string.trains_add_paste_hint,
+                onClick = {
+                    showAddSheet = false
+                    showPasteDialog = true
+                },
+            )
+            AddOptionRow(
+                icon = Icons.Filled.UploadFile,
+                titleRes = R.string.trains_add_import,
+                hintRes = R.string.trains_add_import_hint,
+                onClick = {
+                    showAddSheet = false
+                    importLauncher.launch(arrayOf("image/*", "application/pdf"))
+                },
+            )
+        }
+    }
+
+    if (showPasteDialog) {
+        PasteTextDialog(
+            onDismiss = { showPasteDialog = false },
+            onConfirm = { text ->
+                showPasteDialog = false
+                onAdd(AddChoice.FromText(text))
+            },
+        )
+    }
+}
+
+@Composable
+private fun AddOptionRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    titleRes: Int,
+    hintRes: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    ListItem(
+        headlineContent = { Text(stringResource(titleRes)) },
+        supportingContent = { Text(stringResource(hintRes)) },
+        leadingContent = { Icon(imageVector = icon, contentDescription = null) },
+        modifier = modifier.clickable(onClick = onClick),
+    )
+}
+
+@Composable
+private fun PasteTextDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var text by rememberSaveable { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        modifier = modifier,
+        title = { Text(stringResource(R.string.trains_paste_dialog_title)) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text(stringResource(R.string.trains_paste_dialog_label)) },
+                minLines = 4,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(text) }, enabled = text.isNotBlank()) {
+                Text(stringResource(R.string.trains_paste_dialog_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.trains_form_cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun TrainTicketCardItem(
+    card: TrainTicketCard,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val ticket = card.ticket
+    ClearTravelCard(modifier = modifier.clickable(onClick = onClick)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = listOf(ticket.trainNumber, ticket.trainName).filter(String::isNotBlank).joinToString(" · "),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            if (ticket.archived) {
+                Text(
+                    text = stringResource(R.string.trains_card_archived_badge),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        ticket.journeyDate?.let { date ->
+            Text(
+                text = stringResource(R.string.trains_card_journey_date, formatDate(date)),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        if (ticket.fromStation.isNotBlank() || ticket.toStation.isNotBlank()) {
+            Text(
+                text = stringResource(R.string.trains_card_route, ticket.fromStation, ticket.toStation),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+        }
+        if (card.passengers.isNotEmpty()) {
+            ChipRow(modifier = Modifier.padding(top = 8.dp)) {
+                card.passengers.forEach { passenger ->
+                    PassengerStatusChip(passenger = passenger)
+                }
+            }
+        }
+        Text(
+            text = lastFetchedText(ticket),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 8.dp),
+        )
+    }
+}
+
+@Composable
+private fun PassengerStatusChip(
+    passenger: TrainPassenger,
+    modifier: Modifier = Modifier,
+) {
+    val status = passenger.currentStatus.ifBlank { passenger.bookingStatus }
+    val label = listOf(passenger.name, status).filter(String::isNotBlank).joinToString(": ")
+    if (label.isNotBlank()) {
+        AssistChip(onClick = {}, label = { Text(label) }, modifier = modifier)
+    }
+}
+
+@Composable
+internal fun lastFetchedText(ticket: TrainTicket): String {
+    val fetched = ticket.lastFetchedAt
+    return if (fetched == null) {
+        stringResource(R.string.trains_card_never_fetched)
+    } else {
+        stringResource(
+            R.string.trains_card_last_fetched,
+            TIMESTAMP_FORMAT.format(fetched.atZone(ZoneId.systemDefault())),
+        )
+    }
+}
+
+internal fun formatDate(date: LocalDate): String = DATE_FORMAT.format(date)

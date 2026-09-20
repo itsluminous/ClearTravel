@@ -2,4 +2,97 @@
 <resources>
     <string name="trains_empty_title">No train journeys yet</string>
     <string name="trains_empty_message">Add a train ticket to track its PNR status, seats and schedule here.</string>
+    <string name="trains_empty_archive_title">No archived journeys</string>
+    <string name="trains_empty_archive_message">Past train journeys you archive will show up here.</string>
+
+    <string name="trains_filter_active">Active</string>
+    <string name="trains_filter_archived">Archived</string>
+
+    <string name="trains_add_ticket">Add train ticket</string>
+    <string name="trains_add_manual">Manual entry</string>
+    <string name="trains_add_manual_hint">Type the ticket details yourself</string>
+    <string name="trains_add_paste">Paste SMS or email text</string>
+    <string name="trains_add_paste_hint">Prefill the form from an IRCTC message</string>
+    <string name="trains_add_import">Import PDF or image</string>
+    <string name="trains_add_import_hint">Prefill the form from a ticket file</string>
+    <string name="trains_paste_dialog_title">Paste ticket text</string>
+    <string name="trains_paste_dialog_label">IRCTC SMS or email text</string>
+    <string name="trains_paste_dialog_confirm">Prefill form</string>
+    <string name="trains_import_failed">Couldn\'t read that file — the form opens blank</string>
+
+    <string name="trains_card_journey_date">Journey on %1$s</string>
+    <string name="trains_card_route">%1$s → %2$s</string>
+    <string name="trains_card_last_fetched">Status checked %1$s</string>
+    <string name="trains_card_never_fetched">Status never checked</string>
+    <string name="trains_card_archived_badge">Archived</string>
+
+    <string name="trains_form_title_add">Add train ticket</string>
+    <string name="trains_form_title_edit">Edit train ticket</string>
+    <string name="trains_form_pnr">PNR number</string>
+    <string name="trains_form_pnr_error">PNR must be exactly 10 digits</string>
+    <string name="trains_form_train_number">Train number</string>
+    <string name="trains_form_train_name">Train name</string>
+    <string name="trains_form_journey_date">Journey date</string>
+    <string name="trains_form_pick_date">Pick journey date</string>
+    <string name="trains_form_from_station">From station</string>
+    <string name="trains_form_to_station">To station</string>
+    <string name="trains_form_class">Class</string>
+    <string name="trains_form_quota">Quota</string>
+    <string name="trains_form_passengers">Passengers</string>
+    <string name="trains_form_passenger_name">Name</string>
+    <string name="trains_form_passenger_coach">Coach</string>
+    <string name="trains_form_passenger_seat">Seat/berth</string>
+    <string name="trains_form_passenger_status">Booking status</string>
+    <string name="trains_form_add_passenger">Add passenger</string>
+    <string name="trains_form_remove_passenger">Remove this passenger</string>
+    <string name="trains_form_save">Save ticket</string>
+    <string name="trains_form_cancel">Cancel</string>
+    <string name="trains_form_low_confidence">Auto-filled with low confidence — please verify</string>
+    <string name="trains_form_prefilled">Auto-filled from your ticket — review before saving</string>
+    <string name="trains_form_saved">Ticket saved</string>
+    <string name="trains_form_back">Back</string>
+    <string name="trains_form_date_ok">OK</string>
+    <string name="trains_form_date_cancel">Cancel</string>
+
+    <string name="trains_detail_title">Ticket details</string>
+    <string name="trains_detail_pnr">PNR</string>
+    <string name="trains_detail_train">Train</string>
+    <string name="trains_detail_date">Date</string>
+    <string name="trains_detail_route">Route</string>
+    <string name="trains_detail_class">Class</string>
+    <string name="trains_detail_quota">Quota</string>
+    <string name="trains_detail_duration">Journey duration</string>
+    <string name="trains_detail_duration_value">%1$dh %2$dm</string>
+    <string name="trains_detail_passengers">Passengers</string>
+    <string name="trains_detail_booking_status">Booked: %1$s</string>
+    <string name="trains_detail_current_status">Current: %1$s</string>
+    <string name="trains_detail_seat">Coach %1$s · %2$s</string>
+    <string name="trains_detail_route_stops">Route</string>
+    <string name="trains_detail_stop_times">Arr %1$s · Dep %2$s</string>
+    <string name="trains_detail_stop_platform">Platform %1$s</string>
+    <string name="trains_detail_last_fetched">Status checked %1$s</string>
+    <string name="trains_detail_never_fetched">Status never checked</string>
+    <string name="trains_detail_check_status">Check PNR status</string>
+    <string name="trains_detail_edit">Edit</string>
+    <string name="trains_detail_archive">Archive</string>
+    <string name="trains_detail_unarchive">Unarchive</string>
+    <string name="trains_detail_delete">Delete</string>
+    <string name="trains_detail_delete_confirm_title">Delete this ticket?</string>
+    <string name="trains_detail_delete_confirm_message">The ticket, its passengers and route details will be removed.</string>
+    <string name="trains_detail_delete_confirm_yes">Delete</string>
+    <string name="trains_detail_delete_confirm_no">Keep</string>
+    <string name="trains_detail_deleted">Ticket deleted</string>
+    <string name="trains_detail_archived">Ticket archived</string>
+    <string name="trains_detail_unarchived">Ticket restored to active</string>
+
+    <string name="trains_pnr_check_title">Check PNR status</string>
+    <string name="trains_pnr_check_instructions">Tap Submit on the page and solve the captcha — the app reads the result automatically.</string>
+    <string name="trains_pnr_check_close">Close</string>
+    <string name="trains_pnr_check_retry">Retry</string>
+    <string name="trains_pnr_check_applied">PNR status updated</string>
+    <string name="trains_pnr_check_parse_failed">Couldn\'t read the results — your data is unchanged</string>
+    <string name="trains_pnr_check_rule_missing">The PNR enquiry rule isn\'t available on this build</string>
+    <string name="trains_pnr_check_loading">Opening Indian Railways PNR enquiry…</string>
+
+    <string name="trains_shared_text_title">Ticket shared with ClearTravel</string>
 </resources>

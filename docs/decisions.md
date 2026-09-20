@@ -238,7 +238,7 @@ Tink into DataStore by hand is more code and more crypto surface for zero benefi
 this data size. Keys are read rarely (only when an API provider fires), so
 SharedPreferences' synchronous model is fine behind `Dispatchers.IO`.
 
-## ADR-010: Train PNR refresh bypasses TrainStatusProvider; manual stub keeps the seam alive
+## ADR-011: Train PNR refresh bypasses TrainStatusProvider; manual stub keeps the seam alive
 
 **What.** The trains feature's DEFAULT PNR refresh is an interactive, full-screen,
 user-visible WebView flow (`feature:trains` `pnr` package): it builds a
@@ -271,28 +271,3 @@ the active provider first — on success call `applyStatusResult` with its resul
 `InteractiveCheckRequiredException`/failure fall back to launching the interactive
 WebView screen. No UI or repository changes are needed; only the action's dispatch
 logic grows one branch.
-
-## ADR-010: Per-tab nested NavHost; built-in presets read-only (duplicate-to-customize)
-
-**What.** (1) Feature tabs own their sub-navigation: `checklistGraph()`/`menuGraph()`
-register ONE destination on the app NavHost, and that destination hosts a nested
-`NavHost` (`rememberNavController` inside the tab) for its subscreens (checklist
-list → full-screen detail; menu root → Settings / Manage presets / preset editor /
-About). Checklist detail is a full screen, not a bottom sheet — packing lists are
-long and need the add-item field + reorder controls anchored. Reordering uses
-up/down buttons (swap `sort_order` with the neighbour), not drag handles. (2) In
-Manage presets, built-in presets are READ-ONLY: no edit/delete (guarded in both the
-UI and the ViewModels); the sanctioned customization path is duplicate-then-edit
-(`duplicatePreset` yields a user copy, `builtIn = false`). User presets support
-rename, add/remove/reorder, duplicate and delete.
-
-**Why.** (1) The app module passes no NavController into feature graphs, and feature
-modules must not depend on each other — a nested NavHost keeps ALL subscreen wiring
-inside the owning module (app/ is never touched when a feature adds a screen) and
-keeps the bottom bar highlighted on the owning tab, matching the feature READMEs.
-Up/down buttons are deterministic and trivially unit-testable where drag-reorder in
-Lazy lists is gesture-fragile. (2) Tombstone-aware seeding (ADR-006) means an edited
-built-in would never be re-seeded — a user who breaks a built-in template could never
-recover it; read-only built-ins + duplicate-to-customize preserves the templates
-while allowing full customization, and copy semantics already guarantee editing any
-preset never mutates existing checklists.
