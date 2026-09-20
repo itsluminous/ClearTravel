@@ -30,6 +30,12 @@ class ScrapeWebViewController(
     @SuppressLint("SetJavaScriptEnabled")
     fun start() {
         webView.settings.javaScriptEnabled = true
+        // D1 (validation 2026-09-21): airline SPAs require window.localStorage —
+        // with DOM storage off it is null and e.g. airindia.com's status clientlib
+        // crashes before rendering its form (widget stuck on "LOADING" forever).
+        // Kept minimal on purpose: databaseEnabled (WebSQL) is deprecated/removed in
+        // modern WebView and no recon'd site needed it or mixed content.
+        webView.settings.domStorageEnabled = true
         webView.webViewClient =
             object : WebViewClient() {
                 override fun onPageFinished(
@@ -37,6 +43,9 @@ class ScrapeWebViewController(
                     url: String?,
                 ) {
                     if (stopped) return
+                    // Blocking overlays (cookie walls) first — they intercept
+                    // pointer events, so submit clicks silently fail under them.
+                    session.dismissJavaScript()?.let { view.evaluateJavascript(it, null) }
                     view.evaluateJavascript(session.prefillJavaScript()) {
                         session.submitJavaScript()?.let { submit -> view.evaluateJavascript(submit, null) }
                         session.onPageReady()
@@ -55,7 +64,16 @@ class ScrapeWebViewController(
 
     private fun pollReadySignal() {
         if (stopped) return
-        if (elapsedMillis >= timeoutMillis) return
+        if (elapsedMillis >= timeoutMillis) {
+            // Timed out waiting for the ready signal: dump whatever rendered anyway.
+            // Extraction on a result-less page fails, so the session emits
+            // ParseFailed (raw-page fallback) instead of stalling silently (D2).
+            dumpHtml()
+            return
+        }
+        // Re-attempt overlay dismissal each tick — consent SDKs (OneTrust etc.)
+        // render asynchronously, often well after onPageFinished.
+        session.dismissJavaScript()?.let { webView.evaluateJavascript(it, null) }
         webView.evaluateJavascript(session.readySignalJavaScript()) { value ->
             if (stopped) return@evaluateJavascript
             if (value == "true") {

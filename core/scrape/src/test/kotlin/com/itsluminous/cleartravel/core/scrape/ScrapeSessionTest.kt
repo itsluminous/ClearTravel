@@ -75,6 +75,35 @@ class ScrapeSessionTest {
     }
 
     @Test
+    fun `dismiss js is null when the rule declares no dismiss selectors`() {
+        assertThat(RuleDrivenScrapeSession(captchaRule, params).dismissJavaScript()).isNull()
+    }
+
+    @Test
+    fun `dismiss js clicks each declared selector only when visible`() {
+        val rule =
+            captchaRule.copy(
+                dismissSelectors = listOf("#onetrust-accept-btn-handler", ".cookie's-close"),
+            )
+        val js = requireNotNull(RuleDrivenScrapeSession(rule, params).dismissJavaScript())
+
+        assertThat(js).contains("document.querySelector('#onetrust-accept-btn-handler')")
+        assertThat(js).contains("document.querySelector('.cookie\\'s-close')")
+        assertThat(js).contains("el.offsetParent!==null")
+        assertThat(js).contains(".click()")
+    }
+
+    @Test
+    fun `airindia rule v2 declares the OneTrust dismissal`() {
+        val rule = RuleFixtureHarness.loadRule("airindia.json")
+
+        assertThat(rule.version).isAtLeast(2)
+        assertThat(rule.dismissSelectors).containsExactly("#onetrust-accept-btn-handler")
+        val js = requireNotNull(RuleDrivenScrapeSession(rule, ScrapeParams()).dismissJavaScript())
+        assertThat(js).contains("#onetrust-accept-btn-handler")
+    }
+
+    @Test
     fun `submit js clicks the declared selector when present`() {
         val rule = captchaRule.copy(submitSelector = "#SubmitButton")
         val js = RuleDrivenScrapeSession(rule, params).submitJavaScript()

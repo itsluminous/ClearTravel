@@ -69,6 +69,22 @@ class RuleDrivenScrapeSession(
                 "el.dispatchEvent(new Event('change',{bubbles:true}));}})();"
         }
 
+    /**
+     * JS clicking every [ScrapeRule.dismissSelectors] element that exists and is
+     * visible (cookie walls and similar blocking overlays), or null when the rule
+     * declares none. Idempotent — re-running after the overlay is gone is a no-op —
+     * so the host runs it before prefill AND on every poll tick (consent SDKs render
+     * asynchronously after page load).
+     */
+    fun dismissJavaScript(): String? {
+        if (rule.dismissSelectors.isEmpty()) return null
+        return rule.dismissSelectors.joinToString(separator = "\n") { selector ->
+            val escaped = selector.escapeForJsSingleQuotedString()
+            "(function(){var el=document.querySelector('$escaped');" +
+                "if(el&&el.offsetParent!==null){el.click();}})();"
+        }
+    }
+
     /** JS clicking the submit control, or null when auto-submit is unsafe (captcha). */
     fun submitJavaScript(): String? =
         rule.submitSelector?.let { selector ->

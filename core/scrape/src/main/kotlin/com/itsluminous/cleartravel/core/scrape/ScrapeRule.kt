@@ -28,6 +28,16 @@ data class ScrapeRule(
     /** IATA airline codes served by this rule (flight rules only, e.g. `["6E"]`). */
     val iataCodes: List<String> = emptyList(),
     val urlTemplate: String,
+    /**
+     * CSS selectors of known blocking overlays' dismiss controls (cookie-consent
+     * accept buttons etc.). Any that exist AND are visible get clicked before
+     * prefill and again on every ready-signal poll tick — consent SDKs often render
+     * asynchronously after page load. A selector with no match is a silent no-op,
+     * so a rule keeps working if the site stops showing the overlay. Recon
+     * (docs/recon/NOTES.md): Air India's OneTrust dark filter intercepts ALL
+     * pointer events until dismissed, stalling any hands-free flow.
+     */
+    val dismissSelectors: List<String> = emptyList(),
     /** Form fields to fill via JS injection once the page has loaded. */
     val prefill: List<PrefillStep> = emptyList(),
     /**
