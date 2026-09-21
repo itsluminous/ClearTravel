@@ -39,7 +39,10 @@ sealed interface PnrCheckUiState {
     ) : PnrCheckUiState
 
     /** The result was parsed and written to Room — host closes with a snackbar. */
-    data object Applied : PnrCheckUiState
+    data class Applied(
+        /** Train number from the result — lets the host chain a route fetch. */
+        val trainNumber: String = "",
+    ) : PnrCheckUiState
 }
 
 /**
@@ -95,7 +98,7 @@ class PnrCheckViewModel
             }
             viewModelScope.launch {
                 repository.applyStatusResult(ticketId, result)
-                state.value = PnrCheckUiState.Applied
+                state.value = PnrCheckUiState.Applied(trainNumber = result.trainNumber)
             }
         }
 

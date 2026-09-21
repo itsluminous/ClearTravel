@@ -56,13 +56,13 @@ class RouteMapperTest {
         assertThat(stops!!).hasSize(7)
         assertThat(stops.map { it.stationName })
             .containsExactly(
-                "Gomtinagar (Lucknow)",
-                "Ayodhya Dham Jn",
-                "Varanasi Jn",
-                "Dd Upadhyaya Jn",
-                "Buxar",
-                "Ara",
-                "Patna Jn",
+                "Gomtinagar (Lucknow) (GTNR)",
+                "Ayodhya Dham Jn (AY)",
+                "Varanasi Jn (BSB)",
+                "Dd Upadhyaya Jn (DDU)",
+                "Buxar (BXR)",
+                "Ara (ARA)",
+                "Patna Jn (PNBE)",
             ).inOrder()
         assertThat(stops.all { it.ticketId == ticketId }).isTrue()
     }

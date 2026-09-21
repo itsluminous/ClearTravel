@@ -211,8 +211,16 @@ fun TrainsContent(
                 PnrCheckScreen(
                     ticketId = current.ticketId,
                     pnr = current.pnr,
-                    onApplied = {
-                        screen = TrainsScreen.List
+                    onApplied = { resultTrainNumber ->
+                        val card = listState.cards.firstOrNull { it.ticket.id == current.ticketId }
+                        val trainNumber = card?.ticket?.trainNumber?.ifBlank { resultTrainNumber } ?: resultTrainNumber
+                        if (card?.hasRoute != true && trainNumber.isNotBlank()) {
+                            // Chain the hands-free route fetch so departure times and
+                            // coach positions land right after the first PNR check.
+                            screen = TrainsScreen.RouteFetch(ticketId = current.ticketId, trainNumber = trainNumber)
+                        } else {
+                            screen = TrainsScreen.List
+                        }
                         scope.launch {
                             snackbarHostState.showSnackbar(
                                 context.getString(R.string.trains_pnr_check_applied),

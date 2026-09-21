@@ -85,7 +85,7 @@ class TrainListViewModel
                             ticket = ticket,
                             passengers = passengers,
                             hasRoute = stops.isNotEmpty(),
-                            departureTime = departureTime(stops),
+                            departureTime = departureTime(stops, ticket.fromStation),
                         )
                     }
                 }

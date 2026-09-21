@@ -55,9 +55,16 @@ object RouteMapper {
     ): List<TrainRouteStop>? {
         val stops =
             data.rows.mapNotNull { row ->
+                val rawName = row[ROW_STATION_NAME].orEmpty().trim()
+                val code = row[ROW_STATION_CODE].orEmpty().trim()
+                // "Udhna Junction (UDN)" — the code suffix makes stops matchable
+                // against the ticket's boarding-station code from the PNR result.
                 val name =
-                    row[ROW_STATION_NAME].orEmpty().trim().ifEmpty {
-                        row[ROW_STATION_CODE].orEmpty().trim()
+                    when {
+                        rawName.isEmpty() -> code.uppercase()
+                        code.isNotEmpty() && !rawName.contains("($code)", ignoreCase = true) ->
+                            "$rawName (${code.uppercase()})"
+                        else -> rawName
                     }
                 if (name.isEmpty()) return@mapNotNull null
                 RowValues(

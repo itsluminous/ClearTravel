@@ -45,7 +45,7 @@ import com.itsluminous.cleartravel.feature.trains.R
 internal fun PnrCheckScreen(
     ticketId: String,
     pnr: String,
-    onApplied: () -> Unit,
+    onApplied: (trainNumber: String) -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PnrCheckViewModel = hiltViewModel(),
@@ -54,7 +54,8 @@ internal fun PnrCheckScreen(
 
     LaunchedEffect(pnr) { viewModel.start(pnr) }
     LaunchedEffect(state) {
-        if (state is PnrCheckUiState.Applied) onApplied()
+        val applied = state
+        if (applied is PnrCheckUiState.Applied) onApplied(applied.trainNumber)
     }
 
     Column(modifier = modifier.fillMaxSize()) {

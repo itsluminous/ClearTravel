@@ -42,14 +42,33 @@ fun cardTitle(ticket: TrainTicket): String =
         .filter(String::isNotBlank)
         .joinToString(" - ")
 
-/** Scheduled departure from the FIRST route stop, or null when no stop has one. */
-fun departureTime(stops: List<TrainRouteStop>): String? =
-    stops
-        .sortedBy(TrainRouteStop::sortOrder)
-        .firstOrNull()
+/**
+ * Scheduled departure for the ticket's BOARDING station when it can be matched
+ * (by full name, prefix, or the " (CODE)" suffix RouteMapper appends), falling
+ * back to the first route stop. Null when no matched stop has a departure.
+ */
+fun departureTime(
+    stops: List<TrainRouteStop>,
+    boardingStation: String = "",
+): String? {
+    val ordered = stops.sortedBy(TrainRouteStop::sortOrder)
+    val query = boardingStation.trim()
+    val boarding =
+        if (query.isEmpty()) {
+            null
+        } else {
+            ordered.firstOrNull { stop ->
+                val name = stop.stationName.trim()
+                name.equals(query, ignoreCase = true) ||
+                    name.contains("($query)", ignoreCase = true) ||
+                    name.startsWith(query, ignoreCase = true)
+            }
+        }
+    return (boarding ?: ordered.firstOrNull())
         ?.departure
         ?.trim()
         ?.takeIf(String::isNotBlank)
+}
 
 /** Coarse relative age of a timestamp — rendered as "Updated X ago" on the card. */
 sealed interface RelativeAge {

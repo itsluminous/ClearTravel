@@ -109,4 +109,19 @@ class TrainCardFormatTest {
         assertThat(departureTime(stops)).isEqualTo("08:35")
         assertThat(departureTime(emptyList())).isNull()
     }
+
+    @Test
+    fun `departure time prefers the boarding station matched by code suffix`() {
+        val stops =
+            listOf(
+                Fixtures.trainRouteStop(stationName = "Danapur (DNR)", departure = "", sortOrder = 2),
+                Fixtures.trainRouteStop(stationName = "Udhna Junction (UDN)", departure = "08:35", sortOrder = 1),
+                Fixtures.trainRouteStop(stationName = "Mumbai Central (MMCT)", departure = "05:10", sortOrder = 0),
+            )
+        assertThat(departureTime(stops, "UDN")).isEqualTo("08:35")
+        assertThat(departureTime(stops, "Udhna Junction (UDN)")).isEqualTo("08:35")
+        assertThat(departureTime(stops, "Udhna")).isEqualTo("08:35")
+        // Unmatched boarding station falls back to the first stop.
+        assertThat(departureTime(stops, "XYZ")).isEqualTo("05:10")
+    }
 }
