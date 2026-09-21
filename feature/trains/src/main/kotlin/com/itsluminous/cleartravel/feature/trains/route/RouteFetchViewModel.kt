@@ -44,6 +44,8 @@ sealed interface RouteFetchUiState {
     /** The route was parsed and written to Room — host closes with a snackbar. */
     data class Applied(
         val stationCount: Int,
+        /** Coaches persisted by the same fetch; 0 when the source had none (ADR-022). */
+        val coachCount: Int = 0,
     ) : RouteFetchUiState
 }
 
@@ -120,7 +122,10 @@ class RouteFetchViewModel
          * A blank ticket `trainName` is backfilled from the rule's extracted
          * `trainName` field (manual tickets are often number-only) so the ticket
          * card and offline route page read "12345 · Name"; a user-entered name is
-         * never overwritten.
+         * never overwritten. The SAME fetch also persists the coach composition
+         * when the source carries one (ixigo's `coaches` extra row-set, ADR-022):
+         * coaches are OPTIONAL — a route-only extraction (erail fallback, or ixigo
+         * without the section) still succeeds and leaves stored coaches untouched.
          */
         fun onExtracted(
             ticketId: String,
@@ -131,10 +136,12 @@ class RouteFetchViewModel
                 onParseFailed()
                 return
             }
+            val coaches = CoachMapper.map(ticketId = ticketId, data = data)
             viewModelScope.launch {
                 repository.replaceRouteStops(ticketId, stops)
+                if (coaches != null) repository.replaceCoaches(ticketId, coaches)
                 backfillTrainName(ticketId, data)
-                state.value = RouteFetchUiState.Applied(stationCount = stops.size)
+                state.value = RouteFetchUiState.Applied(stationCount = stops.size, coachCount = coaches?.size ?: 0)
             }
         }
 

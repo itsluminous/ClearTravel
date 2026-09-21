@@ -70,8 +70,12 @@ class RouteFetchViewModelTest {
 
     private fun emptyRegistry(): RuleRegistry = RuleRegistry(InlineRuleSource(emptyMap()))
 
-    private fun usableData(trainName: String? = null): ScrapedData =
+    private fun usableData(
+        trainName: String? = null,
+        coaches: List<String>? = null,
+    ): ScrapedData =
         ScrapedData(
+            extraRows = if (coaches == null) emptyMap() else mapOf("coaches" to coaches.map { mapOf("code" to it) }),
             fields =
                 buildMap {
                     put("trainNumber", "22346")
@@ -165,6 +169,37 @@ class RouteFetchViewModelTest {
             val stored = repository.observeRouteStops(ticket.id).first()
             assertThat(stored.map { it.stationName }).containsExactly("Gomati Nagar", "Patna Jn").inOrder()
             assertThat(stored[0].departure).isEqualTo("15:20")
+        }
+
+    @Test
+    fun `extraction with a coaches row-set persists the composition alongside the route`() =
+        runTest {
+            val ticket = Fixtures.trainTicket()
+            repository.seed(ticket, ticketCoaches = listOf(Fixtures.trainCoach(ticketId = ticket.id, code = "OLD")))
+            val vm = RouteFetchViewModel(registryWithBothRules(), repository)
+            vm.start("22346")
+
+            vm.onExtracted(ticket.id, usableData(coaches = listOf("EN ", "C1", "C2")))
+
+            assertThat(vm.uiState.value).isEqualTo(RouteFetchUiState.Applied(stationCount = 2, coachCount = 3))
+            val stored = repository.observeCoaches(ticket.id).first()
+            assertThat(stored.map { it.code }).containsExactly("EN", "C1", "C2").inOrder()
+            assertThat(stored.map { it.sortOrder }).containsExactly(0, 1, 2).inOrder()
+        }
+
+    @Test
+    fun `route-only extraction leaves previously stored coaches untouched`() =
+        runTest {
+            val ticket = Fixtures.trainTicket()
+            repository.seed(ticket, ticketCoaches = listOf(Fixtures.trainCoach(ticketId = ticket.id, code = "S1")))
+            val vm = RouteFetchViewModel(registryWithBothRules(), repository)
+            vm.start("22346")
+
+            vm.onExtracted(ticket.id, usableData())
+
+            assertThat(vm.uiState.value).isEqualTo(RouteFetchUiState.Applied(stationCount = 2, coachCount = 0))
+            assertThat(repository.replacedCoachBatches).isEmpty()
+            assertThat(repository.observeCoaches(ticket.id).first().map { it.code }).containsExactly("S1")
         }
 
     @Test
