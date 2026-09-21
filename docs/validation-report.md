@@ -610,3 +610,25 @@ card, no `AI 0777` card); Trains/Trips/Checklist/SeatMap e2e unchanged and green
 `findByFlight` cases, `JourneysDeepLinkTest` flights routing), ktlint + lint clean.
 Not exercised on device: the share-sheet intake duplicate landing (covered by
 `JourneysDeepLinkTest` + the same `FlightsContent` notice path the e2e drives).
+
+## System back, Archived wording, action-row labels (2026-09-21, emulator Android_16_AOSP_Medium, API 36)
+
+Root cause confirmed on device: Trains/Flights navigate by state, so back skipped
+them and popped the shell NavHost to Trips. After wiring `BackHandler`
+(`TrainsNavigation.kt` / `FlightsRoute.kt`), verified by `uiautomator` dumps with a
+ticket added through the UI: add form + back → Trains list; detail sheet + back →
+Trains list; seat map (card icon) + back → Trains list; seat map (detail button) +
+back → detail sheet, back again → list; route fetch WebView + back → list; PNR check
+WebView + back → list; Flights add form + back → Flights list; Checklist detail + back
+→ checklist list (nested NavHost, unchanged); Checklist base list + back → Trips
+(shell pop, unchanged); Trips base list + back → launcher (`dumpsys window` focus on
+`QuickstepLauncher`) — back is never trapped. Note: a detail sheet that was scrolled
+to full height collapses to half height on the first back and dismisses on the
+second (Material 3 `ModalBottomSheet` behaviour, unchanged). Filter chips, card badge
+and empty states read "Archived" again. Archived ticket → detail: "Unarchive" is a
+single `TextView` node of the same height as its "Edit"/"Delete" siblings (53 px,
+one line) — `60-unarchive-single-line.png` (blind capture). Full gate green: unit
+tests 723/723 (+9 `TrainsNavigationTest`, +4 `FlightsRouteTest`), ktlint + lint clean;
+`connectedDebugAndroidTest` **11/11 PASS** (+4 `BackNavigationE2eTest`:
+`Espresso.pressBack()` from detail sheet, seat map via card, seat map via detail,
+add form), `core:ocr` capture harness SKIPPED (`@Ignore`).
