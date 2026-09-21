@@ -25,6 +25,28 @@
     <string name="trains_card_last_fetched">Status checked %1$s</string>
     <string name="trains_card_never_fetched">Status never checked</string>
     <string name="trains_card_archived_badge">Past</string>
+    <string name="trains_card_band_date_time">%1$s %2$s</string>
+    <string name="trains_card_band_no_date">Date not set</string>
+    <string name="trains_card_untitled">Train</string>
+    <string name="trains_card_pnr">PNR %1$s</string>
+    <string name="trains_card_updated_just_now">Updated a few seconds ago</string>
+    <plurals name="trains_card_updated_minutes">
+        <item quantity="one">Updated %1$d minute ago</item>
+        <item quantity="other">Updated %1$d minutes ago</item>
+    </plurals>
+    <plurals name="trains_card_updated_hours">
+        <item quantity="one">Updated %1$d hour ago</item>
+        <item quantity="other">Updated %1$d hours ago</item>
+    </plurals>
+    <plurals name="trains_card_updated_days">
+        <item quantity="one">Updated %1$d day ago</item>
+        <item quantity="other">Updated %1$d days ago</item>
+    </plurals>
+    <string name="trains_card_seat_details">Seat details</string>
+    <string name="trains_card_share">Share ticket</string>
+    <string name="trains_share_text">Check out my train ticket (PNR %1$s): %2$s</string>
+    <string name="trains_share_chooser_title">Share train ticket</string>
+    <string name="trains_share_failed">Couldn\'t share the ticket</string>
 
     <string name="trains_form_title_add">Add train ticket</string>
     <string name="trains_form_title_edit">Edit train ticket</string>

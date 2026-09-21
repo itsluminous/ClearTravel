@@ -30,6 +30,8 @@ data class TrainTicketCard(
      * offline route page when true, the WebView fetch flow when false (ADR-019).
      */
     val hasRoute: Boolean = false,
+    /** Scheduled departure (`HH:mm`) from the first stored route stop, when known. */
+    val departureTime: String? = null,
 )
 
 data class TrainListUiState(
@@ -83,6 +85,7 @@ class TrainListViewModel
                             ticket = ticket,
                             passengers = passengers,
                             hasRoute = stops.isNotEmpty(),
+                            departureTime = departureTime(stops),
                         )
                     }
                 }

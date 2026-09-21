@@ -3,27 +3,34 @@ package com.itsluminous.cleartravel.feature.trains.list
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AirlineSeatReclineNormal
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Train
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChip
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -36,6 +43,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -43,13 +51,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.itsluminous.cleartravel.core.designsystem.component.ChipRow
-import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
-import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainTicket
 import com.itsluminous.cleartravel.feature.trains.R
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -80,6 +87,7 @@ internal fun TrainListScreen(
     onTicketClick: (TrainTicket) -> Unit,
     onCheckStatus: (TrainTicket) -> Unit,
     onViewRoute: (TrainTicketCard) -> Unit,
+    onShare: (TrainTicketCard) -> Unit,
     onAdd: (AddChoice) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -118,6 +126,9 @@ internal fun TrainListScreen(
                         ),
                 )
             } else {
+                // One clock read per list emission keeps every card's "Updated X ago"
+                // consistent within a frame.
+                val now = remember(state.cards) { Instant.now() }
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 88.dp),
@@ -126,9 +137,11 @@ internal fun TrainListScreen(
                     items(state.cards, key = { it.ticket.id }) { card ->
                         TrainTicketCardItem(
                             card = card,
+                            now = now,
                             onClick = { onTicketClick(card.ticket) },
                             onCheckStatus = { onCheckStatus(card.ticket) },
                             onViewRoute = { onViewRoute(card) },
+                            onShare = { onShare(card) },
                         )
                     }
                 }
@@ -240,81 +253,88 @@ private fun PasteTextDialog(
 @Composable
 private fun TrainTicketCardItem(
     card: TrainTicketCard,
+    now: Instant,
     onClick: () -> Unit,
     onCheckStatus: () -> Unit,
     onViewRoute: () -> Unit,
+    onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ticket = card.ticket
-    ClearTravelCard(modifier = modifier.clickable(onClick = onClick)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = listOf(ticket.trainNumber, ticket.trainName).filter(String::isNotBlank).joinToString(" · "),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f),
+    ElevatedCard(modifier = modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        // Reference layout: header band (from → date/time → to) across the top…
+        TicketHeaderBand(ticket = ticket, departureTime = card.departureTime)
+        Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+            // …a slim accent stripe on the left…
+            Box(
+                modifier =
+                    Modifier
+                        .width(6.dp)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.tertiary),
             )
-            if (ticket.archived) {
-                Text(
-                    text = stringResource(R.string.trains_card_archived_badge),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+            // …body lines + status pills…
+            Column(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 4.dp),
+            ) {
+                TicketBodyLines(
+                    ticket = ticket,
+                    now = now,
+                    trailingTitleContent =
+                        if (ticket.archived) {
+                            {
+                                Text(
+                                    text = stringResource(R.string.trains_card_archived_badge),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        } else {
+                            null
+                        },
                 )
+                StatusPillRow(passengers = card.passengers, modifier = Modifier.padding(top = 10.dp))
             }
-            // Direct card actions (ADR-019): PNR refresh + route, no sheet detour.
-            ExplainableIcon(
-                icon = Icons.Filled.Refresh,
-                explanationRes = R.string.trains_card_check_status,
-                targetSize = 40.dp,
-                onClick = onCheckStatus,
-            )
-            if (ticket.trainNumber.isNotBlank()) {
+            // …and a vertical action column on the right (all ExplainableIcon).
+            Column(
+                modifier = Modifier.padding(vertical = 4.dp, horizontal = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 ExplainableIcon(
-                    icon = Icons.Filled.Place,
-                    explanationRes = R.string.trains_card_view_route,
+                    icon = Icons.Filled.Refresh,
+                    explanationRes = R.string.trains_card_check_status,
+                    tint = MaterialTheme.colorScheme.primary,
                     targetSize = 40.dp,
-                    onClick = onViewRoute,
+                    onClick = onCheckStatus,
+                )
+                ExplainableIcon(
+                    icon = Icons.Filled.AirlineSeatReclineNormal,
+                    explanationRes = R.string.trains_card_seat_details,
+                    tint = MaterialTheme.colorScheme.primary,
+                    targetSize = 40.dp,
+                    onClick = onClick,
+                )
+                if (ticket.trainNumber.isNotBlank()) {
+                    ExplainableIcon(
+                        icon = Icons.Filled.Place,
+                        explanationRes = R.string.trains_card_view_route,
+                        tint = MaterialTheme.colorScheme.primary,
+                        targetSize = 40.dp,
+                        onClick = onViewRoute,
+                    )
+                }
+                ExplainableIcon(
+                    icon = Icons.Filled.Share,
+                    explanationRes = R.string.trains_card_share,
+                    tint = MaterialTheme.colorScheme.primary,
+                    targetSize = 40.dp,
+                    onClick = onShare,
                 )
             }
         }
-        ticket.journeyDate?.let { date ->
-            Text(
-                text = stringResource(R.string.trains_card_journey_date, formatDate(date)),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 4.dp),
-            )
-        }
-        if (ticket.fromStation.isNotBlank() || ticket.toStation.isNotBlank()) {
-            Text(
-                text = stringResource(R.string.trains_card_route, ticket.fromStation, ticket.toStation),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-        }
-        if (card.passengers.isNotEmpty()) {
-            ChipRow(modifier = Modifier.padding(top = 8.dp)) {
-                card.passengers.forEach { passenger ->
-                    PassengerStatusChip(passenger = passenger)
-                }
-            }
-        }
-        Text(
-            text = lastFetchedText(ticket),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
-        )
-    }
-}
-
-@Composable
-private fun PassengerStatusChip(
-    passenger: TrainPassenger,
-    modifier: Modifier = Modifier,
-) {
-    val status = passenger.currentStatus.ifBlank { passenger.bookingStatus }
-    val label = listOf(passenger.name, status).filter(String::isNotBlank).joinToString(": ")
-    if (label.isNotBlank()) {
-        AssistChip(onClick = {}, label = { Text(label) }, modifier = modifier)
     }
 }
 

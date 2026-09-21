@@ -28,6 +28,7 @@ import com.itsluminous.cleartravel.feature.trains.list.TrainListViewModel
 import com.itsluminous.cleartravel.feature.trains.pnr.PnrCheckScreen
 import com.itsluminous.cleartravel.feature.trains.route.RouteFetchScreen
 import com.itsluminous.cleartravel.feature.trains.route.TrainRouteScreen
+import com.itsluminous.cleartravel.feature.trains.share.rememberTrainTicketSharer
 import kotlinx.coroutines.launch
 
 /** Where a form session got its initial content from. */
@@ -104,6 +105,8 @@ fun TrainsContent(
     val formViewModel: TrainTicketFormViewModel = hiltViewModel()
     val detailViewModel: TrainDetailViewModel = hiltViewModel()
 
+    val sharer = rememberTrainTicketSharer()
+
     val listState by listViewModel.uiState.collectAsStateWithLifecycle()
     val formState by formViewModel.uiState.collectAsStateWithLifecycle()
     val detailState by detailViewModel.uiState.collectAsStateWithLifecycle()
@@ -151,6 +154,16 @@ fun TrainsContent(
                                     ticketId = card.ticket.id,
                                     trainNumber = card.ticket.trainNumber,
                                 )
+                            }
+                    },
+                    onShare = { card ->
+                        // Image + deep-link caption via the share sheet; text-only
+                        // fallback is reported so the user knows the picture was skipped.
+                        runCatching { sharer.share(card) }
+                            .onFailure {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(context.getString(R.string.trains_share_failed))
+                                }
                             }
                     },
                     onAdd = { choice ->
