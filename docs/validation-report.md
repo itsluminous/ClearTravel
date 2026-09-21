@@ -388,3 +388,106 @@ run.
 | Item text edit via pencil dialog | PASS |
 | Unit tests | 617/617 |
 | Connected e2e | 4/4 |
+
+## Seat map validation (2026-09-21, emulator Android_16_AOSP_Medium, API 36)
+
+Scope: ADR-022 — `train_coaches` schema v2 + first Room migration, `ixigo-route`
+`extraRows.coaches`, seat layouts as data, the seat-map screen and its entry points.
+Verified through `uiautomator dump` text only; screenshots captured blind
+(`screencap` → `sips -Z 800`, never opened). Gate before/after:
+`ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` →
+BUILD SUCCESSFUL.
+
+### Migration smoke — real v1 → v2 upgrade
+
+The install found on the emulator (16:15, the seatmap stage's own check) was already
+schema v2 (`PRAGMA user_version` = 2, 20 coaches for 13151), so over-installing it is
+a v2→v2 no-op: done anyway — app opens, 13151 / PNR 8524317690 / `CNF B4-32` still
+listed. For a GENUINE v1→2 run the pre-ADR-022 commit `05eedaa` was built in a git
+worktree and installed after an uninstall: on that v1 build (`user_version` 1, no
+`train_coaches` table) ticket **22346 Hool Express**, PNR 4412345678, class CC,
+passenger coach **C4** seat **32** was created through the UI (card shows
+`CNF C4-32`, icon desc `Seat details`). `installDebug` of the v2 build over it →
+launch: no `FATAL` in logcat, `user_version` 2, `train_coaches` present (0 rows),
+ticket + passenger rows intact, card lists `22346 - Hool Express` / `CNF C4-32` and
+the icon desc is now `Seat map`. **PASS.**
+
+### Live 22346 — coach strip, class resolution, highlight
+
+1. Seat icon on the fresh (migrated, no coaches) CC ticket → header **`C4 · AC Chair
+   Car`** / `22346 · Hool Express`, chip `C4 - 32`, compact card *Coach positions not
+   fetched* + **Fetch route & coaches**, warning banner, and the CC grid already
+   rendered (class resolved from coach code `C` → CC; `Row 1`… cells `Berth 1,
+   WINDOW` · `2, MIDDLE` · `3, AISLE` │ `4, AISLE` · `5, WINDOW`).
+   `50-seatmap-cc-no-coaches-fetch-card.png`.
+2. **Fetch route & coaches** → ixigo WebView → back on the map with `7 stations
+   loaded`, but the strip still said *Coach positions not fetched*; DB: 7 route
+   stops, **0 coaches**. Root cause (DOM inspected live through the WebView Shell's
+   DevTools socket): the mobile page nests `.coach-boxes > .coach-box-cntr >
+   (.coach-number = code, .coach-box = TYPE)`, while the desktop recon the fixture
+   was spliced from has `.coach-position-container > .coach-box-container >
+   .coach-box` = code — rule v3 matched nothing live. **Fixed as data** (see
+   "Fixes" below), reinstalled, refresh icon on the seat map → strip now renders
+   **Engine, C1 (1), C2 (2), C3 (3), C4 (4), C5 (5), E1 (6), C6 (7), C7 (8)** —
+   content-descs `Coach C4 at position 4 — tap to view its seat map` etc.; DB
+   `train_coaches` = `0|EN 1|C1 2|C2 3|C3 4|C4 5|C5 6|E1 7|C6 8|C7`; the strip
+   opened auto-scrolled to C4 (C1 clipped at the left edge, Engine off-screen until
+   swiped). Warning text: *Coach position may not be accurate for certain trains —
+   verify at the station.* `51-seatmap-22346-strip-c4.png`.
+3. Grid scrolled to Row 7: **`Berth 32, MIDDLE — your berth`** between `Berth 31,
+   WINDOW` and `Berth 33, AISLE` — the highlight IS exposed as a content-desc
+   (`trains_seatmap_cell_yours`), exactly one such node.
+   `52-seatmap-22346-cc-grid-seat32.png`.
+4. Tap **E1** → header `E1 · Executive Chair Car`, 2+2 EC rows (`Berth 1, WINDOW` ·
+   `2, AISLE` │ `3, AISLE` · `4, WINDOW`), 20 cells composed, zero "your berth"
+   nodes (passenger is in C4). Tap **C2** → `C2 · AC Chair Car`, CC 3+2 rows again,
+   zero highlights. `53-seatmap-22346-coach-e1-ec.png`.
+   Not verifiable via dump: the ticket-coach (filled) vs selected (outlined) strip
+   state — the box content-desc carries code + position only, the state is colour.
+   Observation (not fixed): the SEAT-kind cell desc still reads "Berth n, …" for CC/EC
+   (`trains_seatmap_cell` is shared by both kinds).
+
+### No-data path
+
+Fresh ticket **12301 Rajdhani** (no class, no coach, no fetch) → seat icon → header
+`Seat map` / `12301 · Rajdhani`, EmptyState *Coach positions not fetched* / *Fetch the
+route once and the coach order is saved offline.* — but NO fetch button in the dump:
+`EmptyState` fills max size and pushed the `Button` below the fold (only the top-bar
+refresh icon was reachable). One-line fix (bounded height, same pattern as the
+no-layout EmptyState in the same file) → dump shows **Fetch route & coaches** at
+y≈1684; tapping it opens *Fetch train route* / *Loading the schedule from ixigo Train
+Route…*. `54-seatmap-no-data-empty-state.png`. **PASS after fix.**
+
+### Fixes (this validation)
+
+- `core:scrape` `ixigo-route.json` **v4**: `extraRows.coaches.rowSelector` =
+  `.coach-position-cntr .coach-box-container, .coach-position-cntr .coach-box-cntr`,
+  `code` = `.coach-number, .coach-box` (first match in document order → code on
+  both layouts). New fixture `mobile.html` (DevTools capture of the live mobile
+  page) + `IxigoRouteMobileCoachesFixtureTest` (2 tests: codes not types; route +
+  header intact); `page.html`/`multiday.html` unchanged and green. ADR-022 addendum.
+- `feature:trains` `SeatMapScreen`: no-coaches/no-layout `EmptyState` bounded to
+  320dp so the fetch button stays on screen.
+- `app` androidTest: **`SeatMapE2eTest`** (hermetic — seeds ticket + passenger C4/32
+  + the 22346 rake through the injected `TrainRepository`; asserts seat icon →
+  `C4 · AC Chair Car`, coach box `C4 at position 4`, warning, `Row 1`, scrolls the
+  bay `LazyColumn` to exactly one `Berth 32, MIDDLE — your berth`).
+
+### Instrumented regression
+
+`connectedDebugAndroidTest`: **5/5 PASS** (SeatMapE2eTest new, ChecklistE2eTest,
+FlightsE2eTest, TrainsE2eTest, TripsE2eTest). Emulator killed after the run.
+
+| Check | Verdict |
+|---|---|
+| v1→2 migration on real data (v1 build → v2 build, no crash, rows intact, `train_coaches` created) | PASS |
+| v2→v2 over-install keeps existing tickets | PASS |
+| Live 22346 fetch stores coaches `EN C1 C2 C3 C4 C5 E1 C6 C7` | FAIL on v3 → PASS after rule v4 |
+| Coach strip: codes + positions 1..8, engine box, auto-scroll to C4 | PASS |
+| Class resolution C4 → CC (`AC Chair Car`), E1 → EC (`Executive Chair Car`) | PASS |
+| Warning banner text | PASS |
+| Berth 32 highlighted (`— your berth` content-desc, exactly one) | PASS |
+| Tap other coach re-renders its class layout | PASS |
+| No-data path: EmptyState + fetch button reachable | FAIL → PASS after fix |
+| Unit tests | 676/676 |
+| Connected e2e | 5/5 |
