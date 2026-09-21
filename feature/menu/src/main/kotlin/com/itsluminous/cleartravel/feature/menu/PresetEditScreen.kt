@@ -13,10 +13,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material3.Card
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -37,12 +35,18 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
+import com.itsluminous.cleartravel.core.designsystem.component.ReorderHandle
+import com.itsluminous.cleartravel.core.designsystem.component.ReorderableListState
+import com.itsluminous.cleartravel.core.designsystem.component.TextEditDialog
+import com.itsluminous.cleartravel.core.designsystem.component.rememberReorderableListState
+import com.itsluminous.cleartravel.core.designsystem.component.reorderableItem
 import com.itsluminous.cleartravel.core.model.ChecklistPresetItem
 
 /**
- * Preset editor. User presets: rename + add/remove/reorder items. Built-in presets
- * open read-only with a duplicate-to-customize banner (spec: editing a preset never
- * mutates existing checklists — appends are copies, ADR-006).
+ * Preset editor — rename + add/edit/remove/drag-reorder items. Built-in presets are
+ * editable exactly like user presets (ADR-021); the tombstone-aware seeder never
+ * overwrites an edited built-in. Editing a preset never mutates existing checklists —
+ * appends are copies (ADR-006).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,34 +57,34 @@ internal fun PresetEditScreen(
 ) {
     val preset by viewModel.preset.collectAsStateWithLifecycle()
     val items by viewModel.items.collectAsStateWithLifecycle()
-    val editable = preset?.builtIn == false
 
     var name by rememberSaveable { mutableStateOf("") }
     var nameInitialised by rememberSaveable { mutableStateOf(false) }
+    var editingItemId by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(preset?.id) {
         if (!nameInitialised && preset != null) {
             name = preset?.name.orEmpty()
             nameInitialised = true
         }
     }
+    val reorderState =
+        rememberReorderableListState(
+            items = items,
+            key = { it.id },
+            onDrop = viewModel::moveItem,
+        )
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = {
-                    Text(
-                        stringResource(
-                            if (editable) R.string.menu_preset_edit_title else R.string.menu_preset_view_title,
-                        ),
-                    )
-                },
+                title = { Text(stringResource(R.string.menu_preset_edit_title)) },
                 navigationIcon = {
                     ExplainableIcon(
                         icon = Icons.AutoMirrored.Filled.ArrowBack,
                         explanationRes = R.string.menu_back,
                         onClick = {
-                            if (editable) viewModel.rename(name)
+                            viewModel.rename(name)
                             onBack()
                         },
                     )
@@ -89,28 +93,13 @@ internal fun PresetEditScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (preset?.builtIn == true) {
-                Card(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                    Text(
-                        text = stringResource(R.string.menu_preset_built_in_readonly),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(12.dp),
-                    )
-                }
-                Text(
-                    text = preset?.name.orEmpty(),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-            } else {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(R.string.menu_preset_name_label)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-            }
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text(stringResource(R.string.menu_preset_name_label)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+            )
             if (items.isEmpty()) {
                 EmptyState(
                     icon = Icons.AutoMirrored.Filled.PlaylistAdd,
@@ -119,74 +108,75 @@ internal fun PresetEditScreen(
                     modifier = Modifier.weight(1f),
                 )
             } else {
-                LazyColumn(modifier = Modifier.weight(1f), contentPadding = PaddingValues(top = 8.dp)) {
-                    items(items, key = { it.id }) { item ->
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    state = reorderState.lazyListState,
+                    contentPadding = PaddingValues(top = 8.dp),
+                ) {
+                    items(reorderState.items, key = { it.id }) { item ->
                         PresetItemRow(
                             item = item,
-                            editable = editable,
-                            isFirst = item.id == items.first().id,
-                            isLast = item.id == items.last().id,
-                            onMoveUp = { viewModel.moveItem(item.id, up = true) },
-                            onMoveDown = { viewModel.moveItem(item.id, up = false) },
-                            onRemove = { viewModel.removeItem(item.id) },
+                            reorderState = reorderState,
+                            onEdit = { editingItemId = item.id },
+                            onDelete = { viewModel.removeItem(item.id) },
+                            modifier = Modifier.reorderableItem(reorderState, item.id, this),
                         )
                     }
                 }
             }
-            if (editable) {
-                AddPresetItemField(onAdd = viewModel::addItem)
-            }
+            AddPresetItemField(onAdd = viewModel::addItem)
         }
+    }
+
+    val editingItem = items.firstOrNull { it.id == editingItemId }
+    if (editingItem != null) {
+        TextEditDialog(
+            title = stringResource(R.string.menu_preset_edit_item_title),
+            label = stringResource(R.string.menu_preset_edit_item_label),
+            initialValue = editingItem.text,
+            confirmText = stringResource(R.string.menu_preset_save),
+            dismissText = stringResource(R.string.menu_cancel),
+            onConfirm = { text ->
+                viewModel.renameItem(editingItem.id, text)
+                editingItemId = null
+            },
+            onDismiss = { editingItemId = null },
+        )
     }
 }
 
 @Composable
 private fun PresetItemRow(
     item: ChecklistPresetItem,
-    editable: Boolean,
-    isFirst: Boolean,
-    isLast: Boolean,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    onRemove: () -> Unit,
+    reorderState: ReorderableListState<ChecklistPresetItem>,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        ReorderHandle(state = reorderState, itemKey = item.id)
         Text(
             text = item.text,
             style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).padding(start = 8.dp),
         )
-        if (editable) {
-            if (!isFirst) {
-                ExplainableIcon(
-                    icon = Icons.Filled.KeyboardArrowUp,
-                    explanationRes = R.string.menu_preset_item_move_up,
-                    targetSize = 40.dp,
-                    iconSize = 20.dp,
-                    onClick = onMoveUp,
-                )
-            }
-            if (!isLast) {
-                ExplainableIcon(
-                    icon = Icons.Filled.KeyboardArrowDown,
-                    explanationRes = R.string.menu_preset_item_move_down,
-                    targetSize = 40.dp,
-                    iconSize = 20.dp,
-                    onClick = onMoveDown,
-                )
-            }
-            ExplainableIcon(
-                icon = Icons.Filled.Close,
-                explanationRes = R.string.menu_preset_item_remove,
-                targetSize = 40.dp,
-                iconSize = 20.dp,
-                onClick = onRemove,
-            )
-        }
+        ExplainableIcon(
+            icon = Icons.Filled.Edit,
+            explanationRes = R.string.menu_preset_item_edit,
+            targetSize = 40.dp,
+            iconSize = 20.dp,
+            onClick = onEdit,
+        )
+        ExplainableIcon(
+            icon = Icons.Filled.Delete,
+            explanationRes = R.string.menu_preset_item_delete,
+            targetSize = 40.dp,
+            iconSize = 20.dp,
+            onClick = onDelete,
+        )
     }
 }
 

@@ -53,6 +53,9 @@ class FakePresetRepository : ChecklistPresetRepository {
     private val presets = MutableStateFlow<List<ChecklistPreset>>(emptyList())
     private val items = MutableStateFlow<List<ChecklistPresetItem>>(emptyList())
 
+    /** Every template-item write batch, newest last. */
+    val saveItemsCalls = mutableListOf<List<ChecklistPresetItem>>()
+
     fun seedPreset(preset: ChecklistPreset) {
         presets.value = presets.value + preset
     }
@@ -80,6 +83,7 @@ class FakePresetRepository : ChecklistPresetRepository {
     }
 
     override suspend fun saveItems(items: List<ChecklistPresetItem>): List<ChecklistPresetItem> {
+        saveItemsCalls += items
         this.items.value = this.items.value.filterNot { existing -> items.any { it.id == existing.id } } + items
         return items
     }

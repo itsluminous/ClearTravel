@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsluminous.cleartravel.core.data.repository.ChecklistPresetRepository
+import com.itsluminous.cleartravel.core.designsystem.component.moved
 import com.itsluminous.cleartravel.core.model.ChecklistPreset
 import com.itsluminous.cleartravel.core.model.ChecklistPresetItem
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -18,9 +19,10 @@ import javax.inject.Inject
 const val PRESET_ID_ARG = "presetId"
 
 /**
- * State + actions for one preset's editor. Built-in presets are READ-ONLY here —
- * every mutation is guarded (the UI shows a duplicate-to-customize banner instead).
- * Editing a preset never mutates checklists created from it (copy semantics, ADR-006).
+ * State + actions for one preset's editor. Built-in AND user presets are fully
+ * editable here (ADR-021 supersedes the ADR-010 read-only policy); the tombstone-aware
+ * seeder never overwrites an edited built-in. Editing a preset never mutates checklists
+ * created from it (copy semantics, ADR-006).
  */
 @HiltViewModel
 class PresetEditViewModel
@@ -46,14 +48,14 @@ class PresetEditViewModel
         fun rename(name: String) {
             val current = preset.value ?: return
             val trimmed = name.trim()
-            if (current.builtIn || trimmed.isEmpty() || trimmed == current.name) return
+            if (trimmed.isEmpty() || trimmed == current.name) return
             viewModelScope.launch { presetRepository.save(current.copy(name = trimmed)) }
         }
 
         fun addItem(text: String) {
-            val current = preset.value ?: return
+            if (preset.value == null) return
             val trimmed = text.trim()
-            if (current.builtIn || trimmed.isEmpty()) return
+            if (trimmed.isEmpty()) return
             viewModelScope.launch {
                 val nextOrder = (items.value.maxOfOrNull { it.sortOrder } ?: -1) + 1
                 presetRepository.saveItems(
@@ -63,30 +65,36 @@ class PresetEditViewModel
         }
 
         fun removeItem(itemId: String) {
-            if (preset.value?.builtIn != false) return
             viewModelScope.launch { presetRepository.deleteItem(itemId) }
         }
 
-        /** Moves an item one position up or down by swapping `sortOrder`. */
-        fun moveItem(
+        /** Replaces a template item's text (trimmed); blank or unchanged text is ignored. */
+        fun renameItem(
             itemId: String,
-            up: Boolean,
+            text: String,
         ) {
-            if (preset.value?.builtIn != false) return
+            val trimmed = text.trim()
+            val item = items.value.firstOrNull { it.id == itemId } ?: return
+            if (trimmed.isEmpty() || trimmed == item.text) return
+            viewModelScope.launch { presetRepository.saveItems(listOf(item.copy(text = trimmed))) }
+        }
+
+        /**
+         * Drag-to-reorder drop: moves the item at [from] to [to] (ADR-021). Rows in the
+         * affected range take the `sortOrder` of the slot they now occupy; out-of-range
+         * or same-index moves are no-ops.
+         */
+        fun moveItem(
+            from: Int,
+            to: Int,
+        ) {
             val current = items.value
-            val index = current.indexOfFirst { it.id == itemId }
-            if (index < 0) return
-            val neighbourIndex = if (up) index - 1 else index + 1
-            if (neighbourIndex !in current.indices) return
-            val item = current[index]
-            val neighbour = current[neighbourIndex]
-            viewModelScope.launch {
-                presetRepository.saveItems(
-                    listOf(
-                        item.copy(sortOrder = neighbour.sortOrder),
-                        neighbour.copy(sortOrder = item.sortOrder),
-                    ),
-                )
-            }
+            if (from == to || from !in current.indices || to !in current.indices) return
+            val reordered = current.moved(from, to)
+            val changed =
+                (minOf(from, to)..maxOf(from, to)).map { index ->
+                    reordered[index].copy(sortOrder = current[index].sortOrder)
+                }
+            viewModelScope.launch { presetRepository.saveItems(changed) }
         }
     }

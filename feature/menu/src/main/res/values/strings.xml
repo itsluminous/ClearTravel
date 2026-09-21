@@ -34,15 +34,15 @@
     <string name="menu_preset_deleted">Preset deleted</string>
 
     <string name="menu_preset_edit_title">Edit preset</string>
-    <string name="menu_preset_view_title">Preset</string>
-    <string name="menu_preset_built_in_readonly">Built-in presets can’t be edited. Duplicate this preset to customize it.</string>
     <string name="menu_preset_no_items_title">No items yet</string>
     <string name="menu_preset_no_items_message">Add the items this template should carry.</string>
     <string name="menu_preset_add_item_hint">Add item</string>
     <string name="menu_preset_add_item_action">Add item to preset</string>
-    <string name="menu_preset_item_move_up">Move item up</string>
-    <string name="menu_preset_item_move_down">Move item down</string>
-    <string name="menu_preset_item_remove">Remove item</string>
+    <string name="menu_preset_item_edit">Edit item</string>
+    <string name="menu_preset_item_delete">Delete item</string>
+    <string name="menu_preset_edit_item_title">Edit item</string>
+    <string name="menu_preset_edit_item_label">Item</string>
+    <string name="menu_preset_save">Save</string>
 
     <string name="menu_backup_restore">Backup &amp; Restore</string>
     <string name="menu_backup_restore_subtitle">Export or import your data</string>

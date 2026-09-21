@@ -873,3 +873,64 @@ file intake through the existing prefill entries (rather than new import code)
 honours the no-duplication rule and the feature ownership boundaries: the app module
 only composes, `core:ocr` is untouched, and each feature gained exactly one
 additive public entry composable.
+
+## ADR-021: Checklist UX rework — editable built-ins, drag-to-reorder, per-row edit
+
+**Supersedes** the "built-in presets are read-only" and "reordering uses up/down
+buttons" parts of ADR-010. ADR-010's nested-NavHost and full-screen-detail decisions
+stand.
+
+**What.**
+
+1. **Built-in presets are fully editable** — rename, add/edit/remove/reorder items —
+   exactly like user presets. The `PresetEditViewModel` `builtIn` guards and the
+   read-only banner are gone; `builtIn` remains a display flag ("Built-in" chip,
+   built-ins-first ordering) and a **delete guard**: `PresetManagerViewModel.deletePreset`
+   still refuses built-ins and the manager hides the trash icon for them, so
+   duplicate-then-delete stays the escape hatch for hiding a template. Safety rests on
+   the seeder's existing idempotency (ADR-006): `seedBuiltInPresets` keys on each
+   definition's FIXED id via `getByIdIncludingDeleted` and skips any preset row that
+   exists — live or tombstoned — without touching its items. A renamed built-in, an
+   edited/removed/added/reordered template item, and a deleted built-in all survive
+   re-seeding unchanged; `PresetSeedingTest` now proves the item-level cases too.
+   `core:data` needed no change.
+2. **Drag-to-reorder** replaces the up/down arrow buttons in the checklist detail
+   screen and the preset editor. `core:designsystem` gains a self-contained helper
+   (no new dependencies): `rememberReorderableListState(items, key, onDrop)` owns a
+   locally reordered copy of the caller's list (`state.items`), `ReorderHandle` is a
+   `DragIndicator` `ExplainableIcon` ("Reorder") on the LEFT of each row whose
+   `detectDragGestures` starts the drag on press-and-move immediately (no long-press
+   — the handle is dedicated, so row taps keep their meaning) and consumes the
+   gesture so the list doesn't scroll instead; `Modifier.reorderableItem` translates
+   the dragged row with the pointer (`graphicsLayer` + `zIndex`) and animates every
+   other row's placement (`animateItem`). Neighbours swap live while dragging; on
+   drop `onDrop(from, to)` fires ONCE with the original and final indices, and the
+   local order is held until the caller's list re-emits so there is no flicker back.
+   Constraints: the `LazyColumn` must contain only the reorderable rows (layout index
+   = list index) and there is no auto-scroll at the edges (packing lists are short).
+   The pure index math (`List.moved(from, to)`) is unit-tested.
+   ViewModels replace `moveItem(itemId, up)` with `moveItem(from, to)`: rows in the
+   affected range take the `sortOrder` of the slot they now occupy (the set of sort
+   keys is unchanged, only `min(from,to)..max(from,to)` rows are rewritten); same
+   index / out of range is a no-op. Persistence still goes through the existing
+   `saveItems` bulk upsert — no repository contract change.
+3. **Per-row edit + delete icons.** Every checklist item row and preset item row
+   carries an EDIT (pencil) and a DELETE (trash) `ExplainableIcon` on the right,
+   replacing the single cross/remove icon. Edit opens the shared
+   `TextEditDialog` (`core:designsystem`; takes resolved strings so feature modules
+   keep resource ownership) and saves through new ViewModel `renameItem(itemId, text)`
+   (trimmed; blank/unchanged ignored) → existing `saveItem`/`saveItems`. Delete keeps
+   the soft-delete behavior.
+
+**Why.** Users asked to tune the shipped templates in place; "duplicate to customize"
+left a permanently frozen copy in the list and made the templates feel second-class.
+ADR-010's original concern — an edited built-in can never be "reset" because the
+seeder skips it — is accepted as the cost of editability (the asset can still be
+re-added by duplicating any preset or by a future explicit "restore defaults"
+action), and the delete guard is kept because it costs nothing and prevents an
+accidental permanent loss of a template. Drag handles are the expected mobile
+reorder affordance; the fragility ADR-010 worried about is contained by keeping the
+gesture on a dedicated handle, keeping the helper dependency-free and small, and
+persisting a single `(from, to)` on drop so ViewModel semantics stay deterministic
+and unit-testable. Per-row edit fixes the previous "delete and retype" workflow for
+typos.
