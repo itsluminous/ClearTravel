@@ -597,3 +597,16 @@ UNINSTALLS the app afterwards — the emulator's real-ticket data did not surviv
 Unit tests 698/698; first gate run tripped a known-flaky lint-internal K2 error in
 `:app:lintAnalyzeDebugAndroidTest` ("this is a bug in lint", ChecklistE2eTest.kt)
 that passed on rerun and on a forced `--rerun`.
+
+## Flight de-duplication (2026-09-21, emulator Android_16_AOSP_Medium, API 36)
+
+ADR-025 follow-up to the trains PNR guard. Hermetic instrumented run only (no live
+airline site involved): `connectedDebugAndroidTest` **7/7 PASS** — `FlightsE2eTest`
+gained `addSameFlightTwice_isRefusedWithNotice_andKeepsOneCard` (adds `AI 777`, then
+`AI 0777` on the same date → "Flight already exists" notice, exactly one `AI 777`
+card, no `AI 0777` card); Trains/Trips/Checklist/SeatMap e2e unchanged and green,
+`core:ocr` capture harness SKIPPED (`@Ignore`). Full gate green: unit tests 710/710
+(+8 `FlightFormViewModelTest` dedupe cases, +2 Robolectric `OfflineFlightRepositoryTest`
+`findByFlight` cases, `JourneysDeepLinkTest` flights routing), ktlint + lint clean.
+Not exercised on device: the share-sheet intake duplicate landing (covered by
+`JourneysDeepLinkTest` + the same `FlightsContent` notice path the e2e drives).
