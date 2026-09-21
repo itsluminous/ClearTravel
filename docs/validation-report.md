@@ -167,3 +167,82 @@ BUILD SUCCESSFUL. Emulator killed and confirmed gone afterwards.
 | D1 domStorageEnabled | FIXED — form renders, prefill works |
 | D2 failure banner + outcome | FIXED — banner w/ Retry over raw page + timestamped sheet line |
 | D3 OneTrust dismissal | FIXED — wall never blocks, flow hands-free |
+
+## Route redesign + booking confirmation validation (2026-09-21, emulator Android_16_AOSP_Medium, API 36)
+
+Validation of commits f98ea7a / 071f490 / 12d1a26 / 5600867 plus the live-drift rule fix
+(ixigo-route v2 — live ixigo serves the in-app WebView a MOBILE layout:
+`table.train-route-cntr`, five columns Station · Arrives · Depart · Halt · PF, **no
+Day column and no station-code cell**; the code is recovered from the station link's
+href slug and the running day is inferred by `RouteMapper`'s midnight-crossing rule).
+All UI verification was text-based (uiautomator dumps); screenshots below were
+captured blind for human review only.
+
+Quality gate before flashing: ktlint + lint + **563/563 unit tests** + assembleDebug +
+assembleDebugAndroidTest — BUILD SUCCESSFUL.
+
+### Live route fetch — train 22346 (single day)
+
+Route pin on the ticket card opened the route flow; a fresh **live fetch against
+ixigo.com succeeded with rule v2** ("Route fetched" timestamp advanced to the fetch
+minute). Offline route page renders from Room: **7 stations** — Gomati Nagar
+(Dep 15:20, Platform 2) → Ayodhya 17:15/17:20 → Varanasi Jn 19:50/19:55 →
+Dd Upadhyaya Jn 20:45/20:50 → Buxar 21:50/21:52 → Ara Jn 22:33/22:35 →
+Patna Jn (Arr 23:45, Platform 8), journey duration 8h 25m, derived halts shown
+("5 min halt" etc.). Room cross-check: 7 non-tombstoned stops, day=1 throughout.
+`27-route-22346-offline.png`, `28-route-22346-live-refetch.png`.
+
+### Offline reopen proof — 22346
+
+With **wifi + data disabled**, app force-stopped and relaunched: route pin → route
+page still renders the full 7-station list purely from Room (no fetch). Network
+re-enabled afterwards. `29-route-22346-offline-reopen.png`.
+
+### Multi-day route — train 13151 (three running days)
+
+Fresh live fetch also succeeded (timestamp advanced). Offline page shows **85
+stations** over a **45h 5m** journey with **Day 1 / Day 2 / Day 3 section headers**:
+Kolkata Chitpur (Dep 11:45) → Jammu Tawi (Arr 08:50). Room cross-check: 85
+non-tombstoned stops, day counts 32/38/15; the inferred day switches at exactly the
+recon-documented midnight crossings — **Dd Upadhyaya Jn (Arr 01:25 → Day 2)** and
+**Yamunanagar Jud (Arr 00:06 → Day 3)** — confirming the mapper's inference on the
+day-less mobile layout. `30-route-13151-day3-terminus.png`.
+
+### Card actions
+
+Trains list dump shows both `ExplainableIcon`s on every ticket card: content-desc
+"Check PNR status" (refresh) and "Train route" (pin). Refresh → PNR check WebView
+opens with the instruction banner "Tap Submit on the page and solve the captcha —
+the app reads the result automatically"; closed without solving. Pin → offline route
+page directly (route stored). `26-trains-list-card-icons.png`,
+`31-card-refresh-pnr-webview.png`.
+
+### Booking-confirmation import (ADR-017)
+
+Synthetic e-ticket PNG (Air India / AI 101 / PNR X9K2LQ / DEL→BOM / Economy) pushed
+to `/sdcard/Download`. Flights → FAB → "Import booking confirmation" → system picker
+→ booking.png → form opened **prefilled from OCR**: flight number 101 (High
+confidence), PNR X9K2LQ (Low confidence — review), cabin ECONOMY (High), From DEL /
+To BOM (High), plus the "Filled from the scanned e-ticket — review carefully" banner.
+Airline was OCR-misread as "AL" from the synthetic render (corrected to AI in-form;
+extraction quality of a PIL-drawn PNG is not representative), date filled manually.
+Saved → card "AI 101 · DEL → BOM · Tue, 22 Sep 2026". Detail sheet shows the
+**Documents** section with a "Booking confirmation — Tap to view" row (and the
+"Attach booking confirmation" action); tapping it opened the full-brightness viewer
+titled "Booking confirmation". `32-booking-import-prefilled-form.png`,
+`33-flight-sheet-documents-row.png`, `34-booking-confirmation-viewer.png`.
+
+### Instrumented regression
+
+`connectedDebugAndroidTest`: **4/4 PASS** (ChecklistE2eTest / FlightsE2eTest /
+TrainsE2eTest / TripsE2eTest), BUILD SUCCESSFUL. Emulator killed after the run.
+
+| Check | Verdict |
+|---|---|
+| 22346 live fetch (ixigo rule v2) | PASS — 7 stations, Gomati Nagar 15:20 → Patna Jn 23:45 |
+| 22346 offline reopen (network off) | PASS — full list from Room |
+| 13151 multi-day | PASS — 85 stations, Day 1/2/3 headers, inferred crossings at DDU 01:25 + YJUD 00:06 |
+| Card icons (refresh + pin) | PASS — content-descs present; refresh opens PNR WebView w/ banner |
+| Booking-confirmation import | PASS — picker → OCR prefill → save → Documents row → viewer |
+| Unit tests | 563/563 |
+| Connected e2e | 4/4 |
