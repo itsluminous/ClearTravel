@@ -253,6 +253,9 @@ fun TrainsContent(
                             }
                     },
                     onAdd = { choice ->
+                        // A lingering "Ticket saved" would sit over the form's Save/
+                        // Cancel row and eat the tap; it has done its job by now.
+                        snackbarHostState.currentSnackbarData?.dismiss()
                         when (choice) {
                             is AddChoice.Manual -> formViewModel.startBlank()
                             is AddChoice.FromText -> formViewModel.startFromText(choice.text)
@@ -393,6 +396,7 @@ fun TrainsContent(
                 onEdit = {
                     val id = detailTicketId
                     if (id != null) {
+                        snackbarHostState.currentSnackbarData?.dismiss()
                         detailTicketId = null
                         formViewModel.startEdit(id)
                         screen = TrainsScreen.Form(entry = FormEntry.Edit(id))

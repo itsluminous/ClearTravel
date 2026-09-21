@@ -582,3 +582,18 @@ composable); unit coverage of `relativeAge` (`TrainCardFormatTest`) is unchanged
 | WebView touch scroll (swipe / fling / slow drag) | PASS before and after (not reproducible) |
 | Duplicate PNR via link → notice + View → existing sheet, no new card | PASS |
 | Snackbar action reachable above the FAB | FAIL → PASS |
+
+### Instrumented regression (this wave)
+
+`connectedDebugAndroidTest`: **6/6 PASS** (`TrainsE2eTest` gained
+`addSamePnrTwice_isRefusedWithNotice_andKeepsOneCard`; ChecklistE2eTest,
+FlightsE2eTest, SeatMapE2eTest, TripsE2eTest unchanged) + `core:ocr`'s capture
+harness reported SKIPPED (`@Ignore`). Writing the new e2e exposed one more real
+papercut: the previous save's "Ticket saved" snackbar still sat over the form's
+Save/Cancel row when the next add started quickly and swallowed the tap
+(`printToLog` showed the filled form frozen after "Save"); the Trains host now
+dismisses the current snackbar when a form opens. Note: the Gradle connected run
+UNINSTALLS the app afterwards — the emulator's real-ticket data did not survive it.
+Unit tests 698/698; first gate run tripped a known-flaky lint-internal K2 error in
+`:app:lintAnalyzeDebugAndroidTest` ("this is a bug in lint", ChecklistE2eTest.kt)
+that passed on rerun and on a forced `--rerun`.
