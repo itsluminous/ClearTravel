@@ -330,3 +330,61 @@ Emulator killed after the run.
 | Intake real share from Files app → Suggested Train ticket → OCR-prefilled form | PASS |
 | Unit tests | 601/601 |
 | Connected e2e | 4/4 |
+
+## Checklist UX rework (2026-09-21, emulator Android_16_AOSP_Medium, API 36)
+
+Scope: ADR-021 — editable built-in presets, drag-to-reorder handles replacing the
+up/down arrows, per-row edit/delete icons on checklist and preset items. Fresh
+install (`installDebug` after uninstall), verified through `uiautomator dump` text
+only; screenshots captured blind (`screencap` → `sips -Z 800`, never opened).
+
+### Built-in preset is editable and the edit survives relaunch
+
+1. Menu → Manage presets: the four built-ins still show the **Built-in** chip and a
+   **Duplicate preset** icon, and (unchanged) NO delete icon — the delete guard is kept.
+2. Open **Domestic trip**: top bar reads **"Edit preset"** (not "Preset"), the **Name**
+   text field is present, every row has a **Reorder** handle on the left plus **Edit
+   item** and **Delete item** on the right, and the **Add item** field with **Add item
+   to preset** is at the bottom. No read-only banner text anywhere in the dump.
+   `44-preset-builtin-editable.png`.
+3. Pencil on "Phone charger" → **Edit item** dialog (field "Item", Cancel/Save) →
+   replaced with "USB-C charger" → Save → row reads **USB-C charger**.
+4. `am force-stop` + relaunch → Menu → Manage presets → Domestic trip: the row still
+   reads **USB-C charger**, the preset is listed exactly once, and no "Phone charger"
+   reappeared — the seeder (keyed on the fixed preset id, tombstone-aware) neither
+   reverts nor duplicates edited built-ins. (Production seeding runs only from Room
+   `onCreate`; the explicit re-seed path is covered by `PresetSeedingTest`.)
+
+### Checklist detail: drag handles, drag persistence, per-row edit
+
+1. Checklist tab → FAB → "Goa packing" from **Medicines** → detail: 6 rows, each with
+   `Reorder` (x≈32–95, left edge), `Edit item` and `Delete item` content-descs; **no**
+   "Move item up"/"Move item down" nodes. `45-checklist-detail-handles.png`.
+2. Drag down: `input swipe 63 434 63 700 1500` on the first handle → order became
+   Band-aids, Antiseptic cream, **Paracetamol**, ORS sachets, … (row 1 → row 3).
+3. Drag up: `input swipe 63 812 63 420 1500` on the fourth handle → **ORS sachets**
+   moved to row 1 (ORS sachets, Band-aids, Antiseptic cream, Paracetamol, …).
+4. `am force-stop` + relaunch → Checklist → Goa packing: the dragged order is
+   unchanged — the drop persisted through `saveItems`.
+5. Pencil on "Band-aids" → Edit item dialog pre-filled with "Band-aids" → replaced
+   with "Plasters" → Save → row 2 reads **Plasters**, position preserved.
+   `46-checklist-edit-item-dialog.png`, `47-checklist-after-drag-and-edit.png`.
+
+### Instrumented regression
+
+`connectedDebugAndroidTest`: **4/4 PASS** (ChecklistE2eTest — extended to assert one
+handle + edit + delete per row, zero move arrows, and the pencil → dialog → rename
+flow — plus FlightsE2eTest / TrainsE2eTest / TripsE2eTest). Emulator killed after the
+run.
+
+| Check | Verdict |
+|---|---|
+| Built-in preset opens editable (Edit preset title, Name field, add-item, no banner) | PASS |
+| Built-in item rename survives force-stop + relaunch, no duplicate preset | PASS |
+| Built-in delete still hidden in Manage presets (guard kept) | PASS |
+| Detail rows: Reorder handle left, Edit/Delete right, no up/down arrows | PASS |
+| Handle drag down and drag up reorder live | PASS |
+| Dragged order survives relaunch | PASS |
+| Item text edit via pencil dialog | PASS |
+| Unit tests | 617/617 |
+| Connected e2e | 4/4 |
