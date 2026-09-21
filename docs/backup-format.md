@@ -22,6 +22,7 @@ cleartravel-backup-YYYYMMDD-HHmm.zip
 │   ├── train_tickets.json
 │   ├── train_passengers.json
 │   ├── train_route_stops.json
+│   ├── train_coaches.json             # added ADR-022 — absent in older backups (read as empty)
 │   ├── flight_journeys.json
 │   └── attachments.json
 └── attachments/
@@ -124,5 +125,9 @@ interface BackupManager {
 
 - Additive DTO fields with defaults → **no** version bump (readers ignore unknowns,
   writers' new fields default on old readers).
+- Additive entity FILES (a new `entities/*.json`, e.g. `train_coaches.json` from
+  ADR-022) → **no** version bump either: readers treat a missing entity file as an
+  empty list, so a pre-ADR-022 backup imports with zero coaches and a newer backup
+  imports into an older app minus the unknown file.
 - Renames/removals/semantic changes → bump `schemaVersion`, add a migration in the
   reader, document here and in a new ADR.

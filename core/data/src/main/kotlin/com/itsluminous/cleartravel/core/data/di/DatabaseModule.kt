@@ -7,6 +7,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.itsluminous.cleartravel.core.data.repository.ChecklistPresetRepository
 import com.itsluminous.cleartravel.core.database.ClearTravelDatabase
 import com.itsluminous.cleartravel.core.database.DatabaseConstants
+import com.itsluminous.cleartravel.core.database.DatabaseMigrations
 import com.itsluminous.cleartravel.core.database.dao.AttachmentDao
 import com.itsluminous.cleartravel.core.database.dao.ChecklistDao
 import com.itsluminous.cleartravel.core.database.dao.ChecklistPresetDao
@@ -48,6 +49,7 @@ object DatabaseModule {
     ): ClearTravelDatabase =
         Room
             .databaseBuilder(context, ClearTravelDatabase::class.java, DatabaseConstants.DATABASE_NAME)
+            .addMigrations(*DatabaseMigrations.ALL)
             .addCallback(
                 object : RoomDatabase.Callback() {
                     override fun onCreate(db: SupportSQLiteDatabase) {

@@ -19,6 +19,7 @@ import com.itsluminous.cleartravel.core.database.entity.ChecklistPresetEntity
 import com.itsluminous.cleartravel.core.database.entity.ChecklistPresetItemEntity
 import com.itsluminous.cleartravel.core.database.entity.FlightJourneyEntity
 import com.itsluminous.cleartravel.core.database.entity.ItineraryItemEntity
+import com.itsluminous.cleartravel.core.database.entity.TrainCoachEntity
 import com.itsluminous.cleartravel.core.database.entity.TrainPassengerEntity
 import com.itsluminous.cleartravel.core.database.entity.TrainRouteStopEntity
 import com.itsluminous.cleartravel.core.database.entity.TrainTicketEntity
@@ -27,7 +28,8 @@ import com.itsluminous.cleartravel.core.database.entity.TripEntity
 /**
  * The single on-device Room database — the offline-first source of truth for every
  * feature (ADR-004). Schema history is exported to `core/database/schemas/` and
- * committed; bump [DatabaseConstants] docs and add a migration on every version bump.
+ * committed; bump [DatabaseConstants.SCHEMA_VERSION] and add a [DatabaseMigrations]
+ * entry on every version bump (v2: `train_coaches`, ADR-022).
  */
 @Database(
     entities = [
@@ -40,10 +42,11 @@ import com.itsluminous.cleartravel.core.database.entity.TripEntity
         TrainTicketEntity::class,
         TrainPassengerEntity::class,
         TrainRouteStopEntity::class,
+        TrainCoachEntity::class,
         FlightJourneyEntity::class,
         AttachmentEntity::class,
     ],
-    version = 1,
+    version = DatabaseConstants.SCHEMA_VERSION,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)

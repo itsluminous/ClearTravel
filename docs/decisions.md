@@ -934,3 +934,32 @@ gesture on a dedicated handle, keeping the helper dependency-free and small, and
 persisting a single `(from, to)` on drop so ViewModel semantics stay deterministic
 and unit-testable. Per-row edit fixes the previous "delete and retype" workflow for
 typos.
+
+## ADR-022: Train seat map — `train_coaches` (schema v2), scrape `extraRows`, seat layouts as data
+
+**What.** A seat-map screen per train ticket, modelled on a reference train-tracker
+app (coach-position strip → accuracy warning → bay-wise berth grid with the
+passenger's berths highlighted), built on three additive contract changes:
+
+1. **Schema v2 — `train_coaches`** (the project's FIRST migration). New `core:model`
+   entity `TrainCoach(id, ticketId, code, sortOrder)` + ADR-002 sync fields: one row
+   per physical coach of the ticket's train in rake order from the engine (`EN`,
+   `GN`, `S1`… `PC`, `B4`); `sortOrder` is the 0-based position that doubles as the
+   number under each coach in the strip. Room `ClearTravelDatabase` bumps to
+   `DatabaseConstants.SCHEMA_VERSION = 2` with a hand-written
+   `DatabaseMigrations.MIGRATION_1_2` (`CREATE TABLE` + `ticket_id` index, SQL mirrors
+   the exported `schemas/2.json` which is committed); `DatabaseModule` registers
+   `addMigrations(*DatabaseMigrations.ALL)`. `MigrationTest` (Robolectric +
+   `room-testing`, the exported schema dir is wired as a test asset source) creates a
+   REAL v1 file with a ticket/passenger/stop, runs the migration with schema
+   validation and asserts the rows survive and the new table is usable — a migration
+   whose SQL drifts from the entity fails in CI, not on a phone. `TrainDao` gains
+   `observeCoaches` / `upsertCoaches` / `softDeleteCoachesFor`; `TrainRepository`
+   gains the additive `observeCoaches(ticketId)` and `replaceCoaches(ticketId,
+   coaches)` (soft-delete-then-insert, same shape as `replaceRouteStops`) and its
+   delete cascade covers coaches. Backup (ADR-015): `TrainCoachDto` + mappers +
+   `entities/train_coaches.json` + manifest key `train_coaches` + one more
+   `BackupMerger` pass; NO `schemaVersion` bump — readers already treat a missing
+   entity file as an empty list, so pre-ADR-022 backups import unchanged (tested)
+   and coaches merge LWW like every other entity (tested).
+   `Fixtures.trainCoach` builder added to `core:testing`.

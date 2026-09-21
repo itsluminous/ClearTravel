@@ -45,6 +45,7 @@ internal object BackupCodec {
             zip.putTextEntry(BackupEntries.TRAIN_TICKETS, json.encodeToString(snapshot.trainTickets))
             zip.putTextEntry(BackupEntries.TRAIN_PASSENGERS, json.encodeToString(snapshot.trainPassengers))
             zip.putTextEntry(BackupEntries.TRAIN_ROUTE_STOPS, json.encodeToString(snapshot.trainRouteStops))
+            zip.putTextEntry(BackupEntries.TRAIN_COACHES, json.encodeToString(snapshot.trainCoaches))
             zip.putTextEntry(BackupEntries.FLIGHT_JOURNEYS, json.encodeToString(snapshot.flightJourneys))
             zip.putTextEntry(BackupEntries.ATTACHMENTS, json.encodeToString(snapshot.attachments))
             for ((attachmentId, file) in bundledFiles) {
@@ -87,6 +88,7 @@ internal object BackupCodec {
                 trainTickets = readList(zip, BackupEntries.TRAIN_TICKETS),
                 trainPassengers = readList(zip, BackupEntries.TRAIN_PASSENGERS),
                 trainRouteStops = readList(zip, BackupEntries.TRAIN_ROUTE_STOPS),
+                trainCoaches = readList(zip, BackupEntries.TRAIN_COACHES),
                 flightJourneys = readList(zip, BackupEntries.FLIGHT_JOURNEYS),
                 attachments = readList(zip, BackupEntries.ATTACHMENTS),
             )

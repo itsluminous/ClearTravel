@@ -67,6 +67,7 @@ class DefaultBackupManagerTest {
         val ticket = Fixtures.trainTicket(lastFetchedAt = Fixtures.NOW)
         val passenger = Fixtures.trainPassenger(ticketId = ticket.id)
         val stop = Fixtures.trainRouteStop(ticketId = ticket.id)
+        val coach = Fixtures.trainCoach(ticketId = ticket.id, code = "EN")
         val flight = Fixtures.flightJourney(boardingPassPath = "/nonexistent/bp.pdf")
         val attachment = Fixtures.attachment(ownerId = ticket.id, localPath = "/nonexistent/file.pdf")
         dao.upsertTrips(listOf(trip.toEntity(), tombstonedTrip.toEntity()))
@@ -78,6 +79,7 @@ class DefaultBackupManagerTest {
         dao.upsertTrainTickets(listOf(ticket.toEntity()))
         dao.upsertTrainPassengers(listOf(passenger.toEntity()))
         dao.upsertTrainRouteStops(listOf(stop.toEntity()))
+        dao.upsertTrainCoaches(listOf(coach.toEntity()))
         dao.upsertFlightJourneys(listOf(flight.toEntity()))
         dao.upsertAttachments(listOf(attachment.toEntity()))
         return mapOf(
@@ -91,6 +93,7 @@ class DefaultBackupManagerTest {
             "ticket" to ticket,
             "passenger" to passenger,
             "stop" to stop,
+            "coach" to coach,
             "flight" to flight,
             "attachment" to attachment,
         )
@@ -102,14 +105,14 @@ class DefaultBackupManagerTest {
             val seeded = seedAllEntityTypes()
             val uri = exportFileUri()
             val export = manager.exportToUri(uri)
-            assertThat(export.totalRows).isEqualTo(12)
+            assertThat(export.totalRows).isEqualTo(13)
 
             // "Wipe": a brand-new empty database.
             val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
             val freshManager = DefaultBackupManager(context, freshDb, clock)
             val summary = freshManager.importApply(uri)
 
-            assertThat(summary).isEqualTo(MergeSummary(inserted = 12, updated = 0, skipped = 0))
+            assertThat(summary).isEqualTo(MergeSummary(inserted = 13, updated = 0, skipped = 0))
             val dao = freshDb.backupDao()
             assertThat(dao.dumpTrips().map { it.toModel() })
                 .containsExactly(seeded["trip"], seeded["tombstonedTrip"])
@@ -121,6 +124,7 @@ class DefaultBackupManagerTest {
             assertThat(dao.dumpTrainTickets().single().toModel()).isEqualTo(seeded["ticket"])
             assertThat(dao.dumpTrainPassengers().single().toModel()).isEqualTo(seeded["passenger"])
             assertThat(dao.dumpTrainRouteStops().single().toModel()).isEqualTo(seeded["stop"])
+            assertThat(dao.dumpTrainCoaches().single().toModel()).isEqualTo(seeded["coach"])
             assertThat(dao.dumpFlightJourneys().single().toModel()).isEqualTo(seeded["flight"])
             assertThat(dao.dumpAttachments().single().toModel()).isEqualTo(seeded["attachment"])
             freshDb.close()
@@ -137,8 +141,8 @@ class DefaultBackupManagerTest {
             val second = manager.importApply(uri)
 
             assertThat(first.inserted).isEqualTo(0)
-            assertThat(first.skipped).isEqualTo(12)
-            assertThat(second).isEqualTo(MergeSummary(inserted = 0, updated = 0, skipped = 12))
+            assertThat(first.skipped).isEqualTo(13)
+            assertThat(second).isEqualTo(MergeSummary(inserted = 0, updated = 0, skipped = 13))
         }
 
     @Test
@@ -323,6 +327,57 @@ class DefaultBackupManagerTest {
         }
 
     @Test
+    fun `pre-ADR-022 backup without a train_coaches entry imports with zero coaches`() =
+        runTest {
+            // Simulate a backup written by an app version predating the coaches
+            // table: export normally, then strip the coaches entry from the ZIP.
+            seedAllEntityTypes()
+            val full = File(context.cacheDir, "full.zip")
+            manager.exportToUri(Uri.fromFile(full))
+            val legacy = File(context.cacheDir, "legacy.zip")
+            ZipFile(full).use { source ->
+                ZipOutputStream(legacy.outputStream()).use { zip ->
+                    for (entry in source.entries().asSequence()) {
+                        if (entry.name == BackupEntries.TRAIN_COACHES) continue
+                        zip.putNextEntry(ZipEntry(entry.name))
+                        source.getInputStream(entry).use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                }
+            }
+
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            val freshManager = DefaultBackupManager(context, freshDb, clock)
+            val summary = freshManager.importApply(Uri.fromFile(legacy))
+
+            assertThat(summary).isEqualTo(MergeSummary(inserted = 12, updated = 0, skipped = 0))
+            assertThat(freshDb.backupDao().dumpTrainCoaches()).isEmpty()
+            assertThat(freshDb.backupDao().dumpTrainRouteStops()).hasSize(1)
+            freshDb.close()
+        }
+
+    @Test
+    fun `coaches merge last-write-wins like every other entity`() =
+        runTest {
+            val seeded = seedAllEntityTypes()
+            val ticket = seeded["ticket"] as com.itsluminous.cleartravel.core.model.TrainTicket
+            val uri = exportFileUri()
+            manager.exportToUri(uri)
+
+            // Local now has a NEWER coach composition for the same ticket plus a
+            // renamed copy of the exported coach (same id, older stamp in the backup).
+            val exported = seeded["coach"] as com.itsluminous.cleartravel.core.model.TrainCoach
+            val newerLocal = exported.copy(code = "LOCO", updatedAt = Fixtures.NOW.plusSeconds(10))
+            db.backupDao().upsertTrainCoaches(listOf(newerLocal.toEntity()))
+
+            val summary = manager.importApply(uri)
+
+            assertThat(summary.updated).isEqualTo(0)
+            val coaches = db.backupDao().dumpTrainCoaches().map { it.toModel() }
+            assertThat(coaches.single { it.ticketId == ticket.id }.code).isEqualTo("LOCO")
+        }
+
+    @Test
     fun `corrupted file - not a zip is a typed error`() =
         runTest {
             val file = File(context.cacheDir, "garbage.zip").apply { writeText("this is not a zip archive") }
@@ -363,7 +418,7 @@ class DefaultBackupManagerTest {
 
             assertThat(preview.schemaVersion).isEqualTo(1)
             assertThat(preview.createdAt).isEqualTo(clock.instant())
-            assertThat(preview.totalRows).isEqualTo(12)
+            assertThat(preview.totalRows).isEqualTo(13)
             assertThat(preview.entityCounts[BackupEntries.KEY_TRIPS]).isEqualTo(2)
             assertThat(preview.entityCounts[BackupEntries.KEY_TRAIN_TICKETS]).isEqualTo(1)
             // Preview must not import anything.

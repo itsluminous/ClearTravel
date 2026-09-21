@@ -56,6 +56,39 @@ class TrainDaoTest {
         }
 
     @Test
+    fun `coaches round-trip ordered by sort order and hide tombstones`() =
+        runTest {
+            val ticketId = Fixtures.FIXED_ID
+            val engine = Fixtures.trainCoach(ticketId = ticketId, code = "EN", sortOrder = 0)
+            val sleeper = Fixtures.trainCoach(ticketId = ticketId, code = "S1", sortOrder = 1)
+            val gone = Fixtures.trainCoach(ticketId = ticketId, code = "S2", sortOrder = 2, deletedAt = Fixtures.NOW)
+            val other = Fixtures.trainCoach(ticketId = "other", code = "B1", sortOrder = 0)
+            dao.upsertCoaches(listOf(sleeper, gone, engine, other).map { it.toEntity() })
+
+            assertThat(dao.observeCoaches(ticketId).first())
+                .containsExactly(engine.toEntity(), sleeper.toEntity())
+                .inOrder()
+        }
+
+    @Test
+    fun `soft-deleting coaches for a ticket tombstones only that ticket's live rows`() =
+        runTest {
+            val ticketId = Fixtures.FIXED_ID
+            val mine = Fixtures.trainCoach(ticketId = ticketId, code = "EN")
+            val other = Fixtures.trainCoach(ticketId = "other", code = "EN")
+            dao.upsertCoaches(listOf(mine, other).map { it.toEntity() })
+            val at = Fixtures.NOW.plusSeconds(60)
+
+            dao.softDeleteCoachesFor(ticketId, at)
+
+            assertThat(dao.observeCoaches(ticketId).first()).isEmpty()
+            assertThat(dao.observeCoaches("other").first()).containsExactly(other.toEntity())
+            val columns = db.syncColumns("train_coaches", mine.id)
+            assertThat(columns?.deletedAtEpochMillis).isEqualTo(at.toEpochMilli())
+            assertThat(columns?.updatedAtEpochMillis).isEqualTo(at.toEpochMilli())
+        }
+
+    @Test
     fun `passengers round-trip ordered by sort order`() =
         runTest {
             val ticketId = Fixtures.FIXED_ID

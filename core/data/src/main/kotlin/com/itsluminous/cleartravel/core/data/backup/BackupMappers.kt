@@ -13,6 +13,7 @@ import com.itsluminous.cleartravel.core.model.ItineraryItem
 import com.itsluminous.cleartravel.core.model.ItineraryItemType
 import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.core.model.PlaceCategory
+import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
 import com.itsluminous.cleartravel.core.model.TrainTicket
@@ -281,6 +282,26 @@ fun TrainRouteStopDto.toModel(): TrainRouteStop =
         departure = departure,
         platform = platform,
         day = day,
+        sortOrder = sortOrder,
+        updatedAt = updatedAt.toInstant(),
+        deletedAt = deletedAt?.toInstant(),
+    )
+
+fun TrainCoach.toDto(): TrainCoachDto =
+    TrainCoachDto(
+        id = id,
+        ticketId = ticketId,
+        code = code,
+        sortOrder = sortOrder,
+        updatedAt = updatedAt.toEpochMilli(),
+        deletedAt = deletedAt?.toEpochMilli(),
+    )
+
+fun TrainCoachDto.toModel(): TrainCoach =
+    TrainCoach(
+        id = id,
+        ticketId = ticketId,
+        code = code,
         sortOrder = sortOrder,
         updatedAt = updatedAt.toInstant(),
         deletedAt = deletedAt?.toInstant(),

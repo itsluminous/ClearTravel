@@ -31,6 +31,9 @@ android {
             isIncludeAndroidResources = true
         }
     }
+
+    // The exported schema history doubles as the MigrationTestHelper's input (ADR-022).
+    sourceSets.getByName("test").assets.srcDir("$projectDir/schemas")
 }
 
 // Export the Room schema history (ADR-004): committed under core/database/schemas/.
@@ -53,4 +56,5 @@ dependencies {
     testImplementation(libs.androidx.test.core.ktx)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+    testImplementation(libs.room.testing)
 }

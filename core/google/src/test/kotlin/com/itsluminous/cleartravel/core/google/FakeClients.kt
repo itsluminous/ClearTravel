@@ -15,12 +15,14 @@ import com.itsluminous.cleartravel.core.model.Attachment
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.core.model.ItineraryItem
+import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
 import com.itsluminous.cleartravel.core.model.TrainTicket
 import com.itsluminous.cleartravel.core.model.Trip
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /** In-memory [CalendarClient] recording every call — tests never touch live APIs. */
@@ -195,6 +197,13 @@ class FakeTrainRepository : TrainRepository {
         routeStops.value = routeStops.value.filterNot { it.ticketId == ticketId } + stops
         return stops
     }
+
+    override fun observeCoaches(ticketId: String): Flow<List<TrainCoach>> = flowOf(emptyList())
+
+    override suspend fun replaceCoaches(
+        ticketId: String,
+        coaches: List<TrainCoach>,
+    ): List<TrainCoach> = coaches
 
     override suspend fun applyStatusResult(
         ticketId: String,

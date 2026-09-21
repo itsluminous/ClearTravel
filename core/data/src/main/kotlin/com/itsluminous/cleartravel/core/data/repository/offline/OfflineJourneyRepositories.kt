@@ -13,6 +13,7 @@ import com.itsluminous.cleartravel.core.database.entity.toModel
 import com.itsluminous.cleartravel.core.model.Attachment
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
 import com.itsluminous.cleartravel.core.model.TrainTicket
@@ -45,6 +46,9 @@ class OfflineTrainRepository
         override fun observeRouteStops(ticketId: String): Flow<List<TrainRouteStop>> =
             trainDao.observeRouteStops(ticketId).map { rows -> rows.map { it.toModel() } }
 
+        override fun observeCoaches(ticketId: String): Flow<List<TrainCoach>> =
+            trainDao.observeCoaches(ticketId).map { rows -> rows.map { it.toModel() } }
+
         override suspend fun save(ticket: TrainTicket): TrainTicket {
             val stamped = ticket.copy(updatedAt = clock.instant())
             trainDao.upsert(stamped.toEntity())
@@ -66,6 +70,17 @@ class OfflineTrainRepository
             trainDao.softDeleteRouteStopsFor(ticketId, now)
             val stamped = stops.map { it.copy(ticketId = ticketId, updatedAt = now) }
             trainDao.upsertRouteStops(stamped.map { it.toEntity() })
+            return stamped
+        }
+
+        override suspend fun replaceCoaches(
+            ticketId: String,
+            coaches: List<TrainCoach>,
+        ): List<TrainCoach> {
+            val now = clock.instant()
+            trainDao.softDeleteCoachesFor(ticketId, now)
+            val stamped = coaches.map { it.copy(ticketId = ticketId, updatedAt = now) }
+            trainDao.upsertCoaches(stamped.map { it.toEntity() })
             return stamped
         }
 
@@ -104,6 +119,7 @@ class OfflineTrainRepository
             val now = clock.instant()
             trainDao.softDeletePassengersFor(id, now)
             trainDao.softDeleteRouteStopsFor(id, now)
+            trainDao.softDeleteCoachesFor(id, now)
             attachmentDao.softDeleteForOwner(AttachmentOwnerType.TRAIN, id, now)
             trainDao.softDelete(id, now)
         }

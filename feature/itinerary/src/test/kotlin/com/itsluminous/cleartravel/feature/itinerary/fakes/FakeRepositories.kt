@@ -8,12 +8,14 @@ import com.itsluminous.cleartravel.core.data.repository.TrainRepository
 import com.itsluminous.cleartravel.core.data.repository.TripRepository
 import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.core.model.ItineraryItem
+import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
 import com.itsluminous.cleartravel.core.model.TrainTicket
 import com.itsluminous.cleartravel.core.model.Trip
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 
 /** In-memory [TripRepository] fake: a single backing StateFlow, hard deletes. */
@@ -101,6 +103,13 @@ class FakeTrainRepository : TrainRepository {
         ticketId: String,
         stops: List<TrainRouteStop>,
     ): List<TrainRouteStop> = stops
+
+    override fun observeCoaches(ticketId: String): Flow<List<TrainCoach>> = flowOf(emptyList())
+
+    override suspend fun replaceCoaches(
+        ticketId: String,
+        coaches: List<TrainCoach>,
+    ): List<TrainCoach> = coaches
 
     override suspend fun applyStatusResult(
         ticketId: String,

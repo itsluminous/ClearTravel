@@ -5,12 +5,13 @@ import com.itsluminous.cleartravel.core.data.provider.TrainStatusResult
 import com.itsluminous.cleartravel.core.model.Attachment
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
 import com.itsluminous.cleartravel.core.model.TrainTicket
 import kotlinx.coroutines.flow.Flow
 
-/** Train tickets aggregate: ticket + passengers + route stops (ADR-004). */
+/** Train tickets aggregate: ticket + passengers + route stops (ADR-004) + coaches (ADR-022). */
 interface TrainRepository {
     fun observeActive(): Flow<List<TrainTicket>>
 
@@ -26,6 +27,9 @@ interface TrainRepository {
     /** Live route stops ordered by `sortOrder`. */
     fun observeRouteStops(ticketId: String): Flow<List<TrainRouteStop>>
 
+    /** Live coach composition ordered by `sortOrder` (engine first), ADR-022. */
+    fun observeCoaches(ticketId: String): Flow<List<TrainCoach>>
+
     /** Upserts [ticket] with a bumped `updatedAt`; returns the stored copy. */
     suspend fun save(ticket: TrainTicket): TrainTicket
 
@@ -37,6 +41,12 @@ interface TrainRepository {
         ticketId: String,
         stops: List<TrainRouteStop>,
     ): List<TrainRouteStop>
+
+    /** Replaces the stored coach composition: soft-deletes existing, inserts [coaches] (ADR-022). */
+    suspend fun replaceCoaches(
+        ticketId: String,
+        coaches: List<TrainCoach>,
+    ): List<TrainCoach>
 
     /**
      * Writes a provider fetch (ADR-005) into Room: per-passenger `currentStatus`
@@ -53,7 +63,7 @@ interface TrainRepository {
         archived: Boolean,
     )
 
-    /** Soft-deletes the ticket AND its passengers, route stops, and attachments. */
+    /** Soft-deletes the ticket AND its passengers, route stops, coaches, and attachments. */
     suspend fun delete(id: String)
 }
 

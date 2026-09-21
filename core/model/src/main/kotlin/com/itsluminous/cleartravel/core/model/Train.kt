@@ -63,3 +63,18 @@ data class TrainRouteStop(
     override val updatedAt: Instant = Instant.now(),
     override val deletedAt: Instant? = null,
 ) : SyncableEntity
+
+/**
+ * One coach in a [TrainTicket]'s train composition, in PHYSICAL order from the
+ * engine (ADR-022). [code] is the rake label as displayed at the station — `EN`
+ * (engine), `GN`, `S1`, `B4`, `PC` … — and [sortOrder] its 0-based position, which
+ * doubles as the number shown under the coach in the position strip.
+ */
+data class TrainCoach(
+    override val id: String = EntityIds.newId(),
+    val ticketId: String,
+    val code: String,
+    val sortOrder: Int = 0,
+    override val updatedAt: Instant = Instant.now(),
+    override val deletedAt: Instant? = null,
+) : SyncableEntity

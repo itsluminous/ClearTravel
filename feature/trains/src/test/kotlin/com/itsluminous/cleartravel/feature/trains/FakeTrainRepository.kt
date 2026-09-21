@@ -2,6 +2,7 @@ package com.itsluminous.cleartravel.feature.trains
 
 import com.itsluminous.cleartravel.core.data.provider.TrainStatusResult
 import com.itsluminous.cleartravel.core.data.repository.TrainRepository
+import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
 import com.itsluminous.cleartravel.core.model.TrainTicket
@@ -21,20 +22,24 @@ class FakeTrainRepository(
     private val tickets = MutableStateFlow<Map<String, TrainTicket>>(emptyMap())
     private val passengers = MutableStateFlow<Map<String, TrainPassenger>>(emptyMap())
     private val routeStops = MutableStateFlow<Map<String, TrainRouteStop>>(emptyMap())
+    private val coaches = MutableStateFlow<Map<String, TrainCoach>>(emptyMap())
 
     val savedTickets = mutableListOf<TrainTicket>()
     val savedPassengerBatches = mutableListOf<List<TrainPassenger>>()
     val appliedResults = mutableListOf<Pair<String, TrainStatusResult>>()
     val deletedIds = mutableListOf<String>()
+    val replacedCoachBatches = mutableListOf<Pair<String, List<TrainCoach>>>()
 
     fun seed(
         ticket: TrainTicket,
         ticketPassengers: List<TrainPassenger> = emptyList(),
         stops: List<TrainRouteStop> = emptyList(),
+        ticketCoaches: List<TrainCoach> = emptyList(),
     ) {
         tickets.value += ticket.id to ticket
         passengers.value += ticketPassengers.associateBy(TrainPassenger::id)
         routeStops.value += stops.associateBy(TrainRouteStop::id)
+        coaches.value += ticketCoaches.associateBy(TrainCoach::id)
     }
 
     override fun observeActive(): Flow<List<TrainTicket>> =
@@ -65,6 +70,13 @@ class FakeTrainRepository(
                 .sortedBy(TrainRouteStop::sortOrder)
         }
 
+    override fun observeCoaches(ticketId: String): Flow<List<TrainCoach>> =
+        coaches.map { all ->
+            all.values
+                .filter { it.ticketId == ticketId && it.deletedAt == null }
+                .sortedBy(TrainCoach::sortOrder)
+        }
+
     override suspend fun save(ticket: TrainTicket): TrainTicket {
         val stamped = ticket.copy(updatedAt = now())
         tickets.value += stamped.id to stamped
@@ -88,6 +100,19 @@ class FakeTrainRepository(
             routeStops.value.mapValues { (_, stop) ->
                 if (stop.ticketId == ticketId) stop.copy(deletedAt = now()) else stop
             } + stamped.associateBy(TrainRouteStop::id)
+        return stamped
+    }
+
+    override suspend fun replaceCoaches(
+        ticketId: String,
+        coaches: List<TrainCoach>,
+    ): List<TrainCoach> {
+        val stamped = coaches.map { it.copy(ticketId = ticketId, updatedAt = now()) }
+        replacedCoachBatches += ticketId to stamped
+        this.coaches.value =
+            this.coaches.value.mapValues { (_, coach) ->
+                if (coach.ticketId == ticketId) coach.copy(deletedAt = now()) else coach
+            } + stamped.associateBy(TrainCoach::id)
         return stamped
     }
 

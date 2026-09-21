@@ -10,6 +10,7 @@ import com.itsluminous.cleartravel.core.database.entity.ChecklistPresetEntity
 import com.itsluminous.cleartravel.core.database.entity.ChecklistPresetItemEntity
 import com.itsluminous.cleartravel.core.database.entity.FlightJourneyEntity
 import com.itsluminous.cleartravel.core.database.entity.ItineraryItemEntity
+import com.itsluminous.cleartravel.core.database.entity.TrainCoachEntity
 import com.itsluminous.cleartravel.core.database.entity.TrainPassengerEntity
 import com.itsluminous.cleartravel.core.database.entity.TrainRouteStopEntity
 import com.itsluminous.cleartravel.core.database.entity.TrainTicketEntity
@@ -60,6 +61,9 @@ interface BackupDao {
     @Query("SELECT * FROM train_route_stops")
     suspend fun dumpTrainRouteStops(): List<TrainRouteStopEntity>
 
+    @Query("SELECT * FROM train_coaches")
+    suspend fun dumpTrainCoaches(): List<TrainCoachEntity>
+
     @Query("SELECT * FROM flight_journeys")
     suspend fun dumpFlightJourneys(): List<FlightJourneyEntity>
 
@@ -94,6 +98,9 @@ interface BackupDao {
 
     @Upsert
     suspend fun upsertTrainRouteStops(rows: List<TrainRouteStopEntity>)
+
+    @Upsert
+    suspend fun upsertTrainCoaches(rows: List<TrainCoachEntity>)
 
     @Upsert
     suspend fun upsertFlightJourneys(rows: List<FlightJourneyEntity>)

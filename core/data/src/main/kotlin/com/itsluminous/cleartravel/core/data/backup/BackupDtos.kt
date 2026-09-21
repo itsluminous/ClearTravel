@@ -153,6 +153,17 @@ data class TrainRouteStopDto(
     val deletedAt: Long? = null,
 )
 
+/** Added in ADR-022 (additive — readers of older backups see an empty list). */
+@Serializable
+data class TrainCoachDto(
+    val id: String,
+    val ticketId: String,
+    val code: String,
+    val sortOrder: Int = 0,
+    val updatedAt: Long,
+    val deletedAt: Long? = null,
+)
+
 @Serializable
 data class FlightJourneyDto(
     val id: String,
@@ -215,6 +226,7 @@ data class BackupSnapshot(
     val trainTickets: List<TrainTicketDto> = emptyList(),
     val trainPassengers: List<TrainPassengerDto> = emptyList(),
     val trainRouteStops: List<TrainRouteStopDto> = emptyList(),
+    val trainCoaches: List<TrainCoachDto> = emptyList(),
     val flightJourneys: List<FlightJourneyDto> = emptyList(),
     val attachments: List<AttachmentDto> = emptyList(),
 )
@@ -231,6 +243,7 @@ object BackupEntries {
     const val TRAIN_TICKETS = "entities/train_tickets.json"
     const val TRAIN_PASSENGERS = "entities/train_passengers.json"
     const val TRAIN_ROUTE_STOPS = "entities/train_route_stops.json"
+    const val TRAIN_COACHES = "entities/train_coaches.json"
     const val FLIGHT_JOURNEYS = "entities/flight_journeys.json"
     const val ATTACHMENTS = "entities/attachments.json"
     const val ATTACHMENT_DIR = "attachments/"
@@ -247,6 +260,7 @@ object BackupEntries {
     const val KEY_TRAIN_TICKETS = "train_tickets"
     const val KEY_TRAIN_PASSENGERS = "train_passengers"
     const val KEY_TRAIN_ROUTE_STOPS = "train_route_stops"
+    const val KEY_TRAIN_COACHES = "train_coaches"
     const val KEY_FLIGHT_JOURNEYS = "flight_journeys"
     const val KEY_ATTACHMENTS = "attachments"
 }

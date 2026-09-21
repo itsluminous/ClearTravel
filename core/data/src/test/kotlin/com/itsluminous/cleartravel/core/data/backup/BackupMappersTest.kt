@@ -61,10 +61,12 @@ class BackupMappersTest {
             )
         val passenger = Fixtures.trainPassenger(deletedAt = deletedAt)
         val stop = Fixtures.trainRouteStop(deletedAt = deletedAt)
+        val coach = Fixtures.trainCoach(code = "S1", sortOrder = 3, deletedAt = deletedAt)
 
         assertThat(ticket.toDto().toModel()).isEqualTo(ticket)
         assertThat(passenger.toDto().toModel()).isEqualTo(passenger)
         assertThat(stop.toDto().toModel()).isEqualTo(stop)
+        assertThat(coach.toDto().toModel()).isEqualTo(coach)
     }
 
     @Test

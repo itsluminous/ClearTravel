@@ -156,6 +156,7 @@ class DefaultBackupManager
             val trainTickets = backupDao.dumpTrainTickets().map { it.toModel().toDto() }
             val trainPassengers = backupDao.dumpTrainPassengers().map { it.toModel().toDto() }
             val trainRouteStops = backupDao.dumpTrainRouteStops().map { it.toModel().toDto() }
+            val trainCoaches = backupDao.dumpTrainCoaches().map { it.toModel().toDto() }
             val flightJourneys = backupDao.dumpFlightJourneys().map { it.toModel().toDto() }
 
             val manifest =
@@ -174,6 +175,7 @@ class DefaultBackupManager
                             BackupEntries.KEY_TRAIN_TICKETS to trainTickets.size,
                             BackupEntries.KEY_TRAIN_PASSENGERS to trainPassengers.size,
                             BackupEntries.KEY_TRAIN_ROUTE_STOPS to trainRouteStops.size,
+                            BackupEntries.KEY_TRAIN_COACHES to trainCoaches.size,
                             BackupEntries.KEY_FLIGHT_JOURNEYS to flightJourneys.size,
                             BackupEntries.KEY_ATTACHMENTS to attachmentDtos.size,
                         ),
@@ -190,6 +192,7 @@ class DefaultBackupManager
                     trainTickets = trainTickets,
                     trainPassengers = trainPassengers,
                     trainRouteStops = trainRouteStops,
+                    trainCoaches = trainCoaches,
                     flightJourneys = flightJourneys,
                     attachments = attachmentDtos,
                 )
@@ -309,6 +312,12 @@ class DefaultBackupManager
                 .merge(backupDao.dumpTrainRouteStops().map { it.toModel() }, snapshot.trainRouteStops.map { it.toModel() })
                 .also { plan ->
                     backupDao.upsertTrainRouteStops(plan.toWrite.map { it.toEntity() })
+                    summary += plan.summary
+                }
+            BackupMerger
+                .merge(backupDao.dumpTrainCoaches().map { it.toModel() }, snapshot.trainCoaches.map { it.toModel() })
+                .also { plan ->
+                    backupDao.upsertTrainCoaches(plan.toWrite.map { it.toEntity() })
                     summary += plan.summary
                 }
             BackupMerger

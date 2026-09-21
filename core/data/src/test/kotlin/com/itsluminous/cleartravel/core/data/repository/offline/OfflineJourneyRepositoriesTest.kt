@@ -104,11 +104,33 @@ class OfflineTrainRepositoryTest {
         }
 
     @Test
-    fun `delete cascades to passengers, route stops, and attachments`() =
+    fun `replaceCoaches swaps the stored composition and stamps every row`() =
+        runTest {
+            val ticket = trains.save(Fixtures.trainTicket())
+            trains.replaceCoaches(ticket.id, listOf(Fixtures.trainCoach(code = "OLD")))
+
+            val written =
+                trains.replaceCoaches(
+                    ticket.id,
+                    listOf(
+                        Fixtures.trainCoach(code = "EN", sortOrder = 0, ticketId = "ignored"),
+                        Fixtures.trainCoach(code = "S1", sortOrder = 1, ticketId = "ignored"),
+                    ),
+                )
+
+            val stored = trains.observeCoaches(ticket.id).first()
+            assertThat(stored.map { it.code }).containsExactly("EN", "S1").inOrder()
+            assertThat(stored.map { it.ticketId }.distinct()).containsExactly(ticket.id)
+            assertThat(written.map { it.updatedAt }.distinct()).containsExactly(clock.instant())
+        }
+
+    @Test
+    fun `delete cascades to passengers, route stops, coaches, and attachments`() =
         runTest {
             val ticket = trains.save(Fixtures.trainTicket())
             trains.savePassengers(listOf(Fixtures.trainPassenger(ticketId = ticket.id)))
             trains.replaceRouteStops(ticket.id, listOf(Fixtures.trainRouteStop()))
+            trains.replaceCoaches(ticket.id, listOf(Fixtures.trainCoach()))
             attachments.save(Fixtures.attachment(ownerType = AttachmentOwnerType.TRAIN, ownerId = ticket.id))
 
             trains.delete(ticket.id)
@@ -116,6 +138,7 @@ class OfflineTrainRepositoryTest {
             assertThat(trains.getTicket(ticket.id)).isNull()
             assertThat(trains.observePassengers(ticket.id).first()).isEmpty()
             assertThat(trains.observeRouteStops(ticket.id).first()).isEmpty()
+            assertThat(trains.observeCoaches(ticket.id).first()).isEmpty()
             assertThat(attachments.observeForOwner(AttachmentOwnerType.TRAIN, ticket.id).first()).isEmpty()
         }
 

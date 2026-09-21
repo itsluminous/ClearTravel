@@ -4,6 +4,7 @@ import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
 import com.itsluminous.cleartravel.core.model.TrainTicket
@@ -60,6 +61,20 @@ data class TrainRouteStopEntity(
     val departure: String,
     val platform: String,
     val day: Int,
+    @ColumnInfo(name = "sort_order") val sortOrder: Int,
+    @ColumnInfo(name = "updated_at") val updatedAt: Instant,
+    @ColumnInfo(name = "deleted_at") val deletedAt: Instant?,
+)
+
+/** Room row for [TrainCoach] (ADR-022, schema v2). */
+@Entity(
+    tableName = "train_coaches",
+    indices = [Index("ticket_id")],
+)
+data class TrainCoachEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "ticket_id") val ticketId: String,
+    val code: String,
     @ColumnInfo(name = "sort_order") val sortOrder: Int,
     @ColumnInfo(name = "updated_at") val updatedAt: Instant,
     @ColumnInfo(name = "deleted_at") val deletedAt: Instant?,
@@ -152,6 +167,26 @@ fun TrainRouteStopEntity.toModel(): TrainRouteStop =
         departure = departure,
         platform = platform,
         day = day,
+        sortOrder = sortOrder,
+        updatedAt = updatedAt,
+        deletedAt = deletedAt,
+    )
+
+fun TrainCoach.toEntity(): TrainCoachEntity =
+    TrainCoachEntity(
+        id = id,
+        ticketId = ticketId,
+        code = code,
+        sortOrder = sortOrder,
+        updatedAt = updatedAt,
+        deletedAt = deletedAt,
+    )
+
+fun TrainCoachEntity.toModel(): TrainCoach =
+    TrainCoach(
+        id = id,
+        ticketId = ticketId,
+        code = code,
         sortOrder = sortOrder,
         updatedAt = updatedAt,
         deletedAt = deletedAt,

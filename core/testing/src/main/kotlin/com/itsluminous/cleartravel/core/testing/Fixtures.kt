@@ -14,6 +14,7 @@ import com.itsluminous.cleartravel.core.model.ItineraryItem
 import com.itsluminous.cleartravel.core.model.ItineraryItemType
 import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.core.model.PlaceCategory
+import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
 import com.itsluminous.cleartravel.core.model.TrainTicket
@@ -189,6 +190,15 @@ object Fixtures {
         updatedAt: Instant = NOW,
         deletedAt: Instant? = null,
     ): TrainRouteStop = TrainRouteStop(id, ticketId, stationName, arrival, departure, platform, day, sortOrder, updatedAt, deletedAt)
+
+    fun trainCoach(
+        id: String = EntityIds.newId(),
+        ticketId: String = FIXED_ID,
+        code: String = "B2",
+        sortOrder: Int = 0,
+        updatedAt: Instant = NOW,
+        deletedAt: Instant? = null,
+    ): TrainCoach = TrainCoach(id, ticketId, code, sortOrder, updatedAt, deletedAt)
 
     fun flightJourney(
         id: String = EntityIds.newId(),
