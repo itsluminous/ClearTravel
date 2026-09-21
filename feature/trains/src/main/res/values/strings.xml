@@ -42,7 +42,6 @@
         <item quantity="one">Updated %1$d day ago</item>
         <item quantity="other">Updated %1$d days ago</item>
     </plurals>
-    <string name="trains_card_seat_details">Seat details</string>
     <string name="trains_card_share">Share ticket</string>
     <string name="trains_share_text">Check out my train ticket (PNR %1$s): %2$s</string>
     <string name="trains_share_chooser_title">Share train ticket</string>
@@ -142,4 +141,37 @@
     <string name="trains_card_view_route">Train route</string>
 
     <string name="trains_shared_text_title">Ticket shared with ClearTravel</string>
+
+    <!-- Seat map screen (ADR-022) -->
+    <string name="trains_seatmap_title">%1$s · %2$s</string>
+    <string name="trains_seatmap_title_class_only">%1$s</string>
+    <string name="trains_seatmap_title_fallback">Seat map</string>
+    <string name="trains_seatmap_subtitle">%1$s · %2$s</string>
+    <string name="trains_seatmap_close">Back</string>
+    <string name="trains_seatmap_refresh">Refresh route &amp; coaches from the web</string>
+    <string name="trains_seatmap_engine">Engine</string>
+    <string name="trains_seatmap_coach_box">Coach %1$s at position %2$d — tap to view its seat map</string>
+    <string name="trains_seatmap_passenger_chip">%1$s - %2$d</string>
+    <string name="trains_seatmap_passenger_chip_no_coach">Berth %1$d</string>
+    <string name="trains_seatmap_passenger_chip_unallotted">%1$s</string>
+    <string name="trains_seatmap_passenger_chip_none">No berth yet</string>
+    <string name="trains_seatmap_warning">Coach position may not be accurate for certain trains — verify at the station.</string>
+    <string name="trains_seatmap_no_coaches_title">Coach positions not fetched</string>
+    <string name="trains_seatmap_no_coaches_message">Fetch the route once and the coach order is saved offline.</string>
+    <string name="trains_seatmap_fetch">Fetch route &amp; coaches</string>
+    <string name="trains_seatmap_no_layout_title">No seat map for this coach</string>
+    <string name="trains_seatmap_no_layout_message">Seat maps exist for SL, 3A, 2A, 1A, CC, EC, 2S and general coaches.</string>
+    <string name="trains_seatmap_bay">Bay %1$d</string>
+    <string name="trains_seatmap_row">Row %1$d</string>
+    <string name="trains_seatmap_cell">Berth %1$d, %2$s</string>
+    <string name="trains_seatmap_cell_yours">Berth %1$d, %2$s — your berth</string>
+    <string name="trains_seatmap_type_lower">LOWER</string>
+    <string name="trains_seatmap_type_middle">MIDDLE</string>
+    <string name="trains_seatmap_type_upper">UPPER</string>
+    <string name="trains_seatmap_type_side_lower">S.LOWER</string>
+    <string name="trains_seatmap_type_side_upper">S.UPPER</string>
+    <string name="trains_seatmap_type_window">WINDOW</string>
+    <string name="trains_seatmap_type_aisle">AISLE</string>
+    <string name="trains_card_seat_map">Seat map</string>
+    <string name="trains_detail_seat_map">Seat map</string>
 </resources>

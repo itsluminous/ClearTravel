@@ -45,6 +45,7 @@ internal fun TrainDetailSheet(
     onDismiss: () -> Unit,
     onCheckStatus: () -> Unit,
     onViewRoute: () -> Unit,
+    onSeatMap: () -> Unit,
     onEdit: () -> Unit,
     onArchiveToggle: () -> Unit,
     onDelete: () -> Unit,
@@ -137,6 +138,9 @@ internal fun TrainDetailSheet(
                 OutlinedButton(onClick = onViewRoute, modifier = Modifier.fillMaxWidth()) {
                     Text(stringResource(R.string.trains_detail_view_route))
                 }
+            }
+            OutlinedButton(onClick = onSeatMap, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(R.string.trains_detail_seat_map))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f)) {

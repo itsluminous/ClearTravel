@@ -87,6 +87,7 @@ internal fun TrainListScreen(
     onTicketClick: (TrainTicket) -> Unit,
     onCheckStatus: (TrainTicket) -> Unit,
     onViewRoute: (TrainTicketCard) -> Unit,
+    onSeatMap: (TrainTicketCard) -> Unit,
     onShare: (TrainTicketCard) -> Unit,
     onAdd: (AddChoice) -> Unit,
     modifier: Modifier = Modifier,
@@ -141,6 +142,7 @@ internal fun TrainListScreen(
                             onClick = { onTicketClick(card.ticket) },
                             onCheckStatus = { onCheckStatus(card.ticket) },
                             onViewRoute = { onViewRoute(card) },
+                            onSeatMap = { onSeatMap(card) },
                             onShare = { onShare(card) },
                         )
                     }
@@ -257,6 +259,7 @@ private fun TrainTicketCardItem(
     onClick: () -> Unit,
     onCheckStatus: () -> Unit,
     onViewRoute: () -> Unit,
+    onSeatMap: () -> Unit,
     onShare: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -312,10 +315,10 @@ private fun TrainTicketCardItem(
                 )
                 ExplainableIcon(
                     icon = Icons.Filled.AirlineSeatReclineNormal,
-                    explanationRes = R.string.trains_card_seat_details,
+                    explanationRes = R.string.trains_card_seat_map,
                     tint = MaterialTheme.colorScheme.primary,
                     targetSize = 40.dp,
-                    onClick = onClick,
+                    onClick = onSeatMap,
                 )
                 if (ticket.trainNumber.isNotBlank()) {
                     ExplainableIcon(

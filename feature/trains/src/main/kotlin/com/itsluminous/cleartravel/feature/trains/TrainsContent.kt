@@ -28,6 +28,7 @@ import com.itsluminous.cleartravel.feature.trains.list.TrainListViewModel
 import com.itsluminous.cleartravel.feature.trains.pnr.PnrCheckScreen
 import com.itsluminous.cleartravel.feature.trains.route.RouteFetchScreen
 import com.itsluminous.cleartravel.feature.trains.route.TrainRouteScreen
+import com.itsluminous.cleartravel.feature.trains.seatmap.SeatMapScreen
 import com.itsluminous.cleartravel.feature.trains.share.rememberTrainTicketSharer
 import kotlinx.coroutines.launch
 
@@ -62,6 +63,14 @@ private sealed interface TrainsScreen {
     ) : TrainsScreen
 
     data class RouteFetch(
+        val ticketId: String,
+        val trainNumber: String,
+        /** True when opened from the seat map — a success returns there (ADR-022). */
+        val returnToSeatMap: Boolean = false,
+    ) : TrainsScreen
+
+    /** The OFFLINE seat map (ADR-022) — coach strip + berth grid from Room. */
+    data class SeatMap(
         val ticketId: String,
         val trainNumber: String,
     ) : TrainsScreen
@@ -156,6 +165,9 @@ fun TrainsContent(
                                 )
                             }
                     },
+                    onSeatMap = { card ->
+                        screen = TrainsScreen.SeatMap(ticketId = card.ticket.id, trainNumber = card.ticket.trainNumber)
+                    },
                     onShare = { card ->
                         // Image + deep-link caption via the share sheet; text-only
                         // fallback is reported so the user knows the picture was skipped.
@@ -209,17 +221,38 @@ fun TrainsContent(
                     trainNumber = current.trainNumber,
                     onApplied = { stationCount ->
                         // Land on the OFFLINE route page so the freshly fetched
-                        // route is immediately visible from Room (ADR-019).
+                        // route is immediately visible from Room (ADR-019) — or
+                        // back on the seat map when the fetch started there.
                         screen =
-                            TrainsScreen.RouteView(
-                                ticketId = current.ticketId,
-                                trainNumber = current.trainNumber,
-                            )
+                            if (current.returnToSeatMap) {
+                                TrainsScreen.SeatMap(
+                                    ticketId = current.ticketId,
+                                    trainNumber = current.trainNumber,
+                                )
+                            } else {
+                                TrainsScreen.RouteView(
+                                    ticketId = current.ticketId,
+                                    trainNumber = current.trainNumber,
+                                )
+                            }
                         scope.launch {
                             snackbarHostState.showSnackbar(
                                 context.getString(R.string.trains_route_fetch_applied, stationCount),
                             )
                         }
+                    },
+                    onClose = { screen = TrainsScreen.List },
+                )
+            is TrainsScreen.SeatMap ->
+                SeatMapScreen(
+                    ticketId = current.ticketId,
+                    onFetch = {
+                        screen =
+                            TrainsScreen.RouteFetch(
+                                ticketId = current.ticketId,
+                                trainNumber = current.trainNumber,
+                                returnToSeatMap = true,
+                            )
                     },
                     onClose = { screen = TrainsScreen.List },
                 )
@@ -266,6 +299,13 @@ fun TrainsContent(
                                     trainNumber = ticket.trainNumber,
                                 )
                             }
+                    }
+                },
+                onSeatMap = {
+                    val ticket = detailState.ticket
+                    if (ticket != null) {
+                        detailTicketId = null
+                        screen = TrainsScreen.SeatMap(ticketId = ticket.id, trainNumber = ticket.trainNumber)
                     }
                 },
                 onEdit = {
