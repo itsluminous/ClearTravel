@@ -152,6 +152,16 @@ class TrainTicketFormViewModel
             applyExtraction(prefillSource.fromText(text))
         }
 
+        /**
+         * Starts a blank form carrying only [pnr] — the incoming share-link path
+         * (ADR-020): the recipient fills in what they know, saves, and then runs the
+         * captcha-gated PNR check to pull the rest.
+         */
+        fun startWithPnr(pnr: String) {
+            startBlank()
+            state.update { it.copy(pnr = pnr.trim(), prefilled = true) }
+        }
+
         /** Starts a blank form and prefills it from an imported PDF/image. */
         fun startFromUri(uri: Uri) {
             startBlank()

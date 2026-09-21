@@ -120,6 +120,21 @@ class TrainTicketFormViewModelTest {
         }
 
     @Test
+    fun `start with pnr carries only the pnr into an otherwise blank form`() {
+        val vm = viewModel()
+        vm.startFromText("irctc sms")
+
+        vm.startWithPnr(" 8553674906 ")
+
+        val state = vm.uiState.value
+        assertThat(state.pnr).isEqualTo("8553674906")
+        assertThat(state.trainNumber).isEmpty()
+        assertThat(state.passengers).hasSize(1)
+        assertThat(state.prefilled).isTrue()
+        assertThat(state.isEdit).isFalse()
+    }
+
+    @Test
     fun `prefill from text applies fields and records confidences`() {
         prefillSource.extraction = richExtraction
         val vm = viewModel()
