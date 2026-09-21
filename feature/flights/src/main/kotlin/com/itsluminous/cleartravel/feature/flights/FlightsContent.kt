@@ -1,5 +1,6 @@
 package com.itsluminous.cleartravel.feature.flights
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -15,28 +16,6 @@ import com.itsluminous.cleartravel.feature.flights.pass.BoardingPassViewerScreen
 import com.itsluminous.cleartravel.feature.flights.polling.FlightPollScheduler
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcome
 import com.itsluminous.cleartravel.feature.flights.status.StatusCheckScreen
-
-/** In-tab navigation of the Flights segment (the app shell owns no flight routes). */
-private sealed interface FlightsRoute {
-    data object Journeys : FlightsRoute
-
-    data class Form(
-        val editId: String? = null,
-        val importUri: String? = null,
-        /** Picked booking-confirmation file (third add path, ADR-017). */
-        val bookingUri: String? = null,
-    ) : FlightsRoute
-
-    data class StatusCheck(
-        val flightId: String,
-    ) : FlightsRoute
-
-    data class PassViewer(
-        val path: String,
-        /** Viewer reuse (ADR-017): booking confirmations carry their own title. */
-        val titleRes: Int = R.string.flights_pass_viewer_title,
-    ) : FlightsRoute
-}
 
 /**
  * The Flights segment of the Journeys tab. The app module places this next to the
@@ -64,6 +43,13 @@ fun FlightsContent(
     // it never re-fires on a later return.
     var duplicateNotice by remember { mutableStateOf<DuplicateFlightNotice?>(null) }
     val context = LocalContext.current
+
+    // State-based navigation does not take part in system back by itself: without
+    // this, back reaches the shell NavHost and pops the whole Journeys tab. Disabled
+    // on the list (back leaves the tab) and on the status check, which owns its own
+    // handler so the outcome travels back with it.
+    val backRoute = flightsBackRoute(route)
+    BackHandler(enabled = backRoute != null) { backRoute?.let { route = it } }
 
     // Feature-local WorkManager wiring: make sure a poll chain exists (ADR-013).
     LaunchedEffect(Unit) {

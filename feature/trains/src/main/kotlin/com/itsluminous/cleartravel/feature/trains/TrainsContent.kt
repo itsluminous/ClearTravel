@@ -1,6 +1,6 @@
 package com.itsluminous.cleartravel.feature.trains
 
-import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -62,56 +62,6 @@ private suspend fun showDuplicateNotice(
     if (result == SnackbarResult.ActionPerformed) onView()
 }
 
-/** Where a form session got its initial content from. */
-private sealed interface FormEntry {
-    data object Blank : FormEntry
-
-    data class Edit(
-        val ticketId: String,
-    ) : FormEntry
-
-    data class FromText(
-        val text: String,
-    ) : FormEntry
-
-    data class FromUri(
-        val uri: Uri,
-    ) : FormEntry
-}
-
-/** The Trains segment's internal navigation state (it is not a NavHost route). */
-private sealed interface TrainsScreen {
-    data object List : TrainsScreen
-
-    data class Form(
-        val entry: FormEntry,
-    ) : TrainsScreen
-
-    data class PnrCheck(
-        val ticketId: String,
-        val pnr: String,
-    ) : TrainsScreen
-
-    data class RouteFetch(
-        val ticketId: String,
-        val trainNumber: String,
-        /** True when opened from the seat map — a success returns there (ADR-022). */
-        val returnToSeatMap: Boolean = false,
-    ) : TrainsScreen
-
-    /** The OFFLINE seat map (ADR-022) — coach strip + berth grid from Room. */
-    data class SeatMap(
-        val ticketId: String,
-        val trainNumber: String,
-    ) : TrainsScreen
-
-    /** The OFFLINE route page (ADR-019) — renders the stored route from Room. */
-    data class RouteView(
-        val ticketId: String,
-        val trainNumber: String,
-    ) : TrainsScreen
-}
-
 /**
  * The Trains segment of the Journeys tab. The app module places this next to the
  * Flights segment under a segmented control; this module never references
@@ -132,6 +82,26 @@ fun TrainsContent(
 ) {
     var screen by remember { mutableStateOf<TrainsScreen>(TrainsScreen.List) }
     var detailTicketId by remember { mutableStateOf<String?>(null) }
+
+    // State-based navigation does not take part in system back by itself: without
+    // this, back reaches the shell NavHost and pops the whole Journeys tab. Step one
+    // level at a time; on the bare list the handler is disabled so back leaves the tab.
+    val backTarget = trainsBackTarget(screen, detailTicketId)
+    BackHandler(enabled = backTarget != null) {
+        backTarget?.let {
+            screen = it.screen
+            detailTicketId = it.detailTicketId
+        }
+    }
+
+    /** The Close action of a seat map / offline route page mirrors back: to its opener. */
+    fun closeToOpener(
+        ticketId: String,
+        fromDetail: Boolean,
+    ) {
+        screen = TrainsScreen.List
+        detailTicketId = ticketId.takeIf { fromDetail }
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -309,16 +279,13 @@ fun TrainsContent(
                         // route is immediately visible from Room (ADR-019) — or
                         // back on the seat map when the fetch started there.
                         screen =
-                            if (current.returnToSeatMap) {
-                                TrainsScreen.SeatMap(
-                                    ticketId = current.ticketId,
-                                    trainNumber = current.trainNumber,
-                                )
-                            } else {
-                                TrainsScreen.RouteView(
-                                    ticketId = current.ticketId,
-                                    trainNumber = current.trainNumber,
-                                )
+                            when (val returnTo = current.returnTo) {
+                                is TrainsScreen.SeatMap, is TrainsScreen.RouteView -> returnTo
+                                else ->
+                                    TrainsScreen.RouteView(
+                                        ticketId = current.ticketId,
+                                        trainNumber = current.trainNumber,
+                                    )
                             }
                         scope.launch {
                             snackbarHostState.showSnackbar(
@@ -326,7 +293,7 @@ fun TrainsContent(
                             )
                         }
                     },
-                    onClose = { screen = TrainsScreen.List },
+                    onClose = { screen = current.returnTo },
                 )
             is TrainsScreen.SeatMap ->
                 SeatMapScreen(
@@ -336,10 +303,10 @@ fun TrainsContent(
                             TrainsScreen.RouteFetch(
                                 ticketId = current.ticketId,
                                 trainNumber = current.trainNumber,
-                                returnToSeatMap = true,
+                                returnTo = current,
                             )
                     },
-                    onClose = { screen = TrainsScreen.List },
+                    onClose = { closeToOpener(current.ticketId, current.fromDetail) },
                 )
             is TrainsScreen.RouteView ->
                 TrainRouteScreen(
@@ -349,9 +316,10 @@ fun TrainsContent(
                             TrainsScreen.RouteFetch(
                                 ticketId = current.ticketId,
                                 trainNumber = current.trainNumber,
+                                returnTo = current,
                             )
                     },
-                    onClose = { screen = TrainsScreen.List },
+                    onClose = { closeToOpener(current.ticketId, current.fromDetail) },
                 )
         }
 
@@ -377,6 +345,7 @@ fun TrainsContent(
                                 TrainsScreen.RouteView(
                                     ticketId = ticket.id,
                                     trainNumber = ticket.trainNumber,
+                                    fromDetail = true,
                                 )
                             } else {
                                 TrainsScreen.RouteFetch(
@@ -390,7 +359,12 @@ fun TrainsContent(
                     val ticket = detailState.ticket
                     if (ticket != null) {
                         detailTicketId = null
-                        screen = TrainsScreen.SeatMap(ticketId = ticket.id, trainNumber = ticket.trainNumber)
+                        screen =
+                            TrainsScreen.SeatMap(
+                                ticketId = ticket.id,
+                                trainNumber = ticket.trainNumber,
+                                fromDetail = true,
+                            )
                     }
                 },
                 onEdit = {

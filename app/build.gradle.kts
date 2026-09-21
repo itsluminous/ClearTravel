@@ -163,6 +163,8 @@ dependencies {
     debugImplementation(libs.compose.ui.test.manifest)
     androidTestImplementation(libs.androidx.test.runner)
     androidTestImplementation(libs.androidx.test.ext.junit)
+    // Espresso.pressBack() drives the real system-back path (window key dispatch).
+    androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestImplementation(libs.truth)
     // Hilt in tests: HiltTestApplication + @TestInstallIn module replacement
     // (TestDatabaseModule swaps the on-disk Room DB for an in-memory one).

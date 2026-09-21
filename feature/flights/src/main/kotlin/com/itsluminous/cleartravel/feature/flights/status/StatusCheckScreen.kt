@@ -3,6 +3,7 @@ package com.itsluminous.cleartravel.feature.flights.status
 import android.annotation.SuppressLint
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -64,6 +65,10 @@ fun StatusCheckScreen(
     val lastOutcome by viewModel.lastOutcome.collectAsStateWithLifecycle()
 
     LaunchedEffect(flightId) { viewModel.start(flightId) }
+
+    // System back mirrors the Close icon — it must carry the last outcome too, so the
+    // screen owns its own handler instead of the segment's generic one.
+    BackHandler { onClose(lastOutcome) }
 
     Scaffold(
         modifier = modifier,

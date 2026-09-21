@@ -1027,7 +1027,9 @@ passenger's berths highlighted), built on three additive contract changes:
    with the fetch button above the map (the map still helps); unknown class →
    "No seat map for this coach". Fetch opens the EXISTING `RouteFetchScreen`
    (ONE fetch fills route AND coaches) with `returnToSeatMap = true` so success
-   lands back on the map. Strings are module-local (`trains_seatmap_*`).
+   lands back on the map (generalised to `returnTo: TrainsScreen` when system back
+   was wired through `TrainsNavigation.kt` — back and Close from a fetch return to
+   whichever screen opened it). Strings are module-local (`trains_seatmap_*`).
 5. **Entry points.** The card's seat `ExplainableIcon` now opens the seat map
    (it previously opened the detail sheet, whose own seat rows are unchanged);
    the detail sheet gains a "Seat map" button next to "View route".
