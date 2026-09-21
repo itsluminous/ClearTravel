@@ -27,11 +27,17 @@ data class TrainTicketExtraction(
     }
 }
 
-/** One passenger row from a ticket: name plus coach/berth and booking status when present. */
+/**
+ * One passenger row from a ticket: name plus coach/berth, the booking status and —
+ * when the ticket prints a second status column (ERS "Current Status") — the current
+ * status. [currentStatus] is additive with a default, so older fixtures/callers that
+ * never carried it are unaffected.
+ */
 @Serializable
 data class PassengerExtraction(
     val name: ExtractedField = ExtractedField.EMPTY,
     val coach: ExtractedField = ExtractedField.EMPTY,
     val berth: ExtractedField = ExtractedField.EMPTY,
     val bookingStatus: ExtractedField = ExtractedField.EMPTY,
+    val currentStatus: ExtractedField = ExtractedField.EMPTY,
 )

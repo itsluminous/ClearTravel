@@ -32,7 +32,7 @@ class IrctcTicketExtractorFixturesTest(
     companion object {
         @JvmStatic
         @Parameterized.Parameters(name = "{0}")
-        fun fixtures() = listOf("irctc-ticket-1", "irctc-ticket-2")
+        fun fixtures() = listOf("irctc-ticket-1", "irctc-ticket-2", "irctc-ticket-3")
     }
 }
 

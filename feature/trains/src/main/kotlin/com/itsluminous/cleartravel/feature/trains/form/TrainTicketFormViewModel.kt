@@ -208,6 +208,7 @@ class TrainTicketFormViewModel
                                 coach = passenger.coach.value.orEmpty(),
                                 seatBerth = passenger.berth.value.orEmpty(),
                                 bookingStatus = passenger.bookingStatus.value.orEmpty(),
+                                currentStatus = passenger.currentStatus.value.orEmpty(),
                                 lowConfidence = passenger.name.confidence == ExtractionConfidence.LOW,
                             )
                         }.ifEmpty { current.passengers }

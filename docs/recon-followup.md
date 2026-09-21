@@ -168,3 +168,35 @@ discoverable for WL/RAC tickets.
       if it does, verify `.close-banner` dismisses it.
 - [ ] Exercise "Try another source" live: force an ixigo parse failure and check
       the erail fallback produces a day-inferred multi-day route.
+
+## IRCTC ERS PDF import — real OCR capture (2026-09-21, remaining-fixes wave)
+
+- **Root cause of "PDF import fills nothing but PNR/train/stations":** ML Kit's
+  `Text.text` concatenates blocks in DETECTION order, not reading order. On the real
+  ERS PDF (`8553674906`, 2A, 2 RAC passengers) the label `Class` landed 40 lines away
+  from `SECOND AC (2A)`, `Start Date*` was not a recognized journey label, and each
+  passenger row was shredded into five separate lines (name / age / gender / booking
+  / current) — so `PASSENGER_LINE` never matched and `journeyDate`, `travelClass`
+  and `passengers` came back empty (captured extraction before the fix:
+  `journeyDate=NONE, travelClass=NONE, passengers=[]`).
+- **Fix (pipeline + extractor):** `OcrLayout` rebuilds visual rows from ML Kit line
+  geometry (rows = lines whose vertical centres are within 0.6× the median line
+  height; cells left→right joined by two spaces). `IrctcTicketExtractor` now works
+  per CELL for inline labels and adds STACKED header/value tables (value = same
+  column index on the next row), `Start Date*` as a journey-date label, class codes
+  in parentheses (`SECOND AC (2A)`), and a `currentStatus` passenger column (RAC/WL
+  tickets have no coach/berth yet — coach/berth are taken from whichever status
+  column carries them).
+- **Fixtures:** `irctc-ticket-3.geometry.txt` (real on-device ML Kit line boxes,
+  names + transaction/registration numbers anonymized) → `OcrLayoutTest` pins the
+  row text `irctc-ticket-3.txt` → `irctc-ticket-3.expected.json`. Fixtures 1/2
+  gained the `currentStatus` field (additive).
+- **Capture harness kept:** `core/ocr/src/androidTest/.../OcrCaptureHarnessTest`
+  (`@Ignore`d, device-only) logs raw text + geometry + extraction under logcat tag
+  `OcrCapture` for a PDF pushed to the test app's external files dir — drop the
+  `@Ignore` locally to record the next layout. Never commit a capture with real names.
+
+### TODO
+- [ ] Capture a CONFIRMED (CNF/coach/berth) ERS PDF through the harness — the real
+      capture is RAC/WL, so the `CNF/B4/32/LB` coach/berth path is still only
+      covered by the hand-written fixtures 1/2.

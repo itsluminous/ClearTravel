@@ -1,0 +1,45 @@
+Electronic Reservation Slip (ERS) Normal User
+INDIA
+IRCTC
+Booked From  Boarding At  To
+UDHNA JN (UDN)  UDHNA JN (UDN)  DANAPUR (DNR)
+Start Date* 29-Sept-2026  Departure* 08:35 29-Sept-2026  Arrival* 11:50 30-Sept-2026
+PNR  Train No./Name  Class
+8553674906  20933 /UDN DANAPUR EXP  SECOND AC (2A)
+Quota  Distance  Booking Date
+GENERAL (GN)  1594 KM  14-Sept-2026 22:37:33 HRS
+Passenger  Details
+# Name  Age  Gender  Booking Status  Current Status
+1. RAMESH KUMAR  59  M  RAC/12  RAC/11
+2. SUNITA DEVI  57  F  WL/1  RAC/12
+Railway Pass Details
+# Concession Code  Registration No.
+1  EPRPAS  31234567
+2 EPRPAS  31234567
+Acronyms:  RLWL: REMOTE LOCATION WAITLIST  POWL: POOLED QUOTA WAITLIST  RSWL: ROAD-SIDE WAITLIST
+Transaction ID: 100001234567890
+IR recovers only 57% of cost of travel on an average.
+Payment Details
+Ticket Fare  70.00
+IRCTC Convenience Fee (lncl. of GST)  T0.00
+Total Fare (all inclusive)  70.00
+PG Charges as applicable (Additional)
+Beware of fraudulent customer care number. For any assistance, use only the IRCTC e-ticketing Customer care
+number:14646.
+IRCTC Convenience Fee is charged per e-ticket irrespective of number of passengers on the ticket.
+* The printed Departure and Arrival Times are liable to change. Please Check correct departure, arrival from Railway Station
+Enquiry or Dial 139 or SMS RAIL to 139.
+This ticket is booked on a personal User ID, its sale/purchase is an offence u/s 143 of the Railways Act, 1989.
+Prescribed original ID proof is required while travelling along with SMS/ VRM/ ERS otherwise will be treated as without
+ticket and penalized as per Railway Rules.
+Place of Supply: NA State Name/Code of Supplier: /
+INSTRUCTIONS:
+1  Prescribed Original ID proofs are:- Voter ldentity Card/ Passport / PAN Card / Driving License / Photo ID card issued by Central / State Govt. /
+Public Sector Undertakings of State / Central Government ,District Administrations, Municipal bodies and Panchayat Administrations which are
+having serial number / Student Identity Card with photograph issued by recognized School or College for their students / Nationalized Bank
+Passbook with photograph /Credit Cards issued by Banks with laminated photograph/Unique ldentification Card "Aadhaar", m-Aadhaar, e-
+Aadhaar. /Passenger showing the Aadhaar/Driving Licence from the lssued Document" section by logging into his/her DigiLocker account
+considered as valid proof of identity. (Documents uploaded by the user i.e. the document in "Uploaded Document" section will not be considered
+as a valid proof of identity).
+2  PNRs having fully waitlisted status will be dropped and automatic refund of the ticket amount after deducting the applicable CLERKAGE by
+Railway shall be credited to the account used for payment for booking of the ticket. Passengers having fully waitlistede-ticket are not allowed to

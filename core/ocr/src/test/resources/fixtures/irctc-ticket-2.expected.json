@@ -12,11 +12,13 @@
       "name": { "value": "ARJUN MENON", "confidence": "HIGH" },
       "coach": { "value": "S6", "confidence": "MEDIUM" },
       "berth": { "value": "12", "confidence": "MEDIUM" },
-      "bookingStatus": { "value": "RAC/S6/12/SL", "confidence": "HIGH" }
+      "bookingStatus": { "value": "RAC/S6/12/SL", "confidence": "HIGH" },
+      "currentStatus": { "value": "RAC/S6/12/SL", "confidence": "HIGH" }
     },
     {
       "name": { "value": "DIVYA MENON", "confidence": "HIGH" },
-      "bookingStatus": { "value": "WL/15", "confidence": "HIGH" }
+      "bookingStatus": { "value": "WL/15", "confidence": "HIGH" },
+      "currentStatus": { "value": "WL/12", "confidence": "HIGH" }
     }
   ]
 }

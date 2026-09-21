@@ -1,0 +1,84 @@
+G|170|164|228|186|INDIA
+G|108|1124|118|1149|1
+G|251|373|471|402|Booked From
+G|204|448|514|492|UDHNA JN (UDN)
+G|140|513|581|549|Start Date* 29-Sept-2026
+G|250|581|321|607|PNR
+G|158|635|412|668|8553674906
+G|117|799|307|843|Passenger
+G|264|799|445|843|Details
+G|100|858|241|884|# Name
+G|235|697|332|729|Quota
+G|178|747|392|778|GENERAL (GN)
+G|98|908|493|934|1. RAMESH KUMAR
+G|97|954|303|986|2. SUNITA DEVI
+G|122|1007|492|1054|Railway Pass Details
+G|105|1249|197|1268|Acronyms:
+G|123|1068|457|1094|# Concession Code
+G|107|1179|320|1205|2 EPRPAS
+G|197|1124|320|1150|EPRPAS
+G|113|2307|120|2326|1
+G|109|1476|266|1501|Ticket Fare
+G|112|2542|124|2558|2
+G|558|858|618|891|Age
+G|106|1304|654|1330|Transaction ID: 100001234567890
+G|109|1568|449|1601|Total Fare (all inclusive)
+G|297|1250|623|1265|RLWL: REMOTE LOCATION WAITLIST
+G|578|908|612|934|59
+G|108|1672|567|1698|PG Charges as applicable (Additional)
+G|578|959|613|984|57
+G|111|1522|647|1552|IRCTC Convenience Fee (lncl. of GST)
+G|630|81|1434|129|Electronic Reservation Slip (ERS) Normal User
+G|105|2259|308|2283|INSTRUCTIONS:
+G|109|1359|906|1391|IR recovers only 57% of cost of travel on an average.
+G|125|1407|418|1451|Payment Details
+G|741|513|1311|549|Departure* 08:35 29-Sept-2026
+G|713|857|826|884|Gender
+G|749|908|774|934|M
+G|752|631|1310|671|20933 /UDN DANAPUR EXP
+G|749|959|764|983|F
+G|914|371|1127|416|Boarding At
+G|868|449|1179|492|UDHNA JN (UDN)
+G|892|580|1158|610|Train No./Name
+G|105|2182|856|2213|Place of Supply: NA State Name/Code of Supplier: /
+G|953|695|1097|729|Distance
+G|962|747|1086|773|1594 KM
+G|945|857|1184|890|Booking Status
+G|902|1477|987|1501|70.00
+G|901|1522|984|1550|T0.00
+G|998|908|1115|936|RAC/12
+G|901|1572|986|1596|70.00
+G|996|958|1072|986|WL/1
+G|859|1250|1160|1266|POWL: POOLED QUOTA WAITLIST
+G|1064|1064|1317|1101|Registration No.
+G|1120|1124|1274|1150|31234567
+G|1120|1179|1275|1205|31234567
+G|103|1914|1433|1943|IRCTC Convenience Fee is charged per e-ticket irrespective of number of passengers on the ticket.
+G|1670|374|1709|402|To
+G|1554|447|1843|493|DANAPUR (DNR)
+G|1446|512|1933|550|Arrival* 11:50 30-Sept-2026
+G|1720|579|1811|608|Class
+G|1593|629|1934|675|SECOND AC (2A)
+G|1534|908|1645|936|RAC/11
+G|1812|297|1933|331|IRCTC
+G|1569|749|1963|776|14-Sept-2026 22:37:33 HRS
+G|1480|858|1710|884|Current Status
+G|1534|958|1651|986|RAC/12
+G|1655|697|1878|732|Booking Date
+G|1420|1250|1674|1265|RSWL: ROAD-SIDE WAITLIST
+G|138|1825|1914|1853|Beware of fraudulent customer care number. For any assistance, use only the IRCTC e-ticketing Customer care
+G|137|1863|357|1888|number:14646.
+G|104|1955|1903|1985|* The printed Departure and Arrival Times are liable to change. Please Check correct departure, arrival from Railway Station
+G|100|1993|677|2023|Enquiry or Dial 139 or SMS RAIL to 139.
+G|136|2049|1705|2081|This ticket is booked on a personal User ID, its sale/purchase is an offence u/s 143 of the Railways Act, 1989.
+G|138|2091|1914|2120|Prescribed original ID proof is required while travelling along with SMS/ VRM/ ERS otherwise will be treated as without
+G|136|2128|736|2160|ticket and penalized as per Railway Rules.
+G|169|2303|1939|2330|Prescribed Original ID proofs are:- Voter ldentity Card/ Passport / PAN Card / Driving License / Photo ID card issued by Central / State Govt. /
+G|169|2338|1939|2363|Public Sector Undertakings of State / Central Government ,District Administrations, Municipal bodies and Panchayat Administrations which are
+G|168|2368|1939|2396|having serial number / Student Identity Card with photograph issued by recognized School or College for their students / Nationalized Bank
+G|169|2399|1940|2428|Passbook with photograph /Credit Cards issued by Banks with laminated photograph/Unique ldentification Card "Aadhaar", m-Aadhaar, e-
+G|167|2436|1939|2462|Aadhaar. /Passenger showing the Aadhaar/Driving Licence from the lssued Document" section by logging into his/her DigiLocker account
+G|168|2467|1938|2493|considered as valid proof of identity. (Documents uploaded by the user i.e. the document in "Uploaded Document" section will not be considered
+G|168|2500|498|2527|as a valid proof of identity).
+G|169|2536|1939|2563|PNRs having fully waitlisted status will be dropped and automatic refund of the ticket amount after deducting the applicable CLERKAGE by
+G|169|2571|1939|2595|Railway shall be credited to the account used for payment for booking of the ticket. Passengers having fully waitlistede-ticket are not allowed to

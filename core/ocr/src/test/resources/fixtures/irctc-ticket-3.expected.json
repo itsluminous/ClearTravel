@@ -1,0 +1,22 @@
+{
+  "pnr": { "value": "8553674906", "confidence": "HIGH" },
+  "trainNumber": { "value": "20933", "confidence": "HIGH" },
+  "trainName": { "value": "UDN DANAPUR EXP", "confidence": "HIGH" },
+  "journeyDate": { "value": "2026-09-29", "confidence": "HIGH" },
+  "fromStation": { "value": "UDN", "confidence": "HIGH" },
+  "toStation": { "value": "DNR", "confidence": "HIGH" },
+  "travelClass": { "value": "2A", "confidence": "HIGH" },
+  "quota": { "value": "GN", "confidence": "HIGH" },
+  "passengers": [
+    {
+      "name": { "value": "RAMESH KUMAR", "confidence": "HIGH" },
+      "bookingStatus": { "value": "RAC/12", "confidence": "HIGH" },
+      "currentStatus": { "value": "RAC/11", "confidence": "HIGH" }
+    },
+    {
+      "name": { "value": "SUNITA DEVI", "confidence": "HIGH" },
+      "bookingStatus": { "value": "WL/1", "confidence": "HIGH" },
+      "currentStatus": { "value": "RAC/12", "confidence": "HIGH" }
+    }
+  ]
+}

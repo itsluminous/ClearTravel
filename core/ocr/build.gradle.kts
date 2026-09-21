@@ -12,6 +12,7 @@ android {
 
     defaultConfig {
         minSdk = 26
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     compileOptions {
@@ -56,4 +57,10 @@ dependencies {
     // else in this module is pure Kotlin tested as plain JUnit.
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.test.core.ktx)
+
+    // Device-only OCR capture harness (see androidTest/README): records the REAL ML Kit
+    // text of a ticket file so extractor fixtures can be built from it.
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.truth)
 }

@@ -12,13 +12,15 @@
       "name": { "value": "RAHUL SHARMA", "confidence": "HIGH" },
       "coach": { "value": "B4", "confidence": "MEDIUM" },
       "berth": { "value": "32", "confidence": "MEDIUM" },
-      "bookingStatus": { "value": "CNF/B4/32/LB", "confidence": "HIGH" }
+      "bookingStatus": { "value": "CNF/B4/32/LB", "confidence": "HIGH" },
+      "currentStatus": { "value": "CNF/B4/32/LB", "confidence": "HIGH" }
     },
     {
       "name": { "value": "PRIYA SHARMA", "confidence": "HIGH" },
       "coach": { "value": "B4", "confidence": "MEDIUM" },
       "berth": { "value": "33", "confidence": "MEDIUM" },
-      "bookingStatus": { "value": "CNF/B4/33/MB", "confidence": "HIGH" }
+      "bookingStatus": { "value": "CNF/B4/33/MB", "confidence": "HIGH" },
+      "currentStatus": { "value": "CNF/B4/33/MB", "confidence": "HIGH" }
     }
   ]
 }
