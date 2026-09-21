@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.scrape.RuleDrivenScrapeSession
 import com.itsluminous.cleartravel.core.scrape.ScrapeWebViewController
+import com.itsluminous.cleartravel.core.scrape.configureTouchScrolling
 import com.itsluminous.cleartravel.feature.flights.R
 
 /**
@@ -217,6 +218,8 @@ private fun PlainWebView(
                 settings.javaScriptEnabled = true
                 // Same D1 rationale as the scrape host: airline SPAs need localStorage.
                 settings.domStorageEnabled = true
+                // Same touch-scroll setup as the scrape hosts (core:scrape).
+                configureTouchScrolling()
                 webViewClient = WebViewClient()
                 loadUrl(url)
             }

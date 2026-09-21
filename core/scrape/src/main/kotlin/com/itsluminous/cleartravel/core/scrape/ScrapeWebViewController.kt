@@ -36,6 +36,8 @@ class ScrapeWebViewController(
         // Kept minimal on purpose: databaseEnabled (WebSQL) is deprecated/removed in
         // modern WebView and no recon'd site needed it or mixed content.
         webView.settings.domStorageEnabled = true
+        // Every Compose-hosted WebView gets the same touch-scroll setup (see there).
+        webView.configureTouchScrolling()
         webView.webViewClient =
             object : WebViewClient() {
                 override fun onPageFinished(

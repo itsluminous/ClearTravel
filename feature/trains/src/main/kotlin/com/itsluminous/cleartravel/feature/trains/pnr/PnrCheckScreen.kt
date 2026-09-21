@@ -52,10 +52,16 @@ internal fun PnrCheckScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(pnr) { viewModel.start(pnr) }
-    LaunchedEffect(state) {
-        val applied = state
-        if (applied is PnrCheckUiState.Applied) onApplied(applied.trainNumber)
+    // Start FIRST, then watch for completion in the same effect: the ViewModel is
+    // scoped to the Journeys back-stack entry and outlives this screen, so a
+    // stale `Applied` from an earlier check must never fire `onApplied` on
+    // re-entry (it used to close the screen — and chain a route fetch for the
+    // wrong train — before the page even loaded).
+    LaunchedEffect(pnr) {
+        viewModel.start(pnr)
+        viewModel.uiState.collect { current ->
+            if (current is PnrCheckUiState.Applied) onApplied(current.trainNumber)
+        }
     }
 
     Column(modifier = modifier.fillMaxSize()) {

@@ -54,10 +54,14 @@ internal fun RouteFetchScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(trainNumber) { viewModel.start(trainNumber) }
-    LaunchedEffect(state) {
-        val current = state
-        if (current is RouteFetchUiState.Applied) onApplied(current.stationCount)
+    // Start first, then observe within the same effect — the ViewModel outlives
+    // the screen, so a stale `Applied` must not complete a fresh fetch on entry
+    // (same hazard as the PNR check).
+    LaunchedEffect(trainNumber) {
+        viewModel.start(trainNumber)
+        viewModel.uiState.collect { current ->
+            if (current is RouteFetchUiState.Applied) onApplied(current.stationCount)
+        }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
