@@ -104,13 +104,14 @@ installable.
 
 From the on-device validation runs (`docs/validation/`):
 
-| | |
-|---|---|
-| Trips | ![Trips tab](docs/validation/02-trips-tab.png) |
-| Journeys | ![Journeys tab](docs/validation/03-journeys-tab.png) |
-| Checklist from preset | ![Checklist](docs/validation/07-checklist-from-preset.png) |
-| Dark theme | ![Dark theme](docs/validation/09-theme-dark.png) |
-| Ticket prefilled from SMS | ![Prefilled form](docs/validation/10-share-prefilled-form.png) |
-| Flight status extracted live | ![Flight sheet updated](docs/validation/24-flight-sheet-updated.png) |
-| Scrape failure UX (banner + retry) | ![Failure banner](docs/validation/22-ai-parsefail-banner.png) |
-| PNR check WebView | ![PNR WebView](docs/validation/25-pnr-webview-post-fix.png) |
+| Trips | Journeys | Checklist from preset |
+| :---: | :---: | :---: |
+| ![Trips tab](docs/validation/02-trips-tab.png) | ![Journeys tab](docs/validation/03-journeys-tab.png) | ![Checklist](docs/validation/07-checklist-from-preset.png) |
+
+| Train tickets | Offline train route | Ticket prefilled from SMS |
+| :---: | :---: | :---: |
+| ![Train ticket cards](docs/validation/26-trains-list-card-icons.png) | ![Offline route page](docs/validation/27-route-22346-offline.png) | ![Prefilled form](docs/validation/10-share-prefilled-form.png) |
+
+| Flight status extracted live | Scrape failure UX | PNR check WebView | Dark theme |
+| :---: | :---: | :---: | :---: |
+| ![Flight sheet updated](docs/validation/24-flight-sheet-updated.png) | ![Failure banner](docs/validation/22-ai-parsefail-banner.png) | ![PNR WebView](docs/validation/25-pnr-webview-post-fix.png) | ![Dark theme](docs/validation/09-theme-dark.png) |
