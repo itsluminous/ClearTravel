@@ -20,7 +20,7 @@ class RouteFetchViewModelTest {
 
     private val repository = FakeTrainRepository(now = { Fixtures.NOW })
 
-    /** In-test rule source carrying a minimal erail-route rule (same id + template). */
+    /** In-test rule source carrying minimal route rules (same ids + templates). */
     private class InlineRuleSource(
         private val files: Map<String, String>,
     ) : RuleSource {
@@ -29,22 +29,41 @@ class RouteFetchViewModelTest {
         override fun openRule(fileName: String): InputStream = files.getValue(fileName).byteInputStream()
     }
 
-    private fun registryWithRouteRule(): RuleRegistry =
+    private fun routeRuleJson(
+        id: String,
+        displayName: String,
+        urlTemplate: String,
+    ): String =
+        """
+        {
+          "id": "$id",
+          "displayName": "$displayName",
+          "version": 1,
+          "kind": "train",
+          "urlTemplate": "$urlTemplate",
+          "readySignal": { "jsCondition": "true" },
+          "extract": { "trainNumber": { "selector": "#x", "required": true } }
+        }
+        """.trimIndent()
+
+    private fun registryWithBothRules(): RuleRegistry =
         RuleRegistry(
             InlineRuleSource(
                 mapOf(
+                    "ixigo-route.json" to
+                        routeRuleJson("ixigo-route", "ixigo Train Route", "https://www.ixigo.com/trains/{trainNumber}"),
                     "erail-route.json" to
-                        """
-                        {
-                          "id": "erail-route",
-                          "displayName": "eRail.in Train Route",
-                          "version": 1,
-                          "kind": "train",
-                          "urlTemplate": "https://erail.in/train-enquiry/{trainNumber}",
-                          "readySignal": { "jsCondition": "true" },
-                          "extract": { "trainNumber": { "selector": "#x", "required": true } }
-                        }
-                        """.trimIndent(),
+                        routeRuleJson("erail-route", "eRail.in Train Route", "https://erail.in/train-enquiry/{trainNumber}"),
+                ),
+            ),
+        )
+
+    private fun registryWithIxigoOnly(): RuleRegistry =
+        RuleRegistry(
+            InlineRuleSource(
+                mapOf(
+                    "ixigo-route.json" to
+                        routeRuleJson("ixigo-route", "ixigo Train Route", "https://www.ixigo.com/trains/{trainNumber}"),
                 ),
             ),
         )
@@ -56,13 +75,13 @@ class RouteFetchViewModelTest {
             fields = mapOf("trainNumber" to "22346"),
             rows =
                 listOf(
-                    mapOf("stationName" to "Gomtinagar (Lucknow)", "arrival" to "First", "departure" to "15.20", "day" to "1"),
-                    mapOf("stationName" to "Patna Jn", "arrival" to "23.45", "departure" to "Last", "day" to "1"),
+                    mapOf("stationName" to "Gomati Nagar", "arrival" to "starts", "departure" to "15:20", "day" to "1"),
+                    mapOf("stationName" to "Patna Jn", "arrival" to "23:45", "departure" to "ends", "day" to "1"),
                 ),
         )
 
     @Test
-    fun `start without the rule stays RuleUnavailable`() {
+    fun `start without any route rule stays RuleUnavailable`() {
         val vm = RouteFetchViewModel(emptyRegistry(), repository)
 
         vm.start("22346")
@@ -71,14 +90,61 @@ class RouteFetchViewModelTest {
     }
 
     @Test
-    fun `start builds a running session with the train number expanded`() {
-        val vm = RouteFetchViewModel(registryWithRouteRule(), repository)
+    fun `start runs the ixigo PRIMARY source with the train number expanded`() {
+        val vm = RouteFetchViewModel(registryWithBothRules(), repository)
 
         vm.start("22346")
 
         val running = vm.uiState.value as RouteFetchUiState.Running
-        assertThat(running.session.startUrl).isEqualTo("https://erail.in/train-enquiry/22346")
+        assertThat(running.session.startUrl).isEqualTo("https://www.ixigo.com/trains/22346")
+        assertThat(running.sourceName).isEqualTo("ixigo Train Route")
+        assertThat(running.hasAlternateSource).isTrue()
         assertThat(running.attempt).isEqualTo(1)
+    }
+
+    @Test
+    fun `tryAlternateSource cycles to erail and back to ixigo`() {
+        val vm = RouteFetchViewModel(registryWithBothRules(), repository)
+        vm.start("22346")
+
+        vm.tryAlternateSource()
+        val erail = vm.uiState.value as RouteFetchUiState.Running
+        assertThat(erail.session.startUrl).isEqualTo("https://erail.in/train-enquiry/22346")
+        assertThat(erail.sourceName).isEqualTo("eRail.in Train Route")
+        assertThat(erail.attempt).isEqualTo(2)
+
+        vm.tryAlternateSource()
+        val backToIxigo = vm.uiState.value as RouteFetchUiState.Running
+        assertThat(backToIxigo.session.startUrl).isEqualTo("https://www.ixigo.com/trains/22346")
+    }
+
+    @Test
+    fun `single-rule build reports no alternate source and cycling is a no-op`() {
+        val vm = RouteFetchViewModel(registryWithIxigoOnly(), repository)
+        vm.start("22346")
+
+        val running = vm.uiState.value as RouteFetchUiState.Running
+        assertThat(running.hasAlternateSource).isFalse()
+
+        vm.tryAlternateSource()
+
+        assertThat(vm.uiState.value).isSameInstanceAs(running)
+    }
+
+    @Test
+    fun `retry re-runs the CURRENT source with a fresh session`() {
+        val vm = RouteFetchViewModel(registryWithBothRules(), repository)
+        vm.start("22346")
+        vm.tryAlternateSource()
+        val erail = vm.uiState.value as RouteFetchUiState.Running
+
+        vm.onParseFailed()
+        vm.retry()
+
+        val retried = vm.uiState.value as RouteFetchUiState.Running
+        assertThat(retried.session.startUrl).isEqualTo("https://erail.in/train-enquiry/22346")
+        assertThat(retried.attempt).isEqualTo(3)
+        assertThat(retried.session).isNotSameInstanceAs(erail.session)
     }
 
     @Test
@@ -86,14 +152,14 @@ class RouteFetchViewModelTest {
         runTest {
             val ticket = Fixtures.trainTicket()
             repository.seed(ticket, stops = listOf(Fixtures.trainRouteStop(ticketId = ticket.id, stationName = "Old Stop")))
-            val vm = RouteFetchViewModel(registryWithRouteRule(), repository)
+            val vm = RouteFetchViewModel(registryWithBothRules(), repository)
             vm.start("22346")
 
             vm.onExtracted(ticket.id, usableData())
 
             assertThat(vm.uiState.value).isEqualTo(RouteFetchUiState.Applied(stationCount = 2))
             val stored = repository.observeRouteStops(ticket.id).first()
-            assertThat(stored.map { it.stationName }).containsExactly("Gomtinagar (Lucknow)", "Patna Jn").inOrder()
+            assertThat(stored.map { it.stationName }).containsExactly("Gomati Nagar", "Patna Jn").inOrder()
             assertThat(stored[0].departure).isEqualTo("15:20")
         }
 
@@ -102,7 +168,7 @@ class RouteFetchViewModelTest {
         runTest {
             val ticket = Fixtures.trainTicket()
             repository.seed(ticket)
-            val vm = RouteFetchViewModel(registryWithRouteRule(), repository)
+            val vm = RouteFetchViewModel(registryWithBothRules(), repository)
             vm.start("22346")
             val running = vm.uiState.value as RouteFetchUiState.Running
 
@@ -111,24 +177,22 @@ class RouteFetchViewModelTest {
             val failed = vm.uiState.value as RouteFetchUiState.ParseFailed
             assertThat(failed.session).isSameInstanceAs(running.session)
             assertThat(failed.attempt).isEqualTo(running.attempt)
+            assertThat(failed.hasAlternateSource).isTrue()
             assertThat(repository.observeRouteStops(ticket.id).first()).isEmpty()
         }
 
     @Test
-    fun `parse failure keeps the session and retry rebuilds a fresh attempt`() =
+    fun `parse failure keeps the session and carries the source context`() =
         runTest {
-            val vm = RouteFetchViewModel(registryWithRouteRule(), repository)
+            val vm = RouteFetchViewModel(registryWithBothRules(), repository)
             vm.start("22346")
             val first = vm.uiState.value as RouteFetchUiState.Running
 
             vm.onParseFailed()
+
             val failed = vm.uiState.value as RouteFetchUiState.ParseFailed
             assertThat(failed.session).isSameInstanceAs(first.session)
-
-            vm.start("22346")
-            val retried = vm.uiState.value as RouteFetchUiState.Running
-            assertThat(retried.attempt).isEqualTo(2)
-            assertThat(retried.session).isNotSameInstanceAs(first.session)
+            assertThat(failed.sourceName).isEqualTo(first.sourceName)
         }
 
     @Test
@@ -136,7 +200,7 @@ class RouteFetchViewModelTest {
         runTest {
             val ticket = Fixtures.trainTicket()
             repository.seed(ticket)
-            val vm = RouteFetchViewModel(registryWithRouteRule(), repository)
+            val vm = RouteFetchViewModel(registryWithBothRules(), repository)
             vm.start("22346")
 
             vm.uiState.test {

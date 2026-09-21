@@ -25,6 +25,11 @@ enum class TrainListFilter { ACTIVE, ARCHIVED }
 data class TrainTicketCard(
     val ticket: TrainTicket,
     val passengers: List<TrainPassenger>,
+    /**
+     * True when a route is stored in Room — drives the card's route action:
+     * offline route page when true, the WebView fetch flow when false (ADR-019).
+     */
+    val hasRoute: Boolean = false,
 )
 
 data class TrainListUiState(
@@ -70,8 +75,15 @@ class TrainListViewModel
             if (tickets.isEmpty()) return flowOf(emptyList())
             val perTicket =
                 tickets.map { ticket ->
-                    repository.observePassengers(ticket.id).map { passengers ->
-                        TrainTicketCard(ticket = ticket, passengers = passengers)
+                    combine(
+                        repository.observePassengers(ticket.id),
+                        repository.observeRouteStops(ticket.id),
+                    ) { passengers, stops ->
+                        TrainTicketCard(
+                            ticket = ticket,
+                            passengers = passengers,
+                            hasRoute = stops.isNotEmpty(),
+                        )
                     }
                 }
             return combine(perTicket) { it.toList() }

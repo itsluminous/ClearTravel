@@ -53,6 +53,51 @@ class TrainListViewModelTest {
         }
 
     @Test
+    fun `card hasRoute reflects stored route stops for the route action (ADR-019)`() =
+        runTest {
+            val withRoute = Fixtures.trainTicket(pnr = "1111111111")
+            val withoutRoute = Fixtures.trainTicket(pnr = "2222222222")
+            repository.seed(
+                withRoute,
+                stops =
+                    listOf(
+                        Fixtures.trainRouteStop(ticketId = withRoute.id, sortOrder = 0),
+                        Fixtures.trainRouteStop(ticketId = withRoute.id, sortOrder = 1),
+                    ),
+            )
+            repository.seed(withoutRoute)
+            val vm = viewModel()
+
+            vm.uiState.test {
+                val state = expectMostRecentItem()
+                val byId = state.cards.associateBy { it.ticket.id }
+                // hasRoute=true → the card's route icon opens the OFFLINE page;
+                // hasRoute=false → it opens the WebView fetch flow directly.
+                assertThat(byId.getValue(withRoute.id).hasRoute).isTrue()
+                assertThat(byId.getValue(withoutRoute.id).hasRoute).isFalse()
+            }
+        }
+
+    @Test
+    fun `hasRoute updates reactively after a route fetch writes stops`() =
+        runTest {
+            val ticket = Fixtures.trainTicket()
+            repository.seed(ticket)
+            val vm = viewModel()
+
+            vm.uiState.test {
+                assertThat(expectMostRecentItem().cards.single().hasRoute).isFalse()
+
+                repository.replaceRouteStops(
+                    ticket.id,
+                    listOf(Fixtures.trainRouteStop(ticketId = ticket.id)),
+                )
+
+                assertThat(expectMostRecentItem().cards.single().hasRoute).isTrue()
+            }
+        }
+
+    @Test
     fun `archived tickets are hidden from the active list`() =
         runTest {
             repository.seed(Fixtures.trainTicket(archived = true))

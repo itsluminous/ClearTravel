@@ -85,7 +85,7 @@ internal fun RouteFetchScreen(
                 }
             }
             is RouteFetchUiState.Running -> {
-                Banner(text = stringResource(R.string.trains_route_fetch_instructions))
+                Banner(text = stringResource(R.string.trains_route_fetch_instructions, current.sourceName))
                 RouteWebView(
                     session = current.session,
                     attempt = current.attempt,
@@ -96,8 +96,13 @@ internal fun RouteFetchScreen(
             }
             is RouteFetchUiState.ParseFailed -> {
                 Banner(text = stringResource(R.string.trains_route_fetch_parse_failed)) {
-                    TextButton(onClick = { viewModel.start(trainNumber) }) {
+                    TextButton(onClick = viewModel::retry) {
                         Text(stringResource(R.string.trains_route_fetch_retry))
+                    }
+                    if (current.hasAlternateSource) {
+                        TextButton(onClick = viewModel::tryAlternateSource) {
+                            Text(stringResource(R.string.trains_route_fetch_alternate))
+                        }
                     }
                     TextButton(onClick = onClose) {
                         Text(stringResource(R.string.trains_route_fetch_close))
@@ -112,9 +117,7 @@ internal fun RouteFetchScreen(
                     modifier = Modifier.weight(1f),
                 )
             }
-            is RouteFetchUiState.Applied -> {
-                Banner(text = stringResource(R.string.trains_route_fetch_instructions))
-            }
+            is RouteFetchUiState.Applied -> Unit
         }
     }
 }

@@ -74,7 +74,7 @@
     <string name="trains_detail_last_fetched">Status checked %1$s</string>
     <string name="trains_detail_never_fetched">Status never checked</string>
     <string name="trains_detail_check_status">Check PNR status</string>
-    <string name="trains_detail_fetch_route">Fetch route</string>
+    <string name="trains_detail_view_route">View route</string>
     <string name="trains_detail_unconfirmed_hint">Seats not confirmed yet — check again closer to your journey</string>
     <string name="trains_detail_edit">Edit</string>
     <string name="trains_detail_archive">Archive</string>
@@ -98,12 +98,26 @@
     <string name="trains_pnr_check_loading">Opening Indian Railways PNR enquiry…</string>
 
     <string name="trains_route_fetch_title">Fetch train route</string>
-    <string name="trains_route_fetch_instructions">Loading the schedule from eRail.in — no input needed, the app reads the route automatically.</string>
+    <string name="trains_route_fetch_instructions">Loading the schedule from %1$s — no input needed, the app reads the route automatically.</string>
     <string name="trains_route_fetch_close">Close</string>
     <string name="trains_route_fetch_retry">Retry</string>
+    <string name="trains_route_fetch_alternate">Try another source</string>
     <string name="trains_route_fetch_applied">%1$d stations loaded</string>
     <string name="trains_route_fetch_parse_failed">Couldn\'t read the route — your data is unchanged</string>
     <string name="trains_route_fetch_rule_missing">The train route rule isn\'t available on this build</string>
+
+    <string name="trains_route_title">Train route</string>
+    <string name="trains_route_close">Back</string>
+    <string name="trains_route_refresh">Refresh route from the web</string>
+    <string name="trains_route_day_header">Day %1$d</string>
+    <string name="trains_route_stop_halt">%1$d min halt</string>
+    <string name="trains_route_last_fetched">Route fetched %1$s</string>
+    <string name="trains_route_empty_title">No route saved yet</string>
+    <string name="trains_route_empty_message">Fetch the route once and it stays available offline.</string>
+    <string name="trains_route_empty_fetch">Fetch route</string>
+
+    <string name="trains_card_check_status">Check PNR status</string>
+    <string name="trains_card_view_route">Train route</string>
 
     <string name="trains_shared_text_title">Ticket shared with ClearTravel</string>
 </resources>

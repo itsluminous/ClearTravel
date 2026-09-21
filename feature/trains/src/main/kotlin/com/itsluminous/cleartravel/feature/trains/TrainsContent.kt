@@ -27,6 +27,7 @@ import com.itsluminous.cleartravel.feature.trains.list.TrainListScreen
 import com.itsluminous.cleartravel.feature.trains.list.TrainListViewModel
 import com.itsluminous.cleartravel.feature.trains.pnr.PnrCheckScreen
 import com.itsluminous.cleartravel.feature.trains.route.RouteFetchScreen
+import com.itsluminous.cleartravel.feature.trains.route.TrainRouteScreen
 import kotlinx.coroutines.launch
 
 /** Where a form session got its initial content from. */
@@ -60,6 +61,12 @@ private sealed interface TrainsScreen {
     ) : TrainsScreen
 
     data class RouteFetch(
+        val ticketId: String,
+        val trainNumber: String,
+    ) : TrainsScreen
+
+    /** The OFFLINE route page (ADR-019) — renders the stored route from Room. */
+    data class RouteView(
         val ticketId: String,
         val trainNumber: String,
     ) : TrainsScreen
@@ -127,6 +134,25 @@ fun TrainsContent(
                     state = listState,
                     onFilterChange = listViewModel::setFilter,
                     onTicketClick = { ticket -> detailTicketId = ticket.id },
+                    onCheckStatus = { ticket ->
+                        screen = TrainsScreen.PnrCheck(ticketId = ticket.id, pnr = ticket.pnr)
+                    },
+                    onViewRoute = { card ->
+                        // Offline route page when a route is stored; the WebView
+                        // fetch flow directly otherwise (ADR-019).
+                        screen =
+                            if (card.hasRoute) {
+                                TrainsScreen.RouteView(
+                                    ticketId = card.ticket.id,
+                                    trainNumber = card.ticket.trainNumber,
+                                )
+                            } else {
+                                TrainsScreen.RouteFetch(
+                                    ticketId = card.ticket.id,
+                                    trainNumber = card.ticket.trainNumber,
+                                )
+                            }
+                    },
                     onAdd = { choice ->
                         when (choice) {
                             is AddChoice.Manual -> formViewModel.startBlank()
@@ -169,15 +195,30 @@ fun TrainsContent(
                     ticketId = current.ticketId,
                     trainNumber = current.trainNumber,
                     onApplied = { stationCount ->
-                        screen = TrainsScreen.List
-                        // Reopen the detail sheet so the freshly loaded route is
-                        // immediately visible under it.
-                        detailTicketId = current.ticketId
+                        // Land on the OFFLINE route page so the freshly fetched
+                        // route is immediately visible from Room (ADR-019).
+                        screen =
+                            TrainsScreen.RouteView(
+                                ticketId = current.ticketId,
+                                trainNumber = current.trainNumber,
+                            )
                         scope.launch {
                             snackbarHostState.showSnackbar(
                                 context.getString(R.string.trains_route_fetch_applied, stationCount),
                             )
                         }
+                    },
+                    onClose = { screen = TrainsScreen.List },
+                )
+            is TrainsScreen.RouteView ->
+                TrainRouteScreen(
+                    ticketId = current.ticketId,
+                    onRefresh = {
+                        screen =
+                            TrainsScreen.RouteFetch(
+                                ticketId = current.ticketId,
+                                trainNumber = current.trainNumber,
+                            )
                     },
                     onClose = { screen = TrainsScreen.List },
                 )
@@ -194,15 +235,24 @@ fun TrainsContent(
                         screen = TrainsScreen.PnrCheck(ticketId = ticket.id, pnr = ticket.pnr)
                     }
                 },
-                onFetchRoute = {
+                onViewRoute = {
                     val ticket = detailState.ticket
                     if (ticket != null && ticket.trainNumber.isNotBlank()) {
                         detailTicketId = null
+                        // Same conditional as the card action (ADR-019): offline
+                        // page when a route is stored, fetch flow otherwise.
                         screen =
-                            TrainsScreen.RouteFetch(
-                                ticketId = ticket.id,
-                                trainNumber = ticket.trainNumber,
-                            )
+                            if (detailState.routeStops.isNotEmpty()) {
+                                TrainsScreen.RouteView(
+                                    ticketId = ticket.id,
+                                    trainNumber = ticket.trainNumber,
+                                )
+                            } else {
+                                TrainsScreen.RouteFetch(
+                                    ticketId = ticket.id,
+                                    trainNumber = ticket.trainNumber,
+                                )
+                            }
                     }
                 },
                 onEdit = {

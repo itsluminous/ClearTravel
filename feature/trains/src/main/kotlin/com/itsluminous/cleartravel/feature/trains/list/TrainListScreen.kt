@@ -18,6 +18,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Train
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
@@ -44,6 +46,7 @@ import com.itsluminous.cleartravel.core.designsystem.component.ChipRow
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
+import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainTicket
 import com.itsluminous.cleartravel.feature.trains.R
@@ -75,6 +78,8 @@ internal fun TrainListScreen(
     state: TrainListUiState,
     onFilterChange: (TrainListFilter) -> Unit,
     onTicketClick: (TrainTicket) -> Unit,
+    onCheckStatus: (TrainTicket) -> Unit,
+    onViewRoute: (TrainTicketCard) -> Unit,
     onAdd: (AddChoice) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -119,7 +124,12 @@ internal fun TrainListScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(state.cards, key = { it.ticket.id }) { card ->
-                        TrainTicketCardItem(card = card, onClick = { onTicketClick(card.ticket) })
+                        TrainTicketCardItem(
+                            card = card,
+                            onClick = { onTicketClick(card.ticket) },
+                            onCheckStatus = { onCheckStatus(card.ticket) },
+                            onViewRoute = { onViewRoute(card) },
+                        )
                     }
                 }
             }
@@ -231,6 +241,8 @@ private fun PasteTextDialog(
 private fun TrainTicketCardItem(
     card: TrainTicketCard,
     onClick: () -> Unit,
+    onCheckStatus: () -> Unit,
+    onViewRoute: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val ticket = card.ticket
@@ -246,6 +258,21 @@ private fun TrainTicketCardItem(
                     text = stringResource(R.string.trains_card_archived_badge),
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            // Direct card actions (ADR-019): PNR refresh + route, no sheet detour.
+            ExplainableIcon(
+                icon = Icons.Filled.Refresh,
+                explanationRes = R.string.trains_card_check_status,
+                targetSize = 40.dp,
+                onClick = onCheckStatus,
+            )
+            if (ticket.trainNumber.isNotBlank()) {
+                ExplainableIcon(
+                    icon = Icons.Filled.Place,
+                    explanationRes = R.string.trains_card_view_route,
+                    targetSize = 40.dp,
+                    onClick = onViewRoute,
                 )
             }
         }

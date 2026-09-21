@@ -44,7 +44,7 @@ internal fun TrainDetailSheet(
     state: TrainDetailUiState,
     onDismiss: () -> Unit,
     onCheckStatus: () -> Unit,
-    onFetchRoute: () -> Unit,
+    onViewRoute: () -> Unit,
     onEdit: () -> Unit,
     onArchiveToggle: () -> Unit,
     onDelete: () -> Unit,
@@ -134,8 +134,8 @@ internal fun TrainDetailSheet(
                 Text(stringResource(R.string.trains_detail_check_status))
             }
             if (ticket.trainNumber.isNotBlank()) {
-                OutlinedButton(onClick = onFetchRoute, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.trains_detail_fetch_route))
+                OutlinedButton(onClick = onViewRoute, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.trains_detail_view_route))
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {

@@ -6,6 +6,7 @@ import com.itsluminous.cleartravel.core.data.repository.TrainRepository
 import com.itsluminous.cleartravel.core.scrape.RuleDrivenScrapeSession
 import com.itsluminous.cleartravel.core.scrape.RuleRegistry
 import com.itsluminous.cleartravel.core.scrape.ScrapeParams
+import com.itsluminous.cleartravel.core.scrape.ScrapeRule
 import com.itsluminous.cleartravel.core.scrape.ScrapedData
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +17,7 @@ import javax.inject.Inject
 
 /** The route-fetch screen's state machine (mirrors the PNR check's shape). */
 sealed interface RouteFetchUiState {
-    /** The `erail-route` rule is missing from this build — cannot scrape. */
+    /** No route rule is present in this build — cannot scrape. */
     data object RuleUnavailable : RouteFetchUiState
 
     /**
@@ -26,12 +27,18 @@ sealed interface RouteFetchUiState {
     data class Running(
         val session: RuleDrivenScrapeSession,
         val attempt: Int,
+        /** The current source's display name (e.g. "ixigo Train Route"). */
+        val sourceName: String,
+        /** True when another route source exists to cycle to on failure. */
+        val hasAlternateSource: Boolean,
     ) : RouteFetchUiState
 
     /** Extraction failed — keep showing the raw page with a banner + retry/close. */
     data class ParseFailed(
         val session: RuleDrivenScrapeSession,
         val attempt: Int,
+        val sourceName: String,
+        val hasAlternateSource: Boolean,
     ) : RouteFetchUiState
 
     /** The route was parsed and written to Room — host closes with a snackbar. */
@@ -41,13 +48,14 @@ sealed interface RouteFetchUiState {
 }
 
 /**
- * Drives the 'Fetch route' flow (ADR-018): the erail.in schedule page needs NO user
- * interaction (direct GET, no captcha, no consent banner — recon 2026-09-21), so the
- * whole flow is hands-free: load → readySignal → extract → pure [RouteMapper] →
- * `TrainRepository.replaceRouteStops` → close. The WebView stays visible while it
- * runs (same host pattern as the PNR check); `NeedsUserAction` never fires an
- * instruction here — there is nothing for the user to do — and on `ParseFailed`
- * the raw page stays visible with a retry (spec fallback).
+ * Drives the 'Fetch route' flow (ADR-018/ADR-019): both route sources are direct-GET
+ * schedule pages needing NO user interaction (no captcha, no consent wall — recon
+ * 2026-09-21), so the whole flow is hands-free: load → readySignal → extract → pure
+ * [RouteMapper] → `TrainRepository.replaceRouteStops` → close. Sources are tried in
+ * [RULE_IDS] priority order — ixigo PRIMARY (day column + richer data), erail.in
+ * fallback — and on ParseFailed the banner offers 'Try another source' which cycles
+ * to the next rule (ADR-019). The WebView stays visible while it runs (same host
+ * pattern as the PNR check).
  */
 @HiltViewModel
 class RouteFetchViewModel
@@ -59,15 +67,38 @@ class RouteFetchViewModel
         private val state = MutableStateFlow<RouteFetchUiState>(RouteFetchUiState.RuleUnavailable)
         val uiState: StateFlow<RouteFetchUiState> = state.asStateFlow()
 
+        private var rules: List<ScrapeRule> = emptyList()
+        private var ruleIndex = 0
+        private var trainNumber = ""
         private var attempt = 0
 
-        /** Builds a fresh scrape session for [trainNumber]; also the retry action. */
+        /** Entry point: (re)starts the flow from the PRIMARY source. */
         fun start(trainNumber: String) {
-            val rule = registry.ruleById(RULE_ID)
-            if (rule == null) {
+            this.trainNumber = trainNumber
+            rules = RULE_IDS.mapNotNull(registry::ruleById)
+            ruleIndex = 0
+            if (rules.isEmpty()) {
                 state.value = RouteFetchUiState.RuleUnavailable
                 return
             }
+            launchAttempt()
+        }
+
+        /** Re-runs the CURRENT source with a fresh WebView. */
+        fun retry() {
+            if (rules.isEmpty()) return
+            launchAttempt()
+        }
+
+        /** Cycles to the next source in priority order and runs it (ADR-019). */
+        fun tryAlternateSource() {
+            if (rules.size < 2) return
+            ruleIndex = (ruleIndex + 1) % rules.size
+            launchAttempt()
+        }
+
+        private fun launchAttempt() {
+            val rule = rules[ruleIndex]
             attempt += 1
             state.value =
                 RouteFetchUiState.Running(
@@ -77,6 +108,8 @@ class RouteFetchViewModel
                             params = ScrapeParams(trainNumber = trainNumber),
                         ),
                     attempt = attempt,
+                    sourceName = rule.displayName,
+                    hasAlternateSource = rules.size > 1,
                 )
         }
 
@@ -104,11 +137,18 @@ class RouteFetchViewModel
         fun onParseFailed() {
             val current = state.value
             if (current is RouteFetchUiState.Running) {
-                state.value = RouteFetchUiState.ParseFailed(session = current.session, attempt = current.attempt)
+                state.value =
+                    RouteFetchUiState.ParseFailed(
+                        session = current.session,
+                        attempt = current.attempt,
+                        sourceName = current.sourceName,
+                        hasAlternateSource = current.hasAlternateSource,
+                    )
             }
         }
 
         companion object {
-            const val RULE_ID = "erail-route"
+            /** Route sources in priority order — ixigo PRIMARY, erail fallback (ADR-019). */
+            val RULE_IDS = listOf("ixigo-route", "erail-route")
         }
     }
