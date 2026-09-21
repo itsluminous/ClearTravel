@@ -2,11 +2,11 @@
 <resources>
     <string name="trains_empty_title">No train journeys yet</string>
     <string name="trains_empty_message">Add a train ticket to track its PNR status, seats and schedule here.</string>
-    <string name="trains_empty_archive_title">No past journeys</string>
+    <string name="trains_empty_archive_title">No archived journeys</string>
     <string name="trains_empty_archive_message">Past train journeys you archive will show up here.</string>
 
     <string name="trains_filter_active">Active</string>
-    <string name="trains_filter_archived">Past</string>
+    <string name="trains_filter_archived">Archived</string>
 
     <string name="trains_add_ticket">Add train ticket</string>
     <string name="trains_add_manual">Manual entry</string>
@@ -24,7 +24,7 @@
     <string name="trains_card_route">%1$s → %2$s</string>
     <string name="trains_card_last_fetched">Status checked %1$s</string>
     <string name="trains_card_never_fetched">Status never checked</string>
-    <string name="trains_card_archived_badge">Past</string>
+    <string name="trains_card_archived_badge">Archived</string>
     <string name="trains_card_band_date_time">%1$s %2$s</string>
     <string name="trains_card_band_no_date">Date not set</string>
     <string name="trains_card_untitled">Train</string>

@@ -6,9 +6,9 @@
     <string name="itinerary_trips_title">Trips</string>
     <string name="itinerary_add_trip">Add trip</string>
     <string name="itinerary_filter_active">Active</string>
-    <string name="itinerary_filter_archived">Past</string>
-    <string name="itinerary_empty_archived_title">No past trips</string>
-    <string name="itinerary_empty_archived_message">Past trips appear here.</string>
+    <string name="itinerary_filter_archived">Archived</string>
+    <string name="itinerary_empty_archived_title">No archived trips</string>
+    <string name="itinerary_empty_archived_message">Archived trips appear here.</string>
     <string name="itinerary_trip_date_range">%1$s – %2$s</string>
     <string name="itinerary_edit_trip">Edit trip</string>
     <string name="itinerary_archive_trip">Archive trip</string>

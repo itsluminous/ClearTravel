@@ -2,12 +2,12 @@
 <resources>
     <string name="flights_empty_title">No flight journeys yet</string>
     <string name="flights_empty_message">Add a flight or import a boarding pass to track status, gate and baggage belt here.</string>
-    <string name="flights_empty_archived_title">No past flights</string>
-    <string name="flights_empty_archived_message">Past flights appear here.</string>
+    <string name="flights_empty_archived_title">No archived flights</string>
+    <string name="flights_empty_archived_message">Past flights you archive will appear here.</string>
 
     <!-- List -->
     <string name="flights_filter_active">Active</string>
-    <string name="flights_filter_archived">Past</string>
+    <string name="flights_filter_archived">Archived</string>
     <string name="flights_add">Add flight</string>
     <string name="flights_add_sheet_title">Add a flight</string>
     <string name="flights_add_manual">Enter manually</string>
