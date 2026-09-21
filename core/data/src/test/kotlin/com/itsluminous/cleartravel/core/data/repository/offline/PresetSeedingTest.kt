@@ -6,6 +6,7 @@ import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.data.preset.AssetBuiltInPresetSource
 import com.itsluminous.cleartravel.core.data.preset.BuiltInPresetsParser
 import com.itsluminous.cleartravel.core.database.ClearTravelDatabase
+import com.itsluminous.cleartravel.core.model.ChecklistPresetItem
 import com.itsluminous.cleartravel.core.model.EntityIds
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.core.testing.inMemoryDatabase
@@ -119,5 +120,38 @@ class PresetSeedingTest {
             val names = repository.observePresets().first().map { it.name }
             assertThat(names).contains("My trek")
             assertThat(names).doesNotContain("Trek")
+        }
+
+    @Test
+    fun `re-seeding keeps item edits on a built-in preset (renamed, removed, added, reordered)`() =
+        runTest {
+            repository.seedBuiltInPresets()
+            val trek = repository.observePresets().first().first { it.name == "Trek" }
+            val original = repository.getItems(trek.id)
+            val first = original[0]
+            val second = original[1]
+            // Rename the first item, delete the second, append a new one, and swap the
+            // order of the two remaining leading rows (ADR-021 editing paths).
+            repository.saveItems(listOf(first.copy(text = "Edited ${first.text}")))
+            repository.deleteItem(second.id)
+            repository.saveItems(
+                listOf(ChecklistPresetItem(presetId = trek.id, text = "User added", sortOrder = original.size)),
+            )
+            val live = repository.getItems(trek.id)
+            repository.saveItems(
+                listOf(live[0].copy(sortOrder = live[1].sortOrder), live[1].copy(sortOrder = live[0].sortOrder)),
+            )
+            val expected = repository.getItems(trek.id).map { it.text }
+            assertThat(expected.take(2)).containsExactly(live[1].text, live[0].text).inOrder()
+
+            repository.seedBuiltInPresets()
+
+            val afterItems = repository.getItems(trek.id)
+            assertThat(afterItems.map { it.text }).containsExactlyElementsIn(expected).inOrder()
+            assertThat(afterItems.map { it.text }).contains("Edited ${first.text}")
+            assertThat(afterItems.map { it.text }).doesNotContain(second.text)
+            assertThat(afterItems.map { it.text }).contains("User added")
+            assertThat(afterItems).hasSize(original.size)
+            assertThat(repository.observePresets().first().count { it.id == trek.id }).isEqualTo(1)
         }
 }
