@@ -1043,3 +1043,17 @@ count is the whole truth, trivially reviewable and pinned per file — and
 `perBay`/`total` alone let the same engine cover berth and seating classes.
 Everything that decides (engine, resolver, parser, ViewModel projections) is
 pure and unit-tested; the UI only draws.
+
+**Addendum (on-device validation 2026-09-21) — `ixigo-route` v4.** The claim above
+that the coach selectors are layout-independent was wrong: the LIVE MOBILE page the
+WebView renders nests `.coach-boxes > .coach-box-cntr > (.coach-number, .coach-box)`
+where `.coach-box` holds the coach TYPE (`CC`, `EC`) and the code sits in the sibling
+`.coach-number`, while the desktop recon has `.coach-position-container >
+.coach-box-container > .coach-box` with the code as box text. v3 therefore stored
+ZERO coaches on a real fetch (route still fine — `minRows: 0` did its job). v4's
+row selector is the group `.coach-position-cntr .coach-box-container,
+.coach-position-cntr .coach-box-cntr` and the `code` field selects
+`.coach-number, .coach-box` (Jsoup `selectFirst` = first match in document order,
+so mobile rows yield the code, desktop rows the only box). Fixture `mobile.html` is
+the DevTools capture of that live page (`IxigoRouteMobileCoachesFixtureTest`), and
+the desktop-shaped `page.html` / `multiday.html` stay green, pinning BOTH layouts.

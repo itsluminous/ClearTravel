@@ -1,7 +1,7 @@
 {
   "id": "ixigo-route",
   "displayName": "ixigo Train Route",
-  "version": 3,
+  "version": 4,
   "kind": "train",
   "urlTemplate": "https://www.ixigo.com/trains/{trainNumber}",
   "dismissSelectors": [".download-banner-close-btn", ".app-download-popup .close-btn", ".close-banner"],
@@ -33,10 +33,10 @@
   },
   "extraRows": {
     "coaches": {
-      "rowSelector": ".coach-position-cntr .coach-position-container .coach-box",
+      "rowSelector": ".coach-position-cntr .coach-box-container, .coach-position-cntr .coach-box-cntr",
       "minRows": 0,
       "fields": {
-        "code": {}
+        "code": { "selector": ".coach-number, .coach-box" }
       }
     }
   }
