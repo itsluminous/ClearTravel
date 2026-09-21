@@ -8,6 +8,7 @@ class RuleExtractorTest {
         extract: Map<String, ExtractSpec> = emptyMap(),
         rows: RowExtract? = null,
         postProcess: Map<String, PostProcessHint> = emptyMap(),
+        extraRows: Map<String, RowExtract> = emptyMap(),
     ) = ScrapeRule(
         id = "test-rule",
         displayName = "Test",
@@ -18,7 +19,78 @@ class RuleExtractorTest {
         extract = extract,
         rows = rows,
         postProcess = postProcess,
+        extraRows = extraRows,
     )
+
+    private val stationRows =
+        RowExtract(
+            rowSelector = "table tr",
+            fields = mapOf("station" to ExtractSpec(selector = "td")),
+            minRows = 1,
+        )
+
+    private val coachRows =
+        RowExtract(
+            rowSelector = ".coaches .coach",
+            fields = mapOf("code" to ExtractSpec()),
+        )
+
+    @Test
+    fun `extraRows extracts a named secondary row-set next to the primary rows`() {
+        val html =
+            """
+            <table><tr><td>A</td></tr><tr><td>B</td></tr></table>
+            <div class="coaches"><div class="coach">EN </div><div class="coach">S1</div><div class="coach">B4</div></div>
+            """.trimIndent()
+
+        val result = RuleExtractor.extract(rule(rows = stationRows, extraRows = mapOf("coaches" to coachRows)), html)
+
+        val data = (result as ExtractionResult.Success).data
+        assertThat(data.rows.map { it["station"] }).containsExactly("A", "B").inOrder()
+        assertThat(data.extraRows.keys).containsExactly("coaches")
+        assertThat(data.extraRows.getValue("coaches").map { it["code"] }).containsExactly("EN", "S1", "B4").inOrder()
+    }
+
+    @Test
+    fun `extraRows section absent from the page yields an empty list and the primary rows still succeed`() {
+        val html = "<table><tr><td>A</td></tr><tr><td>B</td></tr></table>"
+
+        val result = RuleExtractor.extract(rule(rows = stationRows, extraRows = mapOf("coaches" to coachRows)), html)
+
+        val data = (result as ExtractionResult.Success).data
+        assertThat(data.rows).hasSize(2)
+        assertThat(data.extraRows).containsExactly("coaches", emptyList<Map<String, String>>())
+    }
+
+    @Test
+    fun `extraRows minRows is enforced per set with the set name in the reason`() {
+        val html = "<table><tr><td>A</td></tr></table>"
+        val strict = coachRows.copy(minRows = 1)
+
+        val result = RuleExtractor.extract(rule(rows = stationRows, extraRows = mapOf("coaches" to strict)), html)
+
+        val failure = result as ExtractionResult.Failure
+        assertThat(failure.reason).contains("Row-set 'coaches'")
+        assertThat(failure.reason).contains("at least 1")
+    }
+
+    @Test
+    fun `rules without extraRows produce an empty extraRows map`() {
+        val html = "<table><tr><td>A</td></tr></table>"
+
+        val result = RuleExtractor.extract(rule(rows = stationRows), html)
+
+        assertThat((result as ExtractionResult.Success).data.extraRows).isEmpty()
+    }
+
+    @Test
+    fun `extraRows alone count as extracted content`() {
+        val html = "<div class=\"coaches\"><div class=\"coach\">EN</div></div>"
+
+        val result = RuleExtractor.extract(rule(extraRows = mapOf("coaches" to coachRows)), html)
+
+        assertThat(result).isInstanceOf(ExtractionResult.Success::class.java)
+    }
 
     @Test
     fun `regex chain applies patterns sequentially taking group 1`() {

@@ -21,6 +21,7 @@ class RuleFixtureTest(
     data class Expected(
         val fields: Map<String, String> = emptyMap(),
         val rows: List<Map<String, String>> = emptyList(),
+        val extraRows: Map<String, List<Map<String, String>>> = emptyMap(),
     )
 
     @Test
@@ -57,6 +58,7 @@ class RuleFixtureTest(
         val data = (result as ExtractionResult.Success).data
         assertThat(data.fields).containsExactlyEntriesIn(expected.fields)
         assertThat(data.rows).isEqualTo(expected.rows)
+        assertThat(data.extraRows).isEqualTo(expected.extraRows)
     }
 
     companion object {

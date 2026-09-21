@@ -47,6 +47,37 @@ class IxigoRouteMultiDayFixtureTest {
     }
 
     @Test
+    fun `coach composition extracts as the coaches extraRows set in rake order`() {
+        val coaches = extract().extraRows.getValue("coaches").map { it.getValue("code") }
+
+        // Real 13151 capture (docs/recon/ixigo-13151.html): 20 coaches, engine first,
+        // mixed GN/SL/pantry/3A/2A with duplicated GN codes at both ends (ADR-022).
+        assertThat(coaches)
+            .containsExactly(
+                "EN",
+                "GN",
+                "GN",
+                "S1",
+                "S2",
+                "S3",
+                "S4",
+                "S5",
+                "S6",
+                "S7",
+                "PC",
+                "M1",
+                "B1",
+                "B2",
+                "B3",
+                "B4",
+                "B5",
+                "A1",
+                "GN",
+                "GN",
+            ).inOrder()
+    }
+
+    @Test
     fun `train header fields parse from the plain name-then-number h1`() {
         val data = extract()
 

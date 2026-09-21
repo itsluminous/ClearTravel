@@ -52,6 +52,15 @@ data class ScrapeRule(
     val extract: Map<String, ExtractSpec> = emptyMap(),
     /** Repeating-row extraction (e.g. one row per passenger). */
     val rows: RowExtract? = null,
+    /**
+     * ADDITIONAL named row-sets from the SAME page (ADR-022), e.g. a route page's
+     * `coaches` list next to its station [rows]. Each entry is evaluated exactly like
+     * [rows] and lands in `ScrapedData.extraRows[name]`; a set that matches nothing
+     * is an empty list (its own `minRows` decides whether that is a failure), so a
+     * page section that is absent from one layout never breaks the primary
+     * extraction. Additive: rules without this field behave exactly as before.
+     */
+    val extraRows: Map<String, RowExtract> = emptyMap(),
     /** Post-processing hints keyed by field name (dates/times normalization). */
     val postProcess: Map<String, PostProcessHint> = emptyMap(),
 )

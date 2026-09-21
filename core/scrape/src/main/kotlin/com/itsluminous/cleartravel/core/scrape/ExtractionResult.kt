@@ -7,6 +7,8 @@ package com.itsluminous.cleartravel.core.scrape
 data class ScrapedData(
     val fields: Map<String, String>,
     val rows: List<Map<String, String>> = emptyList(),
+    /** Named secondary row-sets declared by `ScrapeRule.extraRows` (ADR-022). */
+    val extraRows: Map<String, List<Map<String, String>>> = emptyMap(),
 )
 
 /**

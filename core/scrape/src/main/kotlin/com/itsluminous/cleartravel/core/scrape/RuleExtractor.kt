@@ -53,23 +53,28 @@ object RuleExtractor {
         val rows = mutableListOf<Map<String, String>>()
         val rowSpec = rule.rows
         if (rowSpec != null) {
-            for (rowElement in document.select(rowSpec.rowSelector)) {
-                rows +=
-                    rowSpec.fields.mapValues { (_, spec) ->
-                        evaluate(spec, rowElement)
-                    }
-            }
+            rows += extractRows(rowSpec, document)
             if (rows.size < rowSpec.minRows) {
                 return ExtractionResult.Failure(
-                    reason =
-                        "Expected at least ${rowSpec.minRows} row(s) for selector " +
-                            "'${rowSpec.rowSelector}' but found ${rows.size}",
+                    reason = tooFewRows(rowSpec, rows.size),
                     rawHtml = html,
                 )
             }
         }
 
-        if (fields.values.all(String::isBlank) && rows.isEmpty()) {
+        val extraRows = mutableMapOf<String, List<Map<String, String>>>()
+        for ((name, extraSpec) in rule.extraRows) {
+            val extracted = extractRows(extraSpec, document)
+            if (extracted.size < extraSpec.minRows) {
+                return ExtractionResult.Failure(
+                    reason = "Row-set '$name': " + tooFewRows(extraSpec, extracted.size),
+                    rawHtml = html,
+                )
+            }
+            extraRows[name] = extracted
+        }
+
+        if (fields.values.all(String::isBlank) && rows.isEmpty() && extraRows.values.all { it.isEmpty() }) {
             return ExtractionResult.Failure(
                 reason = "Nothing extracted — page markup likely changed",
                 rawHtml = html,
@@ -77,8 +82,22 @@ object RuleExtractor {
         }
 
         val processed = fields.mapValues { (name, value) -> postProcess(rule.postProcess[name], value) }
-        return ExtractionResult.Success(ScrapedData(fields = processed, rows = rows))
+        return ExtractionResult.Success(ScrapedData(fields = processed, rows = rows, extraRows = extraRows))
     }
+
+    /** One map per element matching the row selector, specs evaluated relative to it. */
+    private fun extractRows(
+        spec: RowExtract,
+        document: Element,
+    ): List<Map<String, String>> =
+        document.select(spec.rowSelector).map { rowElement ->
+            spec.fields.mapValues { (_, fieldSpec) -> evaluate(fieldSpec, rowElement) }
+        }
+
+    private fun tooFewRows(
+        spec: RowExtract,
+        found: Int,
+    ): String = "Expected at least ${spec.minRows} row(s) for selector '${spec.rowSelector}' but found $found"
 
     /** Resolves one [ExtractSpec] relative to [scope] (whole document or a row). */
     private fun evaluate(

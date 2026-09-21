@@ -963,3 +963,19 @@ passenger's berths highlighted), built on three additive contract changes:
    entity file as an empty list, so pre-ADR-022 backups import unchanged (tested)
    and coaches merge LWW like every other entity (tested).
    `Fixtures.trainCoach` builder added to `core:testing`.
+2. **Scrape schema: `extraRows`** (ADR-008 addition, additive). `ScrapeRule` gains
+   `extraRows: Map<String, RowExtract> = emptyMap()` and `ScrapedData` gains
+   `extraRows: Map<String, List<Map<String, String>>>`: named SECONDARY row-sets
+   from the same page, each evaluated exactly like `rows` (own selector, own
+   `minRows`). Rules without the field behave byte-for-byte as before (every
+   existing rule + fixture stays green; the harness now also compares `extraRows`,
+   defaulting to empty). `ixigo-route` v3 declares `coaches` →
+   `.coach-position-cntr .coach-position-container .coach-box`, field `code` = the
+   box text, `minRows: 0` so a layout without the coach section still yields the
+   route (the erail fallback has no coach data at all — that is fine). Fixtures:
+   the coach-position section from the REAL desktop captures
+   (`docs/recon/ixigo-22346.html` → `page.html`: `EN C1 C2 C3 C4 C5 E1 C6 C7`;
+   `ixigo-13151.html` → `multiday.html`: 20 coaches `EN GN GN S1…S7 PC M1 B1…B5
+   A1 GN GN`) is spliced verbatim into the existing mobile-layout fixtures — the
+   selectors are layout-independent, and whether the LIVE mobile page carries the
+   section is exactly what `minRows: 0` makes irrelevant for correctness.
