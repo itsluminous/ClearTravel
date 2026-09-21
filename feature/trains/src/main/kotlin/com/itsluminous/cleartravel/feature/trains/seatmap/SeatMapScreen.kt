@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -209,14 +210,24 @@ private fun PassengerChips(
     }
 }
 
-/** Engine glyph + one box per coach, position number beneath (reference strip). */
+/**
+ * Engine glyph + one box per coach, position number beneath (reference strip). The
+ * strip scrolls once so the ticket coach is visible — rakes run 20+ coaches and the
+ * booked one is rarely near the engine.
+ */
 @Composable
 private fun CoachStrip(
     items: List<CoachStripItem>,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val listState = rememberLazyListState()
+    val ticketIndex = items.indexOfFirst { it.isTicketCoach }
+    LaunchedEffect(ticketIndex, items.size) {
+        if (ticketIndex > 0) listState.animateScrollToItem((ticketIndex - 2).coerceAtLeast(0))
+    }
     LazyRow(
+        state = listState,
         modifier = modifier.fillMaxWidth(),
         contentPadding = PaddingValues(horizontal = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
