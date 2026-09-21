@@ -15,6 +15,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.IntentCompat
@@ -91,14 +92,19 @@ class MainActivity : ComponentActivity() {
             ClearTravelTheme(darkTheme = themeMode.resolveDarkTheme()) {
                 when (val entry = pendingEntry.value) {
                     // External entry: a feature's add form rendered over the shell
-                    // until saved/cancelled.
+                    // until saved/cancelled; keyed by nonce so a repeated request
+                    // re-creates (and re-prefills) the form.
                     is ExternalEntry.Trains ->
-                        Surface {
-                            TrainsExternalEntry(request = entry.request, onDone = { pendingEntry.value = null })
+                        key(entry.nonce) {
+                            Surface {
+                                TrainsExternalEntry(request = entry.request, onDone = { pendingEntry.value = null })
+                            }
                         }
                     is ExternalEntry.Flights ->
-                        Surface {
-                            FlightsExternalEntry(request = entry.request, onDone = { pendingEntry.value = null })
+                        key(entry.nonce) {
+                            Surface {
+                                FlightsExternalEntry(request = entry.request, onDone = { pendingEntry.value = null })
+                            }
                         }
                     null ->
                         ClearTravelApp(
@@ -160,14 +166,22 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Which feature form an external launch (share sheet / link) is hosting. */
+/**
+ * Which feature form an external launch (share sheet / link) is hosting. [nonce]
+ * makes two arrivals of the SAME request distinct so the hosted form restarts
+ * (e.g. the same PNR link tapped twice while the form is still open).
+ */
 private sealed interface ExternalEntry {
+    val nonce: Long
+
     data class Trains(
         val request: TrainsEntryRequest,
+        override val nonce: Long = System.nanoTime(),
     ) : ExternalEntry
 
     data class Flights(
         val request: FlightsEntryRequest,
+        override val nonce: Long = System.nanoTime(),
     ) : ExternalEntry
 }
 
