@@ -143,3 +143,28 @@ Check button is unconditional, and `applyStatusResult` re-merges passenger
 current-status by position on every apply. No code removal was needed; the detail
 sheet gained the unconfirmed-seat hint (`hasUnconfirmedSeat`) to make re-checking
 discoverable for WL/RAC tickets.
+
+## Train-route sources (2026-09-21 redesign wave, ADR-019)
+
+- **ixigo-route v1 (PRIMARY)** — built from the real captures
+  `docs/recon/ixigo-22346.html` / `ixigo-13151.html` (`docs/recon/ixigo-NOTES.md`).
+  Harness fixture = 22346; the 13151 multi-day capture is pinned by
+  `IxigoRouteMultiDayFixtureTest` (85 rows, day 1→2→3 at DDU/YJUD). Selector
+  landmines documented in ADR-019: descendant-only row selector (tbody div-wrap
+  quirk), name-then-number `h1`, unit-suffixed halt/distance cells.
+- **erail-route v2 (fallback)** — re-pointed at the MOBILE layout the in-app
+  WebView actually receives (`#divResult table.DataTable`, 6 columns, no
+  Day/Code/Halt), adopting a crashed validation run's live fix after its tests
+  passed. Day-awareness for this source now comes from `RouteMapper`'s
+  midnight-crossing inference.
+
+### TODO — live verification (next validation wave)
+
+- [ ] On-device run of the ixigo flow end-to-end (WebView UA may receive a
+      different ixigo layout than the desktop-ish recon capture — the erail
+      desktop/mobile split above is the cautionary tale). If the served DOM
+      differs, re-capture and bump `ixigo-route` to v2.
+- [ ] Confirm the invisible `booking-banner` never becomes visible on device;
+      if it does, verify `.close-banner` dismisses it.
+- [ ] Exercise "Try another source" live: force an ixigo parse failure and check
+      the erail fallback produces a day-inferred multi-day route.

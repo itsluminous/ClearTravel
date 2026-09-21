@@ -726,3 +726,74 @@ backup-format and Drive-engine changes for a strictly worse result. First-leg-pl
 hint multi-flight handling keeps the extractor honest about what a single
 `FlightJourney` row can represent while still telling the user the return leg was
 seen.
+
+## ADR-019: Train-route redesign — ixigo primary + erail fallback, offline route page, card actions
+
+**What.** Redesign of the train-route experience per user steering (2026-09-21):
+
+- **ixigo.com becomes the PRIMARY route source** (`ixigo-route` rule v1,
+  `https://www.ixigo.com/trains/{trainNumber}`), built from REAL captures of trains
+  22346 (7 stops, single day) and 13151 (85 stops, THREE running days) —
+  `docs/recon/ixigo-NOTES.md`. Direct GET, no captcha/consent/expander; the full
+  route (even 85 rows) renders in the initial HTML, so the hands-free flow of
+  ADR-018 is unchanged. Rule quirks: the row selector MUST use a descendant
+  combinator (`tbody tr`) because ixigo div-wraps each `<tr>` inside `<tbody>`
+  (React artifact — a child combinator matches zero rows); a defensive
+  `.close-banner` dismiss entry covers ixigo's currently-invisible app banner
+  (the engine only clicks visible matches, so it is a no-op today); `h1 span.name`
+  is name-then-number (`"Vande Bharat Exp 22346 Train"`), the opposite of erail.
+  The rule extracts `halt`/`distance` cells (unit-suffixed: `5min`, `127 km`) to
+  document the page shape, but they are not persisted (below). Multi-day is a
+  user requirement: the harness pins the 22346 fixture; a second fixture-only
+  test (`IxigoRouteMultiDayFixtureTest`) feeds the 13151 capture through the same
+  pure `RuleExtractor` path (the harness contract is one fixture pair per rule)
+  asserting all 85 rows and the day column's 1→2→3 progression at the exact
+  midnight-crossing stations (DDU, YJUD).
+- **erail.in stays as the FALLBACK** (`erail-route` v2). A crashed validation
+  run's live fix — adopted after verifying its tests green — showed erail serves
+  a MOBILE layout (`#divResult table.DataTable`, 6 columns) to the in-app WebView,
+  not the desktop table the original recon captured; the mobile layout has **no
+  Day/Code/Halt columns**. `RouteFetchViewModel` tries sources in priority order
+  (`RULE_IDS = [ixigo-route, erail-route]`); on ParseFailed the banner offers
+  "Try another source" which cycles to the next rule (and back), alongside Retry
+  (same source) — the simple cycling design over any automatic failover, keeping
+  the user in control of which site they are looking at.
+- **One `RouteMapper` serves both shapes** (their row keys overlap by design):
+  colon AND dot times; `starts`/`ends` AND `First`/`Last` end literals → "";
+  ixigo's `-` platform placeholder → "" ("platform when known"); `day` uses the
+  source column when a cell parses, and is otherwise **inferred per midnight
+  crossing** (a stop whose reference time regresses past the previous stop's
+  increments the running day) — this keeps the day-less erail mobile fallback
+  multi-day-correct and lets one malformed day cell carry the running day forward.
+- **OFFLINE route page** (`TrainRouteScreen`/`TrainRouteViewModel`): renders the
+  stored route purely from Room (`observeRouteStops`) — station list with
+  arrival/departure, day section headers when the journey spans days, platform +
+  derived halt per stop, journey duration and a "route fetched" line. The website
+  is opened ONLY to (re)fetch: the page's refresh action (and its empty-state
+  fetch button) navigate to the existing `RouteFetchScreen` WebView flow, whose
+  write lands back in Room and is picked up reactively. "Route fetched" uses the
+  newest stop's `updatedAt` (a `replaceRouteStops` batch shares one write stamp);
+  the ticket's `lastFetchedAt` keeps meaning "PNR checked" only.
+- **Schema decision: NO migration.** `TrainRouteStop` stays frozen (ADR-004) with
+  arrival/departure/platform/day/sortOrder. `halt` is DERIVED in the UI from the
+  arr/dep delta (`haltMinutes`, +24h wrap across midnight); `distance` is skipped.
+  An additive migration (halt/distance columns) was considered and rejected: it
+  would touch `core:database`, backup DTOs and merge mappers for data that is
+  fully derivable (halt) or cosmetic (distance) — revisit only if a coach-position
+  feature lands and needs real schema anyway.
+- **Card actions**: each train ticket card gains two `ExplainableIcon`s on its
+  right — refresh ("Check PNR status") opening the PNR check flow directly, and a
+  place pin ("Train route") opening the offline route page when a route is stored
+  (`TrainTicketCard.hasRoute`, live from `observeRouteStops`) or the fetch flow
+  directly otherwise. Card tap → detail sheet is unchanged; the sheet's "Fetch
+  route" action becomes "View route" with the same conditional. A successful
+  fetch now lands on the offline page (previously it reopened the detail sheet),
+  so the fetched route is immediately visible from Room.
+
+**Why.** ixigo wins primary on data richness (day column in the WebView-served
+layout — erail's mobile layout lost it — plus coach-position data for a future
+feature) with equal hands-free ergonomics; erail is kept because it costs one rule
+file + fixture and gives a one-tap escape hatch when ixigo's markup changes. The
+offline page enforces the offline-first rule for routes (the old flow re-opened the
+website every time the user wanted to LOOK at a route); deriving halt keeps the
+contract-frozen schema untouched at zero information loss.
