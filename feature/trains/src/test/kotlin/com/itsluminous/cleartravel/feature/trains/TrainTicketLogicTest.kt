@@ -160,4 +160,31 @@ class TrainTicketLogicTest {
 
         assertThat(hasUnconfirmedSeat(passengers)).isTrue()
     }
+
+    @Test
+    fun `halt derives from the arrival-departure delta`() {
+        val stop = Fixtures.trainRouteStop(arrival = "17:15", departure = "17:20")
+
+        assertThat(haltMinutes(stop)).isEqualTo(5)
+    }
+
+    @Test
+    fun `halt is null at route ends where a time is missing`() {
+        assertThat(haltMinutes(Fixtures.trainRouteStop(arrival = "", departure = "15:20"))).isNull()
+        assertThat(haltMinutes(Fixtures.trainRouteStop(arrival = "23:45", departure = ""))).isNull()
+    }
+
+    @Test
+    fun `halt crossing midnight wraps by a day`() {
+        val stop = Fixtures.trainRouteStop(arrival = "23:55", departure = "00:05")
+
+        assertThat(haltMinutes(stop)).isEqualTo(10)
+    }
+
+    @Test
+    fun `zero-minute halt reports zero not null`() {
+        val stop = Fixtures.trainRouteStop(arrival = "10:00", departure = "10:00")
+
+        assertThat(haltMinutes(stop)).isEqualTo(0)
+    }
 }

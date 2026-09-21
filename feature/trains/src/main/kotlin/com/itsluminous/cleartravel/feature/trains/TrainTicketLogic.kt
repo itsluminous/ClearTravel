@@ -56,6 +56,20 @@ fun journeyDuration(stops: List<TrainRouteStop>): Duration? {
 private fun parseStopTime(value: String): LocalTime? = runCatching { LocalTime.parse(value.trim(), STOP_TIME_FORMAT) }.getOrNull()
 
 /**
+ * Halt at a stop DERIVED from its arrival→departure delta (ADR-019): the frozen
+ * [TrainRouteStop] schema stores no halt column, so the route page computes it.
+ * Null when either time is missing/unparseable (route ends, bad data); a halt that
+ * crosses midnight wraps by +24h. Zero-minute halts return 0 — callers decide
+ * whether to display them.
+ */
+fun haltMinutes(stop: TrainRouteStop): Long? {
+    val arrival = parseStopTime(stop.arrival) ?: return null
+    val departure = parseStopTime(stop.departure) ?: return null
+    val minutes = Duration.between(arrival, departure).toMinutes()
+    return if (minutes < 0) minutes + MINUTES_PER_DAY else minutes
+}
+
+/**
  * True when any passenger's effective status (current status, falling back to the
  * booking status) is present but NOT confirmed — e.g. `WL 12`, `RAC 4`, `PQWL 3`.
  * Confirmed shapes start with `CNF` (`CNF`, `CNF/B4/32`); blank statuses (nothing

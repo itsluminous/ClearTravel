@@ -132,7 +132,7 @@ class RouteMapperTest {
     }
 
     @Test
-    fun `day column parses and non-numeric day defaults to 1`() {
+    fun `day column parses and a malformed day cell carries the running day forward`() {
         val data =
             ScrapedData(
                 fields = emptyMap(),
@@ -148,7 +148,8 @@ class RouteMapperTest {
 
         assertThat(stops[0].day).isEqualTo(1)
         assertThat(stops[1].day).isEqualTo(2)
-        assertThat(stops[2].day).isEqualTo(1)
+        // "??" doesn't parse — the stop keeps the running day instead of resetting.
+        assertThat(stops[2].day).isEqualTo(2)
     }
 
     @Test
@@ -205,5 +206,157 @@ class RouteMapperTest {
 
         assertThat(stops[2].platform).isEqualTo("7")
         assertThat(stops[6].platform).isEqualTo("8")
+    }
+
+    // ---- ixigo-route shape (PRIMARY source, ADR-019) --------------------------
+
+    /** Rows exactly as the `ixigo-route` rule emits them (train 22346 capture). */
+    private fun ixigoRow(
+        code: String,
+        name: String,
+        arrival: String,
+        departure: String,
+        halt: String,
+        distance: String,
+        platform: String,
+        day: String,
+    ): Map<String, String> =
+        mapOf(
+            "stationCode" to code,
+            "stationName" to name,
+            "arrival" to arrival,
+            "departure" to departure,
+            "halt" to halt,
+            "distance" to distance,
+            "platform" to platform,
+            "day" to day,
+        )
+
+    private fun ixigoFixtureData(): ScrapedData =
+        ScrapedData(
+            fields = mapOf("trainNumber" to "22346", "trainName" to "Vande Bharat Exp"),
+            rows =
+                listOf(
+                    ixigoRow("GTNR", "Gomati Nagar", "starts", "15:20", "-", "0", "2", "1"),
+                    ixigoRow("AY", "Ayodhya", "17:15", "17:20", "5min", "127 km", "1", "1"),
+                    ixigoRow("BSB", "Varanasi Jn", "19:50", "19:55", "5min", "316 km", "7", "1"),
+                    ixigoRow("DDU", "Dd Upadhyaya Jn", "20:45", "20:50", "5min", "333 km", "4", "1"),
+                    ixigoRow("BXR", "Buxar", "21:50", "21:52", "2min", "427 km", "1", "1"),
+                    ixigoRow("ARA", "Ara Jn", "22:33", "22:35", "2min", "495 km", "1", "1"),
+                    ixigoRow("PNBE", "Patna Jn", "23:45", "ends", "-", "544 km", "8", "1"),
+                ),
+        )
+
+    @Test
+    fun `ixigo fixture shape maps all seven stops with colon times kept`() {
+        val stops = RouteMapper.map(ticketId, ixigoFixtureData())!!
+
+        assertThat(stops).hasSize(7)
+        assertThat(stops[1].arrival).isEqualTo("17:15")
+        assertThat(stops[1].departure).isEqualTo("17:20")
+        assertThat(stops.map { it.sortOrder }).containsExactly(0, 1, 2, 3, 4, 5, 6).inOrder()
+    }
+
+    @Test
+    fun `ixigo starts and ends literals become empty times at the route ends`() {
+        val stops = RouteMapper.map(ticketId, ixigoFixtureData())!!
+
+        assertThat(stops.first().arrival).isEmpty()
+        assertThat(stops.first().departure).isEqualTo("15:20")
+        assertThat(stops.last().arrival).isEqualTo("23:45")
+        assertThat(stops.last().departure).isEmpty()
+    }
+
+    @Test
+    fun `ixigo dash platform placeholder maps to empty`() {
+        val data =
+            ScrapedData(
+                fields = emptyMap(),
+                rows =
+                    listOf(
+                        ixigoRow("GJD", "Gujhandi", "10:00", "10:02", "2min", "10 km", "-", "1"),
+                        ixigoRow("GAP", "Gurpa", "10:20", "10:22", "2min", "20 km", "3", "1"),
+                    ),
+            )
+
+        val stops = RouteMapper.map(ticketId, data)!!
+
+        assertThat(stops[0].platform).isEmpty()
+        assertThat(stops[1].platform).isEqualTo("3")
+    }
+
+    @Test
+    fun `ixigo multi-day rows keep the source day column 1 through 3`() {
+        val data =
+            ScrapedData(
+                fields = emptyMap(),
+                rows =
+                    listOf(
+                        ixigoRow("KOAA", "Kolkata Chitpur", "starts", "11:45", "-", "0", "1", "1"),
+                        ixigoRow("BBU", "Bhabua Road", "23:59", "00:01", "2min", "600 km", "1", "1"),
+                        ixigoRow("DDU", "Dd Upadhyaya Jn", "01:25", "01:35", "10min", "700 km", "4", "2"),
+                        ixigoRow("YJUD", "Yamunanagar Jud", "00:06", "00:08", "2min", "1500 km", "1", "3"),
+                        ixigoRow("JAT", "Jammu Tawi", "05:45", "ends", "-", "1800 km", "2", "3"),
+                    ),
+            )
+
+        val stops = RouteMapper.map(ticketId, data)!!
+
+        assertThat(stops.map { it.day }).containsExactly(1, 1, 2, 3, 3).inOrder()
+    }
+
+    // ---- day inference for the day-less erail mobile fallback (ADR-019) -------
+
+    /** Rows as the erail-route v2 rule emits them: NO day key at all. */
+    private fun erailMobileRow(
+        name: String,
+        arrival: String,
+        departure: String,
+    ): Map<String, String> =
+        mapOf(
+            "stationName" to name,
+            "arrival" to arrival,
+            "departure" to departure,
+            "distance" to "0",
+            "platform" to "1",
+        )
+
+    @Test
+    fun `day-less rows infer day increments at each midnight crossing`() {
+        val data =
+            ScrapedData(
+                fields = emptyMap(),
+                rows =
+                    listOf(
+                        erailMobileRow("Kolkata Chitpur", "First", "11.45"),
+                        erailMobileRow("Bhabua Road", "23.50", "23.52"),
+                        erailMobileRow("Dd Upadhyaya Jn", "01.25", "01.35"),
+                        erailMobileRow("Ludhiana Jn", "20.10", "20.20"),
+                        erailMobileRow("Yamunanagar Jud", "00.06", "00.08"),
+                        erailMobileRow("Jammu Tawi", "05.45", "Last"),
+                    ),
+            )
+
+        val stops = RouteMapper.map(ticketId, data)!!
+
+        assertThat(stops.map { it.day }).containsExactly(1, 1, 2, 2, 3, 3).inOrder()
+    }
+
+    @Test
+    fun `day-less same-day route stays day 1 throughout`() {
+        val data =
+            ScrapedData(
+                fields = emptyMap(),
+                rows =
+                    listOf(
+                        erailMobileRow("Gomtinagar (Lucknow)", "First", "15.20"),
+                        erailMobileRow("Varanasi Jn", "19.50", "19.55"),
+                        erailMobileRow("Patna Jn", "23.45", "Last"),
+                    ),
+            )
+
+        val stops = RouteMapper.map(ticketId, data)!!
+
+        assertThat(stops.map { it.day }).containsExactly(1, 1, 1).inOrder()
     }
 }
