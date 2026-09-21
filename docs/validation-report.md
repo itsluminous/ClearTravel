@@ -246,3 +246,87 @@ TrainsE2eTest / TripsE2eTest), BUILD SUCCESSFUL. Emulator killed after the run.
 | Booking-confirmation import | PASS — picker → OCR prefill → save → Documents row → viewer |
 | Unit tests | 563/563 |
 | Connected e2e | 4/4 |
+
+## Card redesign + share + file intake validation (2026-09-21, emulator Android_16_AOSP_Medium, API 36)
+
+Scope: ADR-020 — redesigned train ticket card, image + PNR-link share, PNR deep links,
+share-sheet file intake. Fresh install (`pm clear`), all UI assertions taken from
+`uiautomator dump` text (screenshots captured blind and downscaled to 800px, never
+opened by the validator).
+
+Gate: `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest`
+BUILD SUCCESSFUL — **601 unit tests, 0 failures, 0 skipped**. No fixes needed.
+
+### Card redesign
+
+Manual ticket PNR 8524567890 / train 22346 / Gomati Nagar → Patna Jn / passenger with
+booking status "RAC 10", no date. Trains list dump right after save: header band
+texts "Gomati Nagar", "Date not set", "Patna Jn" (`stationCode` passes bare names
+through); title "22346" (name blank → exactly the number); "PNR 8524567890";
+"Status never checked" (never fetched); pill **"RAC - 10"** (`passengerPillLabel`);
+and all four icon content-descs "Check PNR status", "Seat details", "Train route",
+"Share ticket". `35-card-redesign-list.png`.
+
+### Share (image + caption)
+
+Tap "Share ticket" → system chooser (`com.android.intentresolver/.ChooserActivity`)
+with heading **"Sharing image"** and the caption text
+"Check out my train ticket (PNR 8524567890): https://itsluminous.github.io/ClearTravel/pnr/8524567890";
+`dumpsys activity` shows the CHOOSER intent carrying `clip={text/uri-list {U(content)}}`;
+`run-as` lists `cache/share/ticket-8524567890.png` (40 218 B, header bytes = PNG
+IHDR 1080×523). ClearTravel itself is listed as a target (intake filter, by design).
+`36-share-chooser.png`.
+
+### PNR deep links
+
+- `am start -a VIEW -d https://itsluminous.github.io/ClearTravel/pnr/8553674906`
+  (implicit) → opens the default browser (WebView Browser Tester): expected, the
+  filter is **not autoVerify** (ADR-020). `pm query-activities … BROWSABLE` lists
+  `com.itsluminous.cleartravel.MainActivity` as a candidate; re-issued with the
+  package → "Add train ticket" form with PNR field "8553674906" and the
+  "Auto-filled from your ticket — review before saving" banner.
+  `37-deeplink-https-form.png`.
+- `cleartravel://pnr/8553674906` → same form, PNR prefilled, hot launch and cold
+  launch (after `force-stop`). `38-deeplink-custom-scheme-form.png`.
+
+### Share-sheet file intake
+
+Share-sheet visibility proof: `pm query-activities -a android.intent.action.SEND -t image/png`
+and `-t application/pdf` both list `com.itsluminous.cleartravel.MainActivity`
+(alongside Messaging / Bluetooth / Print); `text/plain` still resolves to the app.
+
+Verification paths used:
+1. **Shell path** (synthetic 200×120 PNG pushed to `/sdcard/Download`, MediaStore
+   `content://media/external/images/media/<id>` via
+   `am start -a SEND -t image/png --eu android.intent.extra.STREAM … --grant-read-uri-permission`)
+   → the **"What's this file?"** dialog appeared with the three options Train ticket /
+   Flight boarding pass / Flight booking confirmation + Cancel / Continue, no
+   preselection. Note: the shell (uid 2000) cannot actually grant MediaStore URIs
+   (`SecurityException: … has no access to content://media/…` in logcat), so the
+   probe saw an unreadable file — the dialog degraded correctly to "no suggestion"
+   and Train ticket → Continue opened a blank add form. `39-intake-dialog.png`.
+2. **Real share path** (Files app, `VIEW_DOWNLOADS`, long-press `card-share.png` — the
+   app's own share PNG copied out of its cache — → Share): the system sheet
+   ("Sharing image") lists **ClearTravel**; tapping it → dialog with "Train ticket"
+   radio **checked** and the **"Suggested"** label under it (OCR probe finished in
+   ~2 s); Continue → "Add train ticket" form with PNR **8524567890** read from the
+   image and the auto-filled banner. `41-files-app-share-sheet-cleartravel.png`,
+   `42-intake-dialog-suggested-train.png`, `43-intake-form-ocr-prefilled.png`.
+
+### Instrumented regression
+
+`connectedDebugAndroidTest`: **4/4 PASS** (ChecklistE2eTest / FlightsE2eTest /
+TrainsE2eTest / TripsE2eTest), BUILD SUCCESSFUL, no androidTest changes needed.
+Emulator killed after the run.
+
+| Check | Verdict |
+|---|---|
+| Card: band stations, title 22346, PNR line, RAC pill, 4 icon content-descs | PASS |
+| Share: chooser "Sharing image" + caption with PNR link, content URI clip, PNG in cache | PASS |
+| Deep link https (implicit → browser; app is a candidate; explicit → form w/ PNR) | PASS (browser default expected, no autoVerify) |
+| Deep link cleartravel:// hot + cold → form w/ PNR | PASS |
+| Share-sheet visibility (`query-activities` SEND image/png + application/pdf) | PASS |
+| Intake dialog 3 options (shell path, unreadable URI → no suggestion) | PASS |
+| Intake real share from Files app → Suggested Train ticket → OCR-prefilled form | PASS |
+| Unit tests | 601/601 |
+| Connected e2e | 4/4 |
