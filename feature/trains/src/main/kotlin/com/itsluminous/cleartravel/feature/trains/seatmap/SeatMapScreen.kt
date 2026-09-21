@@ -92,6 +92,9 @@ internal fun SeatMapScreen(
                     icon = Icons.Filled.Train,
                     title = stringResource(R.string.trains_seatmap_no_coaches_title),
                     message = stringResource(R.string.trains_seatmap_no_coaches_message),
+                    // EmptyState fills max size by default; bounded here so the fetch
+                    // button below stays on screen (validation 2026-09-21).
+                    modifier = Modifier.height(320.dp),
                 )
                 if (canFetch) {
                     Button(onClick = onFetch, modifier = Modifier.padding(top = 8.dp)) {
