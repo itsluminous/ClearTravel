@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "classCode": "3A",
+  "displayName": "AC 3 Tier",
+  "kind": "BERTH",
+  "total": 64,
+  "perBay": 8,
+  "note": "ICF AC 3-tier: 8 bays x 8, same bay shape as SL.",
+  "template": [
+    {
+      "offset": 0,
+      "type": "LOWER",
+      "row": 0,
+      "column": 0,
+      "block": "LEFT"
+    },
+    {
+      "offset": 1,
+      "type": "MIDDLE",
+      "row": 0,
+      "column": 1,
+      "block": "LEFT"
+    },
+    {
+      "offset": 2,
+      "type": "UPPER",
+      "row": 0,
+      "column": 2,
+      "block": "LEFT"
+    },
+    {
+      "offset": 3,
+      "type": "LOWER",
+      "row": 1,
+      "column": 0,
+      "block": "LEFT"
+    },
+    {
+      "offset": 4,
+      "type": "MIDDLE",
+      "row": 1,
+      "column": 1,
+      "block": "LEFT"
+    },
+    {
+      "offset": 5,
+      "type": "UPPER",
+      "row": 1,
+      "column": 2,
+      "block": "LEFT"
+    },
+    {
+      "offset": 6,
+      "type": "SIDE_LOWER",
+      "row": 0,
+      "column": 0,
+      "block": "RIGHT"
+    },
+    {
+      "offset": 7,
+      "type": "SIDE_UPPER",
+      "row": 1,
+      "column": 0,
+      "block": "RIGHT"
+    }
+  ]
+}

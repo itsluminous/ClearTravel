@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "classCode": "SL",
+  "displayName": "Sleeper",
+  "kind": "BERTH",
+  "total": 72,
+  "perBay": 8,
+  "note": "ICF/LHB sleeper: 9 bays x 8 (LB MB UB | LB MB UB + SL SU).",
+  "template": [
+    {
+      "offset": 0,
+      "type": "LOWER",
+      "row": 0,
+      "column": 0,
+      "block": "LEFT"
+    },
+    {
+      "offset": 1,
+      "type": "MIDDLE",
+      "row": 0,
+      "column": 1,
+      "block": "LEFT"
+    },
+    {
+      "offset": 2,
+      "type": "UPPER",
+      "row": 0,
+      "column": 2,
+      "block": "LEFT"
+    },
+    {
+      "offset": 3,
+      "type": "LOWER",
+      "row": 1,
+      "column": 0,
+      "block": "LEFT"
+    },
+    {
+      "offset": 4,
+      "type": "MIDDLE",
+      "row": 1,
+      "column": 1,
+      "block": "LEFT"
+    },
+    {
+      "offset": 5,
+      "type": "UPPER",
+      "row": 1,
+      "column": 2,
+      "block": "LEFT"
+    },
+    {
+      "offset": 6,
+      "type": "SIDE_LOWER",
+      "row": 0,
+      "column": 0,
+      "block": "RIGHT"
+    },
+    {
+      "offset": 7,
+      "type": "SIDE_UPPER",
+      "row": 1,
+      "column": 0,
+      "block": "RIGHT"
+    }
+  ]
+}

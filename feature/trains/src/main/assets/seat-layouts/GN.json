@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "classCode": "GN",
+  "displayName": "General",
+  "kind": "SEAT",
+  "total": 90,
+  "perBay": 6,
+  "note": "Unreserved general coach approximated as 3+3 seating.",
+  "template": [
+    {
+      "offset": 0,
+      "type": "WINDOW",
+      "row": 0,
+      "column": 0,
+      "block": "LEFT"
+    },
+    {
+      "offset": 1,
+      "type": "MIDDLE",
+      "row": 0,
+      "column": 1,
+      "block": "LEFT"
+    },
+    {
+      "offset": 2,
+      "type": "AISLE",
+      "row": 0,
+      "column": 2,
+      "block": "LEFT"
+    },
+    {
+      "offset": 3,
+      "type": "AISLE",
+      "row": 0,
+      "column": 0,
+      "block": "RIGHT"
+    },
+    {
+      "offset": 4,
+      "type": "MIDDLE",
+      "row": 0,
+      "column": 1,
+      "block": "RIGHT"
+    },
+    {
+      "offset": 5,
+      "type": "WINDOW",
+      "row": 0,
+      "column": 2,
+      "block": "RIGHT"
+    }
+  ]
+}

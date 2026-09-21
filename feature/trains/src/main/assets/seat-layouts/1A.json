@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "classCode": "1A",
+  "displayName": "AC First Class",
+  "kind": "BERTH",
+  "total": 24,
+  "perBay": 4,
+  "note": "AC first: cabins of 4 (LB UB | LB UB); coupes are approximated as cabins.",
+  "template": [
+    {
+      "offset": 0,
+      "type": "LOWER",
+      "row": 0,
+      "column": 0,
+      "block": "LEFT"
+    },
+    {
+      "offset": 1,
+      "type": "UPPER",
+      "row": 0,
+      "column": 1,
+      "block": "LEFT"
+    },
+    {
+      "offset": 2,
+      "type": "LOWER",
+      "row": 1,
+      "column": 0,
+      "block": "LEFT"
+    },
+    {
+      "offset": 3,
+      "type": "UPPER",
+      "row": 1,
+      "column": 1,
+      "block": "LEFT"
+    }
+  ]
+}

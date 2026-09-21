@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "classCode": "2A",
+  "displayName": "AC 2 Tier",
+  "kind": "BERTH",
+  "total": 46,
+  "perBay": 6,
+  "note": "ICF AC 2-tier: 7 bays x 6 (LB UB | LB UB + SL SU) + a tail bay 43-46 without side berths.",
+  "template": [
+    {
+      "offset": 0,
+      "type": "LOWER",
+      "row": 0,
+      "column": 0,
+      "block": "LEFT"
+    },
+    {
+      "offset": 1,
+      "type": "UPPER",
+      "row": 0,
+      "column": 1,
+      "block": "LEFT"
+    },
+    {
+      "offset": 2,
+      "type": "LOWER",
+      "row": 1,
+      "column": 0,
+      "block": "LEFT"
+    },
+    {
+      "offset": 3,
+      "type": "UPPER",
+      "row": 1,
+      "column": 1,
+      "block": "LEFT"
+    },
+    {
+      "offset": 4,
+      "type": "SIDE_LOWER",
+      "row": 0,
+      "column": 0,
+      "block": "RIGHT"
+    },
+    {
+      "offset": 5,
+      "type": "SIDE_UPPER",
+      "row": 1,
+      "column": 0,
+      "block": "RIGHT"
+    }
+  ]
+}

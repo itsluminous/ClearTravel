@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "classCode": "CC",
+  "displayName": "AC Chair Car",
+  "kind": "SEAT",
+  "total": 78,
+  "perBay": 5,
+  "note": "3+2 seating: W M A | A W per row; the last row holds 3 seats.",
+  "template": [
+    {
+      "offset": 0,
+      "type": "WINDOW",
+      "row": 0,
+      "column": 0,
+      "block": "LEFT"
+    },
+    {
+      "offset": 1,
+      "type": "MIDDLE",
+      "row": 0,
+      "column": 1,
+      "block": "LEFT"
+    },
+    {
+      "offset": 2,
+      "type": "AISLE",
+      "row": 0,
+      "column": 2,
+      "block": "LEFT"
+    },
+    {
+      "offset": 3,
+      "type": "AISLE",
+      "row": 0,
+      "column": 0,
+      "block": "RIGHT"
+    },
+    {
+      "offset": 4,
+      "type": "WINDOW",
+      "row": 0,
+      "column": 1,
+      "block": "RIGHT"
+    }
+  ]
+}
