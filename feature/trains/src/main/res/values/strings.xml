@@ -72,6 +72,7 @@
     <string name="trains_form_prefilled">Auto-filled from your ticket — review before saving</string>
     <string name="trains_form_saved">Ticket saved</string>
     <string name="trains_form_duplicate_pnr">Ticket with this PNR already exists</string>
+    <string name="trains_form_duplicate_pnr_view">View</string>
     <string name="trains_form_back">Back</string>
     <string name="trains_form_date_ok">OK</string>
     <string name="trains_form_date_cancel">Cancel</string>

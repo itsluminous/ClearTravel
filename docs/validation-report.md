@@ -491,3 +491,94 @@ FlightsE2eTest, TrainsE2eTest, TripsE2eTest). Emulator killed after the run.
 | No-data path: EmptyState + fetch button reachable | FAIL → PASS after fix |
 | Unit tests | 676/676 |
 | Connected e2e | 5/5 |
+
+## Remaining fixes (2026-09-21, emulator Android_16_AOSP_Medium, API 36)
+
+Method as before: every adb call timeout-wrapped, UI read via `uiautomator dump`
+text (WebView page content included — the emulator exposes the Chromium a11y tree),
+blind screencaps `sips -Z 800`'d into `docs/validation/55–59`. Device state on
+arrival: real ticket PNR 8553674906 (20933, 2A, two RAC passengers, route stored),
+present TWICE — the user's duplicate that motivated fix 5.
+
+### Fix 1 — PDF ticket import (real ERS `8553674906.PDF.pdf`)
+
+- Captured what ML Kit really sees via the `@Ignore`d `OcrCaptureHarnessTest`
+  (`core/ocr` androidTest, PDF pushed to the test app's external files dir, logcat
+  tag `OcrCapture`). BEFORE: `journeyDate=NONE, travelClass=NONE, passengers=[]` —
+  ML Kit's `Text.text` had the ERS table shredded into one cell per line.
+- AFTER (`OcrLayout` row reconstruction + extractor rework): shared the PDF into the
+  app through its own FileProvider (`content://…fileprovider/share/ers.pdf`, copied
+  in with `run-as`; a MediaStore URI is refused — `no access to
+  content://media/external/file/129` — since a shell grant does not reach the
+  app). Intake dialog auto-suggested **Train ticket**; the form dump shows PNR
+  `8553674906`, train `20933` / `UDN DANAPUR EXP`, `Sep 29, 2026`, `UDN` → `DNR`,
+  class `2A`, quota `GN`, passengers `BHUVNESHWAR SING` (booking `RAC/12`) and
+  `ARTI DEVI` (booking `WL/1`) — coach/berth blank because RAC/WL have none yet
+  (screenshot 59). Fixture `irctc-ticket-3` (anonymized) pins the same text.
+
+### Fix 2 — share intake lands on Journeys
+
+- Cold start, `am start -a SEND -t text/plain --es EXTRA_TEXT "PNR:4412345678,TRN:
+  12951,DOJ:29-10-26,3A,NDLS-BCT,…"` → prefilled form → **Save ticket** → dump
+  shows the Journeys segmented row (`Trains | Flights`) with the new ticket's detail
+  sheet open (`4412345678`, `12951`, `NDLS → BCT`, passengers with `Coach B4 · 32`);
+  back → the Trains list with card `PNR 4412345678` (screenshot 56). Before the fix
+  the same flow ended on the Trips tab ("No trips yet").
+- Cold start `cleartravel://pnr/1234567891` (PNR-only quick add) → Save → landed on
+  Journeys/Trains AND the PNR check opened by itself (`Check PNR status`, indianrail
+  page loaded with the PNR) — the in-tab ADR-023 chain now also runs for the link
+  path. Cancel from a shared-file form → Journeys/Trains list.
+
+### Fix 3 — shared image without the freshness line
+
+Code-level change only (`TicketBodyLines(showFreshness = false)` from
+`ShareTicketCard`); the list card still shows `Updated X ago` / `Status never
+checked` in every dump above. No `ShareTicketCardTest` exists (off-screen bitmap
+composable); unit coverage of `relativeAge` (`TrainCardFormatTest`) is unchanged.
+
+### Fix 4 — WebView touch scroll (+ stale-state bug found on the way)
+
+- **Could not reproduce the reported "swipes don't scroll".** On the CURRENT build
+  (before any change) and again on the fixed build, all three input styles scrolled
+  the live indianrail page inside the PNR-check WebView (bounds `[0,547][1080,2128]`):
+  `input swipe 540 1800 540 800 400` moved `Submit` from y=1665 to y=568 and pulled
+  the `Copyright © 2017 …` footer into view (screenshots 57 → 58); a 50 ms fling and
+  an 8-step `motionevent DOWN/MOVE/UP` slow drag also moved the page (Submit
+  1751 → 1345); scrolling worked with the IME open too. Page states covered: fresh
+  load with the tall header, after the site's own error anchor, after focusing the
+  PNR field. Swipes that START below y≈2128 land on the bottom NavigationBar, not
+  the WebView — the most likely way an adb repro "hits" the bug.
+- What DID reproduce, and blocked the scroll check twice: re-opening the PNR check
+  (or the route fetch) after a completed one finished INSTANTLY — the ViewModel is
+  scoped to the Journeys back-stack entry, its `Applied` state survived, and
+  `LaunchedEffect(state)` re-fired `onApplied` before the page loaded (the fake
+  ticket even got train 20933's route fetched for it). Fixed by starting and
+  observing inside one effect (ADR-024 §3); verified: quick-add of `1234567891`
+  now shows the check page and stays there.
+- Defensive hardening shipped for every WebView host (ADR-024 §4):
+  `WebView.configureTouchScrolling()` — scrollbars, over-scroll, non-consuming
+  `requestDisallowInterceptTouchEvent(true)` on ACTION_DOWN.
+
+### Fix 5 — duplicate PNR refused
+
+- Cold start `cleartravel://pnr/8553674906` (a PNR already on device) → form → Save
+  → landed on Journeys/Trains, snackbar **"Ticket with this PNR already exists"**
+  with a **View** action, still exactly the two pre-existing `8553674906` cards
+  (no third card; screenshot 55). Tapping **View** opened the existing ticket's
+  detail sheet (`Ticket details`, `8553674906`).
+- Found on the way: the snackbar sat ON the FAB and the FAB won taps meant for the
+  action (a tap at the action's centre opened the add sheet). The Trains snackbar
+  host now sits 80 dp above the FAB on the list screen (Material placement).
+- The three test tickets created during this run (4412345678, 1234567890,
+  1234567891) were deleted through the detail sheet; the user's two real cards were
+  left untouched.
+
+| Check | Verdict |
+|---|---|
+| PDF import fills date/class/quota/passengers (real ERS) | FAIL → PASS |
+| Shared text → save → Journeys/Trains with the new card | FAIL → PASS |
+| PNR link quick add → Journeys/Trains → PNR check auto-opens | PASS |
+| PNR check re-entry no longer auto-completes (stale `Applied`) | FAIL → PASS |
+| WebView touch scroll (swipe / fling / slow drag) | PASS before and after (not reproducible) |
+| Duplicate PNR via link → notice + View → existing sheet, no new card | PASS |
+| Snackbar action reachable above the FAB | FAIL → PASS |

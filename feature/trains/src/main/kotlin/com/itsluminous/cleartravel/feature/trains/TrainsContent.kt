@@ -3,8 +3,11 @@ package com.itsluminous.cleartravel.feature.trains
 import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -15,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.feature.trains.detail.TrainDetailSheet
@@ -38,6 +42,25 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /** How long the PNR-only landing waits for the saved ticket's card before falling back. */
 private const val PNR_CHECK_LOOKUP_TIMEOUT_MILLIS = 3_000L
+
+/**
+ * Duplicate-PNR notice (ADR-024) over the list — the existing card is already on
+ * screen — with a "View" action that opens its detail sheet. The sheet is NOT opened
+ * automatically: a modal sheet would cover the snackbar and hide the explanation.
+ */
+private suspend fun showDuplicateNotice(
+    snackbarHostState: SnackbarHostState,
+    context: android.content.Context,
+    onView: () -> Unit,
+) {
+    val result =
+        snackbarHostState.showSnackbar(
+            message = context.getString(R.string.trains_form_duplicate_pnr),
+            actionLabel = context.getString(R.string.trains_form_duplicate_pnr_view),
+            duration = SnackbarDuration.Long,
+        )
+    if (result == SnackbarResult.ActionPerformed) onView()
+}
 
 /** Where a form session got its initial content from. */
 private sealed interface FormEntry {
@@ -133,8 +156,7 @@ fun TrainsContent(
             }
             TrainsLandingAction.DUPLICATE_PNR -> {
                 screen = TrainsScreen.List
-                detailTicketId = initialTicketId
-                snackbarHostState.showSnackbar(context.getString(R.string.trains_form_duplicate_pnr))
+                showDuplicateNotice(snackbarHostState, context) { detailTicketId = initialTicketId }
             }
             TrainsLandingAction.OPEN_PNR_CHECK -> {
                 // The just-saved ticket reaches the list through Room; wait for its
@@ -180,11 +202,11 @@ fun TrainsContent(
                         snackbarHostState.showSnackbar(context.getString(R.string.trains_import_failed))
                     }
                 is TrainFormEvent.DuplicatePnr -> {
-                    // Nothing was written (ADR-024): show the EXISTING ticket instead.
+                    // Nothing was written (ADR-024): back to the list, which already
+                    // shows the existing ticket, with the notice + a "View" action.
                     screen = TrainsScreen.List
-                    detailTicketId = event.existingTicketId
                     scope.launch {
-                        snackbarHostState.showSnackbar(context.getString(R.string.trains_form_duplicate_pnr))
+                        showDuplicateNotice(snackbarHostState, context) { detailTicketId = event.existingTicketId }
                     }
                 }
             }
@@ -406,7 +428,15 @@ fun TrainsContent(
 
         SnackbarHost(
             hostState = snackbarHostState,
-            modifier = Modifier.align(Alignment.BottomCenter),
+            modifier =
+                Modifier
+                    .align(Alignment.BottomCenter)
+                    // Clear the list's FAB (Material: snackbars sit ABOVE the FAB) —
+                    // otherwise the FAB wins taps meant for the snackbar action.
+                    .padding(bottom = if (screen is TrainsScreen.List) SNACKBAR_FAB_CLEARANCE else 0.dp),
         )
     }
 }
+
+/** FAB (56dp) + its 16dp margin + a little breathing room. */
+private val SNACKBAR_FAB_CLEARANCE = 80.dp
