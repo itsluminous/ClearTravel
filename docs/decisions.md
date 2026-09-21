@@ -979,3 +979,67 @@ passenger's berths highlighted), built on three additive contract changes:
    A1 GN GN`) is spliced verbatim into the existing mobile-layout fixtures — the
    selectors are layout-independent, and whether the LIVE mobile page carries the
    section is exactly what `minRows: 0` makes irrelevant for correctness.
+3. **Seat layouts are behavior-as-data** (ADR-003):
+   `feature/trains/src/main/assets/seat-layouts/<class>.json` for `SL`, `3A`, `2A`,
+   `1A`, `CC`, `EC`, `2S`, `GN`. Format (`SeatLayoutDefinition`): `version`,
+   `classCode`, `displayName`, `kind` (`BERTH`|`SEAT`), `total`, `perBay`, and a
+   `template` of `perBay` cells `{offset, type, row, column, block}` — berth `n`
+   lives in bay `(n-1)/perBay + 1` at offset `(n-1) % perBay`; `row` gives the two
+   facing rows of a berth bay, `block` `LEFT`/`RIGHT` puts the cell before/after
+   the aisle (side berths are the RIGHT block), `type` is the enum `LOWER`,
+   `MIDDLE`, `UPPER`, `SIDE_LOWER`, `SIDE_UPPER`, `WINDOW`, `AISLE` — an enum, not
+   a label, so the UI renders it through string resources (hard rule 1). The
+   pure `SeatLayoutEngine` validates (offsets must be exactly `0 until perBay`,
+   positive total/perBay → typed `SeatLayoutException.InvalidTemplate`; bad JSON →
+   `MalformedJson`) and expands the template into `Bay(rows: BayRow(left, right))`
+   with `SeatLayout.berth(n)` lookup; a partial tail bay (2A's 43–46 without side
+   berths) falls out of `total` naturally. Contents: SL 9×8=72, 3A 8×8=64
+   (ICF), 2A 7×6+4=46, 1A 6×4=24 (coupes approximated as cabins), CC 3+2 ×
+   16 rows = 78 (last row 3 seats), EC 2+2 = 56, 2S 3+3 = 108, GN 3+3 = 90
+   (unreserved approximated). The parameterized `SeatLayoutAssetTest` enumerates
+   every file and REQUIRES a pinned sample in its `EXPECTED` table (e.g. SL
+   1=LOWER bay 1, 7=S.LOWER bay 1, 23=S.LOWER bay 3, 72=S.UPPER bay 9; 3A 64;
+   2A 46=UPPER bay 8) — a layout file without a pin fails CI. `SeatLayoutCatalog`
+   (Hilt singleton over a `SeatLayoutSource`: assets at runtime, filesystem in
+   tests) caches parsed layouts and resolves unknown/unusable files to null.
+   **Class resolution** is the pure `TrainClassResolver`: coach-code prefix first
+   — `S`→SL, `B`/`M`→3A, `A`→2A, `H`→1A, `C`→CC, `E`→EC, `D`→2S, `GN`/`GS`/`UR`/
+   `SLR`→GN, `EN`/`EOG`/`PC`/`RMS`/`LOCO`→none — then the ticket's `travelClass`
+   (aliases `3E`→3A, `FC`→1A, `EA`/`EV`→EC). `SeatBerthParser` turns the free-text
+   `seatBerth` (`32`, `32 LB`, `B4 32`, `S1/12`, `12A`) into the berth number: the
+   first digit run not preceded by a letter/digit; `0` = unallotted → null.
+4. **UI — `SeatMapScreen`** (`feature:trains` `seatmap/`, internal navigation
+   state `TrainsScreen.SeatMap`): top bar `"<coach> · <class name>"` +
+   `"<number> · <name>"` with a refresh `ExplainableIcon`; passenger chips
+   (`B4 - 32`, raw text like `WL 12` when no berth parses); the COACH STRIP — a
+   `LazyRow` with a leading engine box (`Icons.Filled.Train`, no custom art) and
+   one box per stored coach (code above, position 1..n below — the engine is
+   unnumbered; ticket coach = filled primary + filled position pill, selected
+   coach = outlined, tap = view THAT coach's class layout); the accuracy WARNING
+   banner (`errorContainer`); then a `LazyColumn` of bays, each an outlined block
+   whose rows draw left cells · flexible aisle · right (side) cells, every cell
+   berth number + type label, the ticket's own berths in `tertiary`. Rendering is
+   Room-only (`SeatMapViewModel`: `observeTicket` + `observePassengers` +
+   `observeCoaches` + selection); highlighting follows the SELECTED coach —
+   passengers seated in it (coach-less passengers count only when the ticket has
+   no coach info at all). No stored coaches + no resolvable layout → `EmptyState`
+   + "Fetch route & coaches"; no coaches but a resolvable class → a compact card
+   with the fetch button above the map (the map still helps); unknown class →
+   "No seat map for this coach". Fetch opens the EXISTING `RouteFetchScreen`
+   (ONE fetch fills route AND coaches) with `returnToSeatMap = true` so success
+   lands back on the map. Strings are module-local (`trains_seatmap_*`).
+5. **Entry points.** The card's seat `ExplainableIcon` now opens the seat map
+   (it previously opened the detail sheet, whose own seat rows are unchanged);
+   the detail sheet gains a "Seat map" button next to "View route".
+
+**Why.** A coach-position feature is exactly the "real schema need" ADR-019
+deferred the first migration for, and a table of coach codes is the smallest
+schema that carries it (halt/distance stay derived). Keeping the second row-set
+an additive rule-schema field (rather than a second rule or a second fetch)
+means one page load fills both route and coaches with zero engine behavior
+change for existing rules. Seat maps as data mirror the scrape rules: Indian
+Railways berth numbering is a fixed template per class, so a bay template +
+count is the whole truth, trivially reviewable and pinned per file — and
+`perBay`/`total` alone let the same engine cover berth and seating classes.
+Everything that decides (engine, resolver, parser, ViewModel projections) is
+pure and unit-tested; the UI only draws.
