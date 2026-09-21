@@ -53,6 +53,13 @@ data class TrainStatusResult(
     val chartPrepared: Boolean? = null,
     val trainNumber: String = "",
     val trainName: String = "",
+    /** Journey date from the result page; null = not reported. */
+    val journeyDate: LocalDate? = null,
+    /** Boarding station (the passenger's journey start, not the train origin). */
+    val fromStation: String = "",
+    /** Reserved-upto station (the passenger's journey end). */
+    val toStation: String = "",
+    val travelClass: String = "",
     val fetchedAt: Instant,
 )
 

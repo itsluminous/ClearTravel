@@ -1057,3 +1057,14 @@ row selector is the group `.coach-position-cntr .coach-box-container,
 so mobile rows yield the code, desktop rows the only box). Fixture `mobile.html` is
 the DevTools capture of that live page (`IxigoRouteMobileCoachesFixtureTest`), and
 the desktop-shaped `page.html` / `multiday.html` stay green, pinning BOTH layouts.
+
+## ADR-023 — applyStatusResult inserts scraped train passengers (2026-09-21)
+
+ADR-005 defined passenger merge as by-position into EXISTING rows only, which
+silently dropped all seat data when a ticket had fewer (or zero) passenger rows
+than the live PNR result — the common case for tickets added via the PNR deeplink
+or with only a PNR typed in. `applyStatusResult` now additionally INSERTS scraped
+passengers beyond the stored count (coach/berth/booking/current status,
+sortOrder appended; name left blank — the result page is anonymous). Existing
+rows keep the by-position merge semantics unchanged. Live-verified against real
+PNR 8553674906 (user-solved captcha).

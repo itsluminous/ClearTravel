@@ -136,8 +136,30 @@ class FakeTrainRepository(
                     updatedAt = now(),
                 )
             }
-        passengers.value += updated.associateBy(TrainPassenger::id)
-        tickets.value += ticketId to ticket.copy(lastFetchedAt = result.fetchedAt, updatedAt = now())
+        val inserted =
+            result.passengers.drop(ordered.size).mapIndexed { offset, status ->
+                TrainPassenger(
+                    ticketId = ticketId,
+                    coach = status.coach,
+                    seatBerth = status.seatBerth,
+                    bookingStatus = status.bookingStatus,
+                    currentStatus = status.currentStatus,
+                    sortOrder = ordered.size + offset,
+                    updatedAt = now(),
+                )
+            }
+        passengers.value += (updated + inserted).associateBy(TrainPassenger::id)
+        tickets.value += ticketId to
+            ticket.copy(
+                trainNumber = ticket.trainNumber.ifBlank { result.trainNumber },
+                trainName = ticket.trainName.ifBlank { result.trainName },
+                journeyDate = ticket.journeyDate ?: result.journeyDate,
+                fromStation = ticket.fromStation.ifBlank { result.fromStation },
+                toStation = ticket.toStation.ifBlank { result.toStation },
+                travelClass = ticket.travelClass.ifBlank { result.travelClass },
+                lastFetchedAt = result.fetchedAt,
+                updatedAt = now(),
+            )
     }
 
     override suspend fun setArchived(

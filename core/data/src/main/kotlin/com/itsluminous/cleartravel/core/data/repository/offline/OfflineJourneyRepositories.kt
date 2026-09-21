@@ -91,20 +91,53 @@ class OfflineTrainRepository
             val ticket = trainDao.getById(ticketId) ?: return
             val now = clock.instant()
             val passengers = trainDao.getPassengers(ticketId)
+            // Merge by position into existing rows (ADR-005)...
             val updated =
                 passengers.mapIndexedNotNull { index, passenger ->
                     val status = result.passengers.getOrNull(index) ?: return@mapIndexedNotNull null
                     passenger.copy(
                         currentStatus = status.currentStatus,
+                        bookingStatus = status.bookingStatus.ifEmpty { passenger.bookingStatus },
                         coach = status.coach.ifEmpty { passenger.coach },
                         seatBerth = status.seatBerth.ifEmpty { passenger.seatBerth },
                         updatedAt = now,
                     )
                 }
-            if (updated.isNotEmpty()) {
-                trainDao.upsertPassengers(updated)
+            // ...and INSERT scraped passengers the ticket doesn't have yet (ADR-023):
+            // tickets added with only a PNR have zero passenger rows, and the live PNR
+            // result is the authoritative source for how many passengers exist.
+            val inserted =
+                result.passengers.drop(passengers.size).mapIndexed { offset, status ->
+                    TrainPassenger(
+                        ticketId = ticketId,
+                        coach = status.coach,
+                        seatBerth = status.seatBerth,
+                        bookingStatus = status.bookingStatus,
+                        currentStatus = status.currentStatus,
+                        sortOrder = passengers.size + offset,
+                        updatedAt = now,
+                    )
+                }
+            val toWrite = updated + inserted.map { it.toEntity() }
+            if (toWrite.isNotEmpty()) {
+                trainDao.upsertPassengers(toWrite)
             }
-            trainDao.upsert(ticket.copy(lastFetchedAt = result.fetchedAt, updatedAt = now))
+            // Backfill ticket journey fields the result reported and the user left
+            // blank (ADR-023) — a PNR-only quick add gets its train number/name,
+            // date, stations and class from the first successful status check.
+            // User-entered values are never overwritten.
+            trainDao.upsert(
+                ticket.copy(
+                    trainNumber = ticket.trainNumber.ifBlank { result.trainNumber },
+                    trainName = ticket.trainName.ifBlank { result.trainName },
+                    journeyDate = ticket.journeyDate ?: result.journeyDate,
+                    fromStation = ticket.fromStation.ifBlank { result.fromStation },
+                    toStation = ticket.toStation.ifBlank { result.toStation },
+                    travelClass = ticket.travelClass.ifBlank { result.travelClass },
+                    lastFetchedAt = result.fetchedAt,
+                    updatedAt = now,
+                ),
+            )
         }
 
         override suspend fun setArchived(

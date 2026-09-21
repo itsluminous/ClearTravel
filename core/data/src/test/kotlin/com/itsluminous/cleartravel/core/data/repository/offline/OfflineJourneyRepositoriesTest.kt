@@ -86,6 +86,105 @@ class OfflineTrainRepositoryTest {
         }
 
     @Test
+    fun `applyStatusResult inserts scraped passengers when the ticket has none`() =
+        runTest {
+            val ticket = trains.save(Fixtures.trainTicket())
+            val fetchedAt = Fixtures.NOW.plusSeconds(3600)
+
+            trains.applyStatusResult(
+                ticket.id,
+                TrainStatusResult(
+                    pnr = ticket.pnr,
+                    passengers =
+                        listOf(
+                            TrainPassengerStatus(currentStatus = "RAC 10", bookingStatus = "RAC 21", coach = "S1", seatBerth = "49"),
+                            TrainPassengerStatus(currentStatus = "RAC 11", bookingStatus = "RAC 22"),
+                        ),
+                    fetchedAt = fetchedAt,
+                ),
+            )
+
+            val passengers = trains.observePassengers(ticket.id).first()
+            assertThat(passengers).hasSize(2)
+            assertThat(passengers[0].currentStatus).isEqualTo("RAC 10")
+            assertThat(passengers[0].bookingStatus).isEqualTo("RAC 21")
+            assertThat(passengers[0].coach).isEqualTo("S1")
+            assertThat(passengers[0].seatBerth).isEqualTo("49")
+            assertThat(passengers[0].sortOrder).isEqualTo(0)
+            assertThat(passengers[1].currentStatus).isEqualTo("RAC 11")
+            assertThat(passengers[1].sortOrder).isEqualTo(1)
+        }
+
+    @Test
+    fun `applyStatusResult appends scraped passengers beyond the existing rows`() =
+        runTest {
+            val ticket = trains.save(Fixtures.trainTicket())
+            trains.savePassengers(
+                listOf(Fixtures.trainPassenger(ticketId = ticket.id, sortOrder = 0, currentStatus = "WL 10")),
+            )
+
+            trains.applyStatusResult(
+                ticket.id,
+                TrainStatusResult(
+                    pnr = ticket.pnr,
+                    passengers =
+                        listOf(
+                            TrainPassengerStatus(currentStatus = "CNF"),
+                            TrainPassengerStatus(currentStatus = "RAC 4", coach = "S2", seatBerth = "12"),
+                        ),
+                    fetchedAt = Fixtures.NOW.plusSeconds(3600),
+                ),
+            )
+
+            val passengers = trains.observePassengers(ticket.id).first()
+            assertThat(passengers).hasSize(2)
+            assertThat(passengers[0].currentStatus).isEqualTo("CNF")
+            assertThat(passengers[1].currentStatus).isEqualTo("RAC 4")
+            assertThat(passengers[1].coach).isEqualTo("S2")
+            assertThat(passengers[1].sortOrder).isEqualTo(1)
+        }
+
+    @Test
+    fun `applyStatusResult backfills blank ticket fields and keeps user values`() =
+        runTest {
+            val ticket =
+                trains.save(
+                    Fixtures.trainTicket(
+                        trainNumber = "",
+                        trainName = "",
+                        journeyDate = null,
+                        fromStation = "",
+                        toStation = "",
+                        travelClass = "2A",
+                    ),
+                )
+
+            trains.applyStatusResult(
+                ticket.id,
+                TrainStatusResult(
+                    pnr = ticket.pnr,
+                    passengers = listOf(TrainPassengerStatus(currentStatus = "CNF")),
+                    trainNumber = "20933",
+                    trainName = "DANAPUR SF EXPRESS",
+                    journeyDate = java.time.LocalDate.of(2026, 9, 29),
+                    fromStation = "UDN",
+                    toStation = "DNR",
+                    travelClass = "SL",
+                    fetchedAt = Fixtures.NOW.plusSeconds(60),
+                ),
+            )
+
+            val updated = trains.getTicket(ticket.id)!!
+            assertThat(updated.trainNumber).isEqualTo("20933")
+            assertThat(updated.trainName).isEqualTo("DANAPUR SF EXPRESS")
+            assertThat(updated.journeyDate).isEqualTo(java.time.LocalDate.of(2026, 9, 29))
+            assertThat(updated.fromStation).isEqualTo("UDN")
+            assertThat(updated.toStation).isEqualTo("DNR")
+            // User-entered class is never overwritten.
+            assertThat(updated.travelClass).isEqualTo("2A")
+        }
+
+    @Test
     fun `replaceRouteStops swaps the stored route`() =
         runTest {
             val ticket = trains.save(Fixtures.trainTicket())

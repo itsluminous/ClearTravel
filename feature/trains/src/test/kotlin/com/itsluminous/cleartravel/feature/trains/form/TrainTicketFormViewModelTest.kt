@@ -109,6 +109,34 @@ class TrainTicketFormViewModelTest {
         }
 
     @Test
+    fun `pnr-only quick add asks the host to open the PNR check`() =
+        runTest {
+            val vm = viewModel()
+            vm.onPnrChange("8524317690")
+
+            vm.events.test {
+                vm.save()
+                val event = awaitItem() as TrainFormEvent.Saved
+                assertThat(event.openPnrCheck).isTrue()
+                assertThat(event.pnr).isEqualTo("8524317690")
+            }
+        }
+
+    @Test
+    fun `save with any journey detail does not open the PNR check`() =
+        runTest {
+            val vm = viewModel()
+            vm.onPnrChange("8524317690")
+            vm.onTrainNumberChange("12951")
+
+            vm.events.test {
+                vm.save()
+                val event = awaitItem() as TrainFormEvent.Saved
+                assertThat(event.openPnrCheck).isFalse()
+            }
+        }
+
+    @Test
     fun `blank passenger rows are not persisted`() =
         runTest {
             val vm = viewModel()

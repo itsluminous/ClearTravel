@@ -76,6 +76,13 @@ data class TrainFormUiState(
 sealed interface TrainFormEvent {
     data class Saved(
         val ticketId: String,
+        val pnr: String = "",
+        /**
+         * True for a PNR-only quick add (new ticket, nothing but the PNR filled):
+         * the host should open the PNR check WebView directly so the first status
+         * fetch backfills train, date, stations and passengers (ADR-023).
+         */
+        val openPnrCheck: Boolean = false,
     ) : TrainFormEvent
 
     /** A file import produced nothing — the form stays blank; show a hint. */
@@ -314,7 +321,17 @@ class TrainTicketFormViewModel
                 repository.savePassengers(passengers + tombstones)
                 removedExisting.clear()
                 state.update { it.copy(saving = false) }
-                eventsFlow.tryEmit(TrainFormEvent.Saved(saved.id))
+                val pnrOnlyQuickAdd =
+                    existing == null &&
+                        ticket.trainNumber.isBlank() &&
+                        ticket.trainName.isBlank() &&
+                        ticket.journeyDate == null &&
+                        ticket.fromStation.isBlank() &&
+                        ticket.toStation.isBlank() &&
+                        passengers.isEmpty()
+                eventsFlow.tryEmit(
+                    TrainFormEvent.Saved(saved.id, pnr = saved.pnr, openPnrCheck = pnrOnlyQuickAdd),
+                )
             }
         }
 

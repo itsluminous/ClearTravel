@@ -4,6 +4,8 @@ import com.itsluminous.cleartravel.core.data.provider.TrainPassengerStatus
 import com.itsluminous.cleartravel.core.data.provider.TrainStatusResult
 import com.itsluminous.cleartravel.core.scrape.ScrapedData
 import java.time.Instant
+import java.time.LocalDate
+import java.time.format.DateTimeParseException
 
 /**
  * PURE mapper from the `indianrail-pnr` rule's [ScrapedData] shape to the ADR-005
@@ -25,6 +27,12 @@ object PnrStatusMapper {
     private const val FIELD_TRAIN_NUMBER = "trainNumber"
     private const val FIELD_TRAIN_NAME = "trainName"
     private const val FIELD_CHARTING_STATUS = "chartingStatus"
+    private const val FIELD_JOURNEY_DATE = "journeyDate"
+    private const val FIELD_BOARDING_POINT = "boardingPoint"
+    private const val FIELD_FROM_STATION = "fromStation"
+    private const val FIELD_RESERVED_UPTO = "reservedUpto"
+    private const val FIELD_TO_STATION = "toStation"
+    private const val FIELD_JOURNEY_CLASS = "journeyClass"
     private const val ROW_BOOKING_STATUS = "bookingStatus"
     private const val ROW_CURRENT_STATUS = "currentStatus"
 
@@ -52,9 +60,29 @@ object PnrStatusMapper {
             chartPrepared = chartPrepared(data.fields[FIELD_CHARTING_STATUS].orEmpty()),
             trainNumber = data.fields[FIELD_TRAIN_NUMBER].orEmpty().trim(),
             trainName = data.fields[FIELD_TRAIN_NAME].orEmpty().trim(),
+            journeyDate = parseIsoDate(data.fields[FIELD_JOURNEY_DATE].orEmpty().trim()),
+            // Boarding point / reserved-upto are the passenger's actual journey ends;
+            // fall back to the train's own from/to columns when absent.
+            fromStation =
+                data.fields[FIELD_BOARDING_POINT].orEmpty().trim().ifEmpty {
+                    data.fields[FIELD_FROM_STATION].orEmpty().trim()
+                },
+            toStation =
+                data.fields[FIELD_RESERVED_UPTO].orEmpty().trim().ifEmpty {
+                    data.fields[FIELD_TO_STATION].orEmpty().trim()
+                },
+            travelClass = data.fields[FIELD_JOURNEY_CLASS].orEmpty().trim(),
             fetchedAt = fetchedAt,
         )
     }
+
+    /** The rule post-processes the date to ISO `uuuu-MM-dd`; anything else → null. */
+    private fun parseIsoDate(raw: String): LocalDate? =
+        try {
+            if (raw.isEmpty()) null else LocalDate.parse(raw)
+        } catch (_: DateTimeParseException) {
+            null
+        }
 
     private fun toPassengerStatus(
         bookingStatus: String,

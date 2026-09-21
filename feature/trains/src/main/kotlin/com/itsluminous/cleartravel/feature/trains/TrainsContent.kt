@@ -126,9 +126,15 @@ fun TrainsContent(
         formViewModel.events.collect { event ->
             when (event) {
                 is TrainFormEvent.Saved -> {
-                    screen = TrainsScreen.List
-                    scope.launch {
-                        snackbarHostState.showSnackbar(context.getString(R.string.trains_form_saved))
+                    if (event.openPnrCheck) {
+                        // PNR-only quick add: go straight to the status check so the
+                        // first fetch backfills the ticket (user request, ADR-023).
+                        screen = TrainsScreen.PnrCheck(ticketId = event.ticketId, pnr = event.pnr)
+                    } else {
+                        screen = TrainsScreen.List
+                        scope.launch {
+                            snackbarHostState.showSnackbar(context.getString(R.string.trains_form_saved))
+                        }
                     }
                 }
                 is TrainFormEvent.PrefillEmpty ->

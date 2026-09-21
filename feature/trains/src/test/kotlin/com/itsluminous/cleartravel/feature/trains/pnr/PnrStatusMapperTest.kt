@@ -57,6 +57,10 @@ class PnrStatusMapperTest {
         assertThat(result.pnr).isEqualTo(pnr)
         assertThat(result.trainNumber).isEqualTo("12951")
         assertThat(result.trainName).isEqualTo("MUMBAI RAJDHANI")
+        assertThat(result.journeyDate).isEqualTo(java.time.LocalDate.of(2026, 9, 25))
+        assertThat(result.fromStation).isEqualTo("MMCT")
+        assertThat(result.toStation).isEqualTo("NDLS")
+        assertThat(result.travelClass).isEqualTo("3A")
         assertThat(result.fetchedAt).isEqualTo(fetchedAt)
         assertThat(result.passengers).hasSize(2)
     }

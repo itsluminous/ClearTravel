@@ -4,7 +4,7 @@
     <string name="checklist_empty_title">No checklists yet</string>
     <string name="checklist_empty_message">Create a packing checklist from a preset or start blank.</string>
     <string name="checklist_add_fab">Add checklist</string>
-    <string name="checklist_progress">%1$d of %2$d packed</string>
+    <string name="checklist_progress">%1$d of %2$d done</string>
 
     <string name="checklist_create_title">New checklist</string>
     <string name="checklist_name_label">Name</string>
