@@ -20,7 +20,7 @@ import javax.inject.Singleton
  * Seam over the OCR pipeline for the intake auto-detect, so the ViewModel stays
  * plain-JVM testable. Takes the URI as a string (no `android.net.Uri` in tests).
  */
-interface SharedDocProbe {
+fun interface SharedDocProbe {
     suspend fun probe(uriString: String): SharedDocProbeResult
 }
 

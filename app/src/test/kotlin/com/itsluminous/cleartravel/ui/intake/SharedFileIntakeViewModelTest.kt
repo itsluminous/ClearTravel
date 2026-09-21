@@ -14,18 +14,16 @@ class SharedFileIntakeViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
-    private class FakeProbe(
-        var result: SharedDocProbeResult = SharedDocProbeResult(),
-    ) : SharedDocProbe {
-        var calls = 0
+    private var probeResult = SharedDocProbeResult()
+    private var probeCalls = 0
 
-        override suspend fun probe(uriString: String): SharedDocProbeResult {
-            calls++
-            return result
+    // A lambda-backed fake (fun interface) rather than a named subclass: keeps the
+    // test free of a source supertype so lint's test-source analysis stays simple.
+    private val probe =
+        SharedDocProbe {
+            probeCalls++
+            probeResult
         }
-    }
-
-    private val probe = FakeProbe()
 
     private fun viewModel() = SharedFileIntakeViewModel(probe)
 
@@ -41,7 +39,7 @@ class SharedFileIntakeViewModelTest {
     @Test
     fun `start runs detection and preselects the suggestion`() =
         runTest {
-            probe.result = barcodePass
+            probeResult = barcodePass
             val vm = viewModel()
 
             vm.start(URI)
@@ -52,7 +50,7 @@ class SharedFileIntakeViewModelTest {
             assertThat(state.suggested).isEqualTo(SharedDocType.BOARDING_PASS)
             assertThat(state.selected).isEqualTo(SharedDocType.BOARDING_PASS)
             assertThat(state.route).isNull()
-            assertThat(probe.calls).isEqualTo(1)
+            assertThat(probeCalls).isEqualTo(1)
         }
 
     @Test
@@ -83,7 +81,7 @@ class SharedFileIntakeViewModelTest {
     @Test
     fun `confirming the preselected boarding pass routes to the flights pass import`() =
         runTest {
-            probe.result = barcodePass
+            probeResult = barcodePass
             val vm = viewModel()
             vm.start(URI)
 
@@ -95,7 +93,7 @@ class SharedFileIntakeViewModelTest {
     @Test
     fun `user override beats the suggestion`() =
         runTest {
-            probe.result = barcodePass
+            probeResult = barcodePass
             val vm = viewModel()
             vm.start(URI)
 
