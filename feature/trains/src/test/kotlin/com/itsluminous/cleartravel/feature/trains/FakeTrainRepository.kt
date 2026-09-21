@@ -56,6 +56,12 @@ class FakeTrainRepository(
 
     override suspend fun getTicket(id: String): TrainTicket? = tickets.value[id]?.takeIf { it.deletedAt == null }
 
+    override suspend fun findByPnr(pnr: String): TrainTicket? {
+        val normalized = pnr.trim().uppercase()
+        if (normalized.isEmpty()) return null
+        return tickets.value.values.firstOrNull { it.deletedAt == null && it.pnr.trim().uppercase() == normalized }
+    }
+
     override fun observePassengers(ticketId: String): Flow<List<TrainPassenger>> =
         passengers.map { all ->
             all.values

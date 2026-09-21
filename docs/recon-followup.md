@@ -200,3 +200,10 @@ discoverable for WL/RAC tickets.
 - [ ] Capture a CONFIRMED (CNF/coach/berth) ERS PDF through the harness — the real
       capture is RAC/WL, so the `CNF/B4/32/LB` coach/berth path is still only
       covered by the hand-written fixtures 1/2.
+
+### TODO — flight de-duplication (ADR-024 follow-up)
+- [ ] Mirror the train PNR guard for flights: `FlightRepository.findByFlight(airlineIata,
+      flightNumber, date)` (live, archived included) + a `FlightFormViewModel.save()`
+      refusal routed through a new `FlightFormScreen` callback so the host shows a
+      notice and opens the existing flight. Not done in this wave because the flights
+      form reports saves via callbacks (no event flow) and touches three hosts.

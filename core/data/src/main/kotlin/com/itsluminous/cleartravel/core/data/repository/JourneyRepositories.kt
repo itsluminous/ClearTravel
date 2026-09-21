@@ -21,6 +21,13 @@ interface TrainRepository {
 
     suspend fun getTicket(id: String): TrainTicket?
 
+    /**
+     * Live (non-tombstoned) ticket — archived included — whose PNR equals [pnr]
+     * after trimming/case-folding, or null. Duplicate guard for every add path
+     * (ADR-024); a tombstoned ticket's PNR is free to be re-added.
+     */
+    suspend fun findByPnr(pnr: String): TrainTicket?
+
     /** Live passengers ordered by `sortOrder`. */
     fun observePassengers(ticketId: String): Flow<List<TrainPassenger>>
 

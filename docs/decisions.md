@@ -1068,3 +1068,68 @@ passengers beyond the stored count (coach/berth/booking/current status,
 sortOrder appended; name left blank — the result page is anonymous). Existing
 rows keep the by-position merge semantics unchanged. Live-verified against real
 PNR 8553674906 (user-solved captcha).
+
+## ADR-024 — PNR de-duplication, intake landing, OCR reading order (2026-09-21)
+
+**Context.** Live use surfaced four defects in one session: (1) the same PNR could
+be added twice (every add path — manual, quick add, SMS/file prefill, deep link —
+created a fresh row); (2) a ticket added via the share sheet / PNR link dropped the
+user on the default Trips tab afterwards, so the add looked like a no-op; (3) the
+PNR-check/route-fetch screens completed INSTANTLY on re-entry (a stale `Applied`
+state in a ViewModel scoped to the Journeys back-stack entry re-fired `onApplied`,
+even chaining a route fetch for the wrong train); (4) PDF ticket import filled only
+PNR/train/stations because ML Kit's block order shredded the ERS table.
+
+**Decisions.**
+
+1. **`TrainRepository.findByPnr(pnr)`** (additive, frozen-contract rule):
+   live ticket — archived INCLUDED, tombstones EXCLUDED — whose PNR equals the
+   trimmed, case-folded input. DAO `findLiveByPnr` normalizes the stored value in
+   SQL (`UPPER(TRIM(pnr))`) so legacy rows match. `TrainTicketFormViewModel.save()`
+   runs the check for every save and emits `TrainFormEvent.DuplicatePnr(existingId)`
+   — writing nothing — when a match exists whose id differs from the ticket being
+   edited (editing keeps its own PNR; re-pointing an edit at ANOTHER ticket's PNR is
+   refused too). Hosts show `trains_form_duplicate_pnr` and open the EXISTING
+   ticket's detail sheet. Flights: NOT shipped in this wave (needs an equivalent
+   `FlightRepository` lookup + host plumbing through `FlightFormScreen`'s callback
+   API); tracked as a follow-up in `docs/recon-followup.md`.
+2. **Intake landing.** `TrainsExternalEntry`/`TrainsSharedTextEntry` now report a
+   `TrainsEntryResult` (`Saved(ticketId, openPnrCheck)` / `DuplicatePnr(existingId)`
+   / `Cancelled`) and `FlightsExternalEntry` the saved flight id (or null). The
+   shell maps these to a `JourneysDeepLink` (`forTrainsEntry` / `forFlightsEntry`,
+   unit-tested) — the SAME hook notification deep links use (ADR-014) — so after
+   the hosted form closes the app lands on Journeys with the right segment, cold
+   start included. `JourneysDeepLink.entityId` became nullable (cancel = segment
+   only) and gained `trainsAction`; `TrainsContent` gained `initialAction:
+   TrainsLandingAction` (`OPEN_DETAIL` default = unchanged behaviour,
+   `OPEN_PNR_CHECK` for a PNR-only quick add — waits ≤3 s for the saved card to
+   arrive from Room, then opens the check so the ADR-023 backfill + route chain
+   runs exactly as in-tab, `DUPLICATE_PNR` = existing ticket + notice).
+3. **Stale-state guard for scrape screens.** `PnrCheckScreen` and
+   `RouteFetchScreen` start the ViewModel and observe completion inside ONE effect
+   (`start(); uiState.collect { Applied -> onApplied }`) instead of a separate
+   `LaunchedEffect(state)`, so a previous run's `Applied` can never complete a fresh
+   run before its page loads.
+4. **WebView touch-scroll hardening.** `WebView.configureTouchScrolling()`
+   (`core:scrape`) is applied by `ScrapeWebViewController.start()` and the flights
+   web-search `PlainWebView`: scrollbars, `OVER_SCROLL_IF_CONTENT_SCROLLS`, and
+   `requestDisallowInterceptTouchEvent(true)` on ACTION_DOWN (non-consuming) so no
+   ancestor `ViewGroup` can steal vertical drags. Honest note: adb swipes, flings
+   and slow motion-event drags all scrolled the live indianrail page on the
+   emulator both before and after this change (see `docs/validation-report.md`);
+   the reported "taps work, swipes don't" could not be reproduced there, so this is
+   defensive and the report documents how it was tested.
+5. **OCR reading order.** `OcrTextRecognizer` returns row text rebuilt from ML Kit
+   line geometry (`OcrLayout`: rows = lines whose vertical centres are within 0.6×
+   the median line height, cells joined by two spaces). `IrctcTicketExtractor`
+   parses per cell, supports stacked header/value tables by column index, `Start
+   Date*`, parenthesised class codes and a passenger `currentStatus` (additive field
+   on `PassengerExtraction`, mapped into the form's current-status column). Pinned
+   by a REAL anonymized capture (`irctc-ticket-3.geometry.txt` → `OcrLayoutTest` →
+   `irctc-ticket-3.txt` → `expected.json`).
+
+**Consequences.** Adding a PNR that exists is impossible from any path; the user is
+taken to the existing ticket. Shares/links always end on Journeys. Re-opening a
+check never auto-completes. ERS PDFs import passengers with statuses. Test fakes of
+`TrainRepository` (feature:trains, feature:itinerary, core:google) implement
+`findByPnr`.

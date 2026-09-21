@@ -41,14 +41,56 @@ sealed interface TrainsEntryRequest {
 }
 
 /**
+ * How an external entry ended (ADR-024). The shell uses it to land the user on the
+ * Journeys tab's Trains segment with the right follow-up instead of dropping them
+ * back on whatever tab was open — previously the default Trips tab, which looked
+ * like the share had added nothing.
+ */
+sealed interface TrainsEntryResult {
+    /** The user backed out; nothing was written. */
+    data object Cancelled : TrainsEntryResult
+
+    /**
+     * A ticket was saved. [openPnrCheck] is the PNR-only quick-add signal (ADR-023):
+     * the landing screen should run the PNR check so the first fetch backfills it.
+     */
+    data class Saved(
+        val ticketId: String,
+        val openPnrCheck: Boolean,
+    ) : TrainsEntryResult
+
+    /** Save refused — a live ticket with the same PNR already exists (ADR-024). */
+    data class DuplicatePnr(
+        val existingTicketId: String,
+    ) : TrainsEntryResult
+}
+
+/**
+ * What the Trains segment should do on arrival for a given ticket (integration
+ * contract for the Journeys shell, ADR-024). Mirrors [TrainsEntryResult] so the
+ * shell can forward an entry outcome without knowing the segment's internals.
+ */
+enum class TrainsLandingAction {
+    /** Expand the ticket's detail sheet (notification deep links, plain saves). */
+    OPEN_DETAIL,
+
+    /** Open the PNR check for the ticket (PNR-only quick add, ADR-023). */
+    OPEN_PNR_CHECK,
+
+    /** Expand the EXISTING ticket and explain that the PNR was already present. */
+    DUPLICATE_PNR,
+}
+
+/**
  * PUBLIC external entry point (integration contract for the app module): renders
- * the add-ticket form prefilled per [request]; [onDone] fires after the ticket is
- * saved OR the user cancels. The app shell renders this over its normal UI.
+ * the add-ticket form prefilled per [request]; [onDone] fires exactly once with how
+ * the entry ended — saved, refused as a duplicate, or cancelled. The app shell
+ * renders this over its normal UI and lands on Journeys/Trains afterwards.
  */
 @Composable
 fun TrainsExternalEntry(
     request: TrainsEntryRequest,
-    onDone: () -> Unit,
+    onDone: (TrainsEntryResult) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val viewModel: TrainTicketFormViewModel = hiltViewModel()
@@ -66,7 +108,9 @@ fun TrainsExternalEntry(
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {
-                is TrainFormEvent.Saved -> onDone()
+                is TrainFormEvent.Saved ->
+                    onDone(TrainsEntryResult.Saved(ticketId = event.ticketId, openPnrCheck = event.openPnrCheck))
+                is TrainFormEvent.DuplicatePnr -> onDone(TrainsEntryResult.DuplicatePnr(event.existingTicketId))
                 is TrainFormEvent.PrefillEmpty ->
                     snackbarHostState.showSnackbar(context.getString(R.string.trains_import_failed))
             }
@@ -77,7 +121,7 @@ fun TrainsExternalEntry(
         TrainTicketFormScreen(
             state = state,
             viewModel = viewModel,
-            onCancel = onDone,
+            onCancel = { onDone(TrainsEntryResult.Cancelled) },
         )
         SnackbarHost(
             hostState = snackbarHostState,

@@ -94,16 +94,31 @@ class MainActivity : ComponentActivity() {
                     // External entry: a feature's add form rendered over the shell
                     // until saved/cancelled; keyed by nonce so a repeated request
                     // re-creates (and re-prefills) the form.
+                    // When the hosted form finishes, the shell lands on Journeys with
+                    // the matching segment — showing what was just added (ADR-024)
+                    // instead of the default Trips tab.
                     is ExternalEntry.Trains ->
                         key(entry.nonce) {
                             Surface {
-                                TrainsExternalEntry(request = entry.request, onDone = { pendingEntry.value = null })
+                                TrainsExternalEntry(
+                                    request = entry.request,
+                                    onDone = { result ->
+                                        pendingDeepLink.value = JourneysDeepLink.forTrainsEntry(result)
+                                        pendingEntry.value = null
+                                    },
+                                )
                             }
                         }
                     is ExternalEntry.Flights ->
                         key(entry.nonce) {
                             Surface {
-                                FlightsExternalEntry(request = entry.request, onDone = { pendingEntry.value = null })
+                                FlightsExternalEntry(
+                                    request = entry.request,
+                                    onDone = { savedFlightId ->
+                                        pendingDeepLink.value = JourneysDeepLink.forFlightsEntry(savedFlightId)
+                                        pendingEntry.value = null
+                                    },
+                                )
                             }
                         }
                     null ->

@@ -51,6 +51,26 @@ class OfflineTrainRepositoryTest {
         }
 
     @Test
+    fun `findByPnr matches live tickets case and whitespace insensitively, archived included`() =
+        runTest {
+            val saved = trains.save(Fixtures.trainTicket(pnr = "8553674906"))
+            trains.setArchived(saved.id, true)
+
+            assertThat(trains.findByPnr("  8553674906 ")?.id).isEqualTo(saved.id)
+            assertThat(trains.findByPnr("1234567890")).isNull()
+            assertThat(trains.findByPnr("   ")).isNull()
+        }
+
+    @Test
+    fun `findByPnr ignores tombstoned tickets so a deleted PNR can be re-added`() =
+        runTest {
+            val saved = trains.save(Fixtures.trainTicket(pnr = "8553674906"))
+            trains.delete(saved.id)
+
+            assertThat(trains.findByPnr("8553674906")).isNull()
+        }
+
+    @Test
     fun `applyStatusResult updates passenger statuses by position and lastFetchedAt`() =
         runTest {
             val ticket = trains.save(Fixtures.trainTicket())

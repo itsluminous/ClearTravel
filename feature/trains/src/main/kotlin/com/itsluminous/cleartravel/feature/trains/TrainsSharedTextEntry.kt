@@ -10,13 +10,13 @@ import androidx.compose.ui.Modifier
  * the README contract are untouched.
  *
  * Renders the add-ticket form prefilled from [sharedText] via the IRCTC SMS/email
- * parser (per-field confidence markers, never saved blind). [onDone] fires after the
- * ticket is saved OR the user cancels.
+ * parser (per-field confidence markers, never saved blind). [onDone] fires once with
+ * how the entry ended ([TrainsEntryResult]) so the shell can land on Journeys/Trains.
  */
 @Composable
 fun TrainsSharedTextEntry(
     sharedText: String,
-    onDone: () -> Unit,
+    onDone: (TrainsEntryResult) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     TrainsExternalEntry(

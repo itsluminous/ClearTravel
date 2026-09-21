@@ -29,13 +29,15 @@ sealed interface FlightsEntryRequest {
 /**
  * PUBLIC external entry point (integration contract for the app module): the
  * add-flight form prefilled per [request]. "Save & check status" chains into the
- * interactive status-check screen exactly like the in-tab flow; [onDone] fires when
- * the user cancels, after a plain save, or when the status check closes.
+ * interactive status-check screen exactly like the in-tab flow; [onDone] fires once
+ * when the user cancels (null), after a plain save, or when the status check closes
+ * — with the saved flight id so the shell can land on Journeys/Flights showing it
+ * (ADR-024).
  */
 @Composable
 fun FlightsExternalEntry(
     request: FlightsEntryRequest,
-    onDone: () -> Unit,
+    onDone: (savedFlightId: String?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var checkingFlightId by remember { mutableStateOf<String?>(null) }
@@ -43,7 +45,7 @@ fun FlightsExternalEntry(
     if (checking != null) {
         StatusCheckScreen(
             flightId = checking,
-            onClose = { onDone() },
+            onClose = { onDone(checking) },
             modifier = modifier,
         )
     } else {
@@ -51,7 +53,8 @@ fun FlightsExternalEntry(
             editId = null,
             importUri = (request as? FlightsEntryRequest.BoardingPass)?.uri,
             bookingUri = (request as? FlightsEntryRequest.BookingConfirmation)?.uri,
-            onClose = onDone,
+            onClose = { onDone(null) },
+            onSaved = { id -> onDone(id) },
             onSavedAndCheck = { id -> checkingFlightId = id },
             modifier = modifier,
         )

@@ -25,6 +25,14 @@ interface TrainDao {
     @Query("SELECT * FROM train_tickets WHERE id = :id AND deleted_at IS NULL")
     suspend fun getById(id: String): TrainTicketEntity?
 
+    /**
+     * Live (non-tombstoned, archived OR active) ticket with this PNR — the duplicate
+     * guard of ADR-024. [pnr] must already be normalized (trimmed, upper-cased);
+     * the stored value is normalized in SQL so legacy rows with stray spaces match.
+     */
+    @Query("SELECT * FROM train_tickets WHERE deleted_at IS NULL AND UPPER(TRIM(pnr)) = :pnr LIMIT 1")
+    suspend fun findLiveByPnr(pnr: String): TrainTicketEntity?
+
     @Query("SELECT * FROM train_passengers WHERE ticket_id = :ticketId AND deleted_at IS NULL ORDER BY sort_order")
     fun observePassengers(ticketId: String): Flow<List<TrainPassengerEntity>>
 

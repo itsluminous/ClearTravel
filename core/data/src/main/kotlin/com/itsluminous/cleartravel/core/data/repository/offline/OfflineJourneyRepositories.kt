@@ -40,6 +40,12 @@ class OfflineTrainRepository
 
         override suspend fun getTicket(id: String): TrainTicket? = trainDao.getById(id)?.toModel()
 
+        override suspend fun findByPnr(pnr: String): TrainTicket? {
+            val normalized = pnr.trim().uppercase()
+            if (normalized.isEmpty()) return null
+            return trainDao.findLiveByPnr(normalized)?.toModel()
+        }
+
         override fun observePassengers(ticketId: String): Flow<List<TrainPassenger>> =
             trainDao.observePassengers(ticketId).map { rows -> rows.map { it.toModel() } }
 

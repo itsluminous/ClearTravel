@@ -304,4 +304,93 @@ class TrainTicketFormViewModelTest {
             assertThat(saved.id).isEqualTo(ticket.id)
             assertThat(saved.trainName).isEqualTo("Renamed Express")
         }
+
+    // ---- PNR de-duplication (ADR-024) ----
+
+    @Test
+    fun `new ticket with an existing live PNR is refused with a DuplicatePnr event`() =
+        runTest {
+            val existing = Fixtures.trainTicket(pnr = "8553674906")
+            repository.seed(existing)
+            val vm = viewModel()
+            vm.onPnrChange("8553674906")
+            vm.onTrainNumberChange("20933")
+
+            vm.events.test {
+                vm.save()
+                val event = awaitItem() as TrainFormEvent.DuplicatePnr
+                assertThat(event.existingTicketId).isEqualTo(existing.id)
+                assertThat(event.pnr).isEqualTo("8553674906")
+            }
+            assertThat(repository.savedTickets).isEmpty()
+            assertThat(repository.savedPassengerBatches).isEmpty()
+            assertThat(vm.uiState.value.saving).isFalse()
+        }
+
+    @Test
+    fun `duplicate check is whitespace and case insensitive and includes archived tickets`() =
+        runTest {
+            val existing = Fixtures.trainTicket(pnr = "8553674906", archived = true)
+            repository.seed(existing)
+            val vm = viewModel()
+            vm.onPnrChange("  8553674906 ")
+
+            vm.events.test {
+                vm.save()
+                assertThat((awaitItem() as TrainFormEvent.DuplicatePnr).existingTicketId).isEqualTo(existing.id)
+            }
+            assertThat(repository.savedTickets).isEmpty()
+        }
+
+    @Test
+    fun `editing a ticket keeps its own PNR without tripping the duplicate check`() =
+        runTest {
+            val ticket = Fixtures.trainTicket(pnr = "8553674906")
+            repository.seed(ticket)
+            val vm = viewModel()
+            vm.startEdit(ticket.id)
+            vm.onTrainNameChange("Renamed Express")
+
+            vm.events.test {
+                vm.save()
+                assertThat((awaitItem() as TrainFormEvent.Saved).ticketId).isEqualTo(ticket.id)
+            }
+            assertThat(repository.savedTickets.single().trainName).isEqualTo("Renamed Express")
+        }
+
+    @Test
+    fun `editing a ticket onto ANOTHER ticket's PNR is refused`() =
+        runTest {
+            val other = Fixtures.trainTicket(pnr = "1111111111")
+            val ticket = Fixtures.trainTicket(pnr = "2222222222")
+            repository.seed(other)
+            repository.seed(ticket)
+            val vm = viewModel()
+            vm.startEdit(ticket.id)
+            vm.onPnrChange("1111111111")
+
+            vm.events.test {
+                vm.save()
+                assertThat((awaitItem() as TrainFormEvent.DuplicatePnr).existingTicketId).isEqualTo(other.id)
+            }
+            assertThat(repository.savedTickets).isEmpty()
+        }
+
+    @Test
+    fun `a tombstoned ticket's PNR can be added again`() =
+        runTest {
+            val deleted = Fixtures.trainTicket(pnr = "8553674906")
+            repository.seed(deleted)
+            repository.delete(deleted.id)
+            val vm = viewModel()
+            vm.onPnrChange("8553674906")
+            vm.onTrainNumberChange("20933")
+
+            vm.events.test {
+                vm.save()
+                val event = awaitItem() as TrainFormEvent.Saved
+                assertThat(event.ticketId).isNotEqualTo(deleted.id)
+            }
+            assertThat(repository.savedTickets.single().pnr).isEqualTo("8553674906")
+        }
 }

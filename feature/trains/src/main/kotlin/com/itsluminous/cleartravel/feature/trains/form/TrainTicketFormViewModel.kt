@@ -87,6 +87,16 @@ sealed interface TrainFormEvent {
 
     /** A file import produced nothing — the form stays blank; show a hint. */
     data object PrefillEmpty : TrainFormEvent
+
+    /**
+     * Save refused: a live ticket (archived included) already carries this PNR
+     * (ADR-024). Nothing was written; the host shows a notice and opens
+     * [existingTicketId] instead of creating a second card for the same journey.
+     */
+    data class DuplicatePnr(
+        val existingTicketId: String,
+        val pnr: String,
+    ) : TrainFormEvent
 }
 
 /**
@@ -272,7 +282,12 @@ class TrainTicketFormViewModel
             }
         }
 
-        /** Validates and saves the ticket + passengers; emits [TrainFormEvent.Saved]. */
+        /**
+         * Validates and saves the ticket + passengers; emits [TrainFormEvent.Saved] —
+         * or [TrainFormEvent.DuplicatePnr] and writes nothing when another live
+         * ticket already has this PNR (ADR-024). Editing a ticket never trips on its
+         * own PNR; only re-pointing it at ANOTHER ticket's PNR does.
+         */
         fun save() {
             val current = state.value
             if (!isValidPnr(current.pnr)) {
@@ -282,10 +297,17 @@ class TrainTicketFormViewModel
             if (current.saving) return
             state.update { it.copy(saving = true) }
             viewModelScope.launch {
+                val pnr = current.pnr.trim()
+                val duplicate = repository.findByPnr(pnr)?.takeIf { it.id != current.editingTicketId }
+                if (duplicate != null) {
+                    state.update { it.copy(saving = false) }
+                    eventsFlow.tryEmit(TrainFormEvent.DuplicatePnr(existingTicketId = duplicate.id, pnr = duplicate.pnr))
+                    return@launch
+                }
                 val existing = current.editingTicketId?.let { repository.getTicket(it) }
                 val ticket =
-                    (existing ?: TrainTicket(pnr = current.pnr.trim())).copy(
-                        pnr = current.pnr.trim(),
+                    (existing ?: TrainTicket(pnr = pnr)).copy(
+                        pnr = pnr,
                         trainNumber = current.trainNumber.trim(),
                         trainName = current.trainName.trim(),
                         journeyDate = current.journeyDate,

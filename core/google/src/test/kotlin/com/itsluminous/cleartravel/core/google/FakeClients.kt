@@ -174,6 +174,9 @@ class FakeTrainRepository : TrainRepository {
 
     override suspend fun getTicket(id: String): TrainTicket? = tickets.value.firstOrNull { it.id == id }
 
+    override suspend fun findByPnr(pnr: String): TrainTicket? =
+        tickets.value.firstOrNull { it.deletedAt == null && it.pnr.trim().equals(pnr.trim(), ignoreCase = true) }
+
     override fun observePassengers(ticketId: String): Flow<List<TrainPassenger>> =
         passengers.map { list -> list.filter { it.ticketId == ticketId } }
 

@@ -23,6 +23,7 @@ import com.itsluminous.cleartravel.R
 import com.itsluminous.cleartravel.core.notifications.DeepLinkContract
 import com.itsluminous.cleartravel.feature.flights.FlightsContent
 import com.itsluminous.cleartravel.feature.trains.TrainsContent
+import com.itsluminous.cleartravel.feature.trains.TrainsLandingAction
 
 /** Route of the Journeys tab root (trains + flights, segmented). */
 const val JOURNEYS_ROUTE = "journeys"
@@ -56,6 +57,7 @@ private fun JourneysScreen(
 ) {
     var segment by rememberSaveable { mutableStateOf(JourneysSegment.TRAINS) }
     var trainDeepLinkId by rememberSaveable { mutableStateOf<String?>(null) }
+    var trainAction by rememberSaveable { mutableStateOf(TrainsLandingAction.OPEN_DETAIL) }
     var flightDeepLinkId by rememberSaveable { mutableStateOf<String?>(null) }
 
     LaunchedEffect(deepLink) {
@@ -64,6 +66,7 @@ private fun JourneysScreen(
                 DeepLinkContract.TARGET_TRAIN -> {
                     segment = JourneysSegment.TRAINS
                     trainDeepLinkId = deepLink.entityId
+                    trainAction = deepLink.trainsAction
                 }
                 DeepLinkContract.TARGET_FLIGHT -> {
                     segment = JourneysSegment.FLIGHTS
@@ -104,7 +107,7 @@ private fun JourneysScreen(
             }
         }
         when (segment) {
-            JourneysSegment.TRAINS -> TrainsContent(initialTicketId = trainDeepLinkId)
+            JourneysSegment.TRAINS -> TrainsContent(initialTicketId = trainDeepLinkId, initialAction = trainAction)
             JourneysSegment.FLIGHTS -> FlightsContent(initialFlightId = flightDeepLinkId)
         }
     }

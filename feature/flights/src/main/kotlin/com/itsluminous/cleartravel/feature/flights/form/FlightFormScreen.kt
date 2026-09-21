@@ -44,6 +44,8 @@ fun FlightFormScreen(
     viewModel: FlightFormViewModel = hiltViewModel(),
     /** Picked booking-confirmation file (third add path, ADR-017); defaulted so existing call sites are untouched. */
     bookingUri: String? = null,
+    /** Plain "Save" completion with the journey id; defaults to [onClose] so existing call sites are untouched. */
+    onSaved: (flightId: String) -> Unit = { onClose() },
 ) {
     val state by viewModel.formState.collectAsStateWithLifecycle()
     val busy by viewModel.isBusy.collectAsStateWithLifecycle()
@@ -201,7 +203,7 @@ fun FlightFormScreen(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 OutlinedButton(
-                    onClick = { viewModel.save { onClose() } },
+                    onClick = { viewModel.save(onSaved) },
                     enabled = !busy,
                     modifier = Modifier.weight(1f),
                 ) { Text(stringResource(R.string.flights_form_save)) }

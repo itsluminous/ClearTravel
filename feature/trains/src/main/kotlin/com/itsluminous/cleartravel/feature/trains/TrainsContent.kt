@@ -30,7 +30,14 @@ import com.itsluminous.cleartravel.feature.trains.route.RouteFetchScreen
 import com.itsluminous.cleartravel.feature.trains.route.TrainRouteScreen
 import com.itsluminous.cleartravel.feature.trains.seatmap.SeatMapScreen
 import com.itsluminous.cleartravel.feature.trains.share.rememberTrainTicketSharer
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+
+/** How long the PNR-only landing waits for the saved ticket's card before falling back. */
+private const val PNR_CHECK_LOOKUP_TIMEOUT_MILLIS = 3_000L
 
 /** Where a form session got its initial content from. */
 private sealed interface FormEntry {
@@ -88,24 +95,21 @@ private sealed interface TrainsScreen {
  * `feature:flights`. Hosts the ticket list, add/edit form, detail bottom sheet and
  * the interactive PNR-check WebView screen behind an internal navigation state.
  *
- * [initialTicketId] is the notification deep-link hook (integration contract): when
- * non-null the list opens with that ticket's detail sheet expanded. Defaulted so
- * existing call sites are untouched.
+ * [initialTicketId] is the deep-link hook (integration contract): when non-null the
+ * segment arrives on that ticket per [initialAction] — detail sheet expanded
+ * (notification deep links, saves), the PNR check opened (PNR-only quick add via a
+ * share link, ADR-023) or the existing ticket shown with a duplicate notice
+ * (ADR-024). Both defaulted so existing call sites are untouched.
  */
 @Composable
 fun TrainsContent(
     modifier: Modifier = Modifier,
     initialTicketId: String? = null,
+    initialAction: TrainsLandingAction = TrainsLandingAction.OPEN_DETAIL,
 ) {
     var screen by remember { mutableStateOf<TrainsScreen>(TrainsScreen.List) }
     var detailTicketId by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(initialTicketId) {
-        if (initialTicketId != null) {
-            screen = TrainsScreen.List
-            detailTicketId = initialTicketId
-        }
-    }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -119,6 +123,40 @@ fun TrainsContent(
     val listState by listViewModel.uiState.collectAsStateWithLifecycle()
     val formState by formViewModel.uiState.collectAsStateWithLifecycle()
     val detailState by detailViewModel.uiState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(initialTicketId, initialAction) {
+        if (initialTicketId == null) return@LaunchedEffect
+        when (initialAction) {
+            TrainsLandingAction.OPEN_DETAIL -> {
+                screen = TrainsScreen.List
+                detailTicketId = initialTicketId
+            }
+            TrainsLandingAction.DUPLICATE_PNR -> {
+                screen = TrainsScreen.List
+                detailTicketId = initialTicketId
+                snackbarHostState.showSnackbar(context.getString(R.string.trains_form_duplicate_pnr))
+            }
+            TrainsLandingAction.OPEN_PNR_CHECK -> {
+                // The just-saved ticket reaches the list through Room; wait for its
+                // card (it carries the PNR) rather than threading the PNR through the
+                // shell. If it never shows up, fall back to the detail sheet.
+                val card =
+                    withTimeoutOrNull(PNR_CHECK_LOOKUP_TIMEOUT_MILLIS) {
+                        listViewModel.uiState
+                            .map { state -> state.cards.firstOrNull { it.ticket.id == initialTicketId } }
+                            .filterNotNull()
+                            .first()
+                    }
+                if (card != null) {
+                    detailTicketId = null
+                    screen = TrainsScreen.PnrCheck(ticketId = card.ticket.id, pnr = card.ticket.pnr)
+                } else {
+                    screen = TrainsScreen.List
+                    detailTicketId = initialTicketId
+                }
+            }
+        }
+    }
 
     LaunchedEffect(detailTicketId) { detailViewModel.setTicketId(detailTicketId) }
 
@@ -141,6 +179,14 @@ fun TrainsContent(
                     scope.launch {
                         snackbarHostState.showSnackbar(context.getString(R.string.trains_import_failed))
                     }
+                is TrainFormEvent.DuplicatePnr -> {
+                    // Nothing was written (ADR-024): show the EXISTING ticket instead.
+                    screen = TrainsScreen.List
+                    detailTicketId = event.existingTicketId
+                    scope.launch {
+                        snackbarHostState.showSnackbar(context.getString(R.string.trains_form_duplicate_pnr))
+                    }
+                }
             }
         }
     }
