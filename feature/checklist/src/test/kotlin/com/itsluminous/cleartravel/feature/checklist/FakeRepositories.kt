@@ -24,6 +24,9 @@ class FakeChecklistRepository : ChecklistRepository {
     /** Recorded (checklistId, presetId) pairs, newest last. */
     val appendPresetCalls = mutableListOf<Pair<String, String>>()
 
+    /** Every item write batch ([saveItem] records a singleton batch), newest last. */
+    val saveItemsCalls = mutableListOf<List<ChecklistItem>>()
+
     fun seedChecklist(checklist: Checklist) {
         checklists.value = checklists.value + checklist
     }
@@ -55,13 +58,12 @@ class FakeChecklistRepository : ChecklistRepository {
         return checklist
     }
 
-    override suspend fun saveItem(item: ChecklistItem): ChecklistItem {
-        items.value = items.value.filterNot { it.id == item.id } + item
-        return item
-    }
+    override suspend fun saveItem(item: ChecklistItem): ChecklistItem = saveItems(listOf(item)).single()
 
     override suspend fun saveItems(items: List<ChecklistItem>): List<ChecklistItem> {
-        items.forEach { saveItem(it) }
+        saveItemsCalls += items
+        val ids = items.map { it.id }.toSet()
+        this.items.value = this.items.value.filterNot { it.id in ids } + items
         return items
     }
 

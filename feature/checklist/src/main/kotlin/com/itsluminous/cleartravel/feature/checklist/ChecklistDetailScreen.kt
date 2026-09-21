@@ -16,10 +16,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,14 +46,20 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
+import com.itsluminous.cleartravel.core.designsystem.component.ReorderHandle
+import com.itsluminous.cleartravel.core.designsystem.component.ReorderableListState
+import com.itsluminous.cleartravel.core.designsystem.component.TextEditDialog
+import com.itsluminous.cleartravel.core.designsystem.component.rememberReorderableListState
+import com.itsluminous.cleartravel.core.designsystem.component.reorderableItem
 import com.itsluminous.cleartravel.core.model.ChecklistItem
 import com.itsluminous.cleartravel.core.model.ChecklistPreset
 
 /**
  * Full-screen checklist detail (not a bottom sheet: packing lists get long, and the
- * add-item field + reorder controls need stable room). Progress header, tap-to-toggle
- * rows, up/down reorder buttons, per-row remove, add field at the bottom, and the
- * append-preset action supporting cumulative multi-append (ADR-006).
+ * add-item field needs stable room). Progress header, tap-to-toggle rows with a
+ * drag handle (hold-and-drag to reorder, ADR-021) on the left and edit/delete icons on
+ * the right, add field at the bottom, and the append-preset action supporting
+ * cumulative multi-append (ADR-006).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,6 +75,13 @@ internal fun ChecklistDetailScreen(
     val context = LocalContext.current
     var showAppendDialog by rememberSaveable { mutableStateOf(false) }
     var showDeleteDialog by rememberSaveable { mutableStateOf(false) }
+    var editingItemId by rememberSaveable { mutableStateOf<String?>(null) }
+    val reorderState =
+        rememberReorderableListState(
+            items = items,
+            key = { it.id },
+            onDrop = viewModel::moveItem,
+        )
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
@@ -131,16 +142,15 @@ internal fun ChecklistDetailScreen(
                     modifier = Modifier.weight(1f),
                 )
             } else {
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(items, key = { it.id }) { item ->
+                LazyColumn(modifier = Modifier.weight(1f), state = reorderState.lazyListState) {
+                    items(reorderState.items, key = { it.id }) { item ->
                         ChecklistItemRow(
                             item = item,
-                            isFirst = item.id == items.first().id,
-                            isLast = item.id == items.last().id,
+                            reorderState = reorderState,
                             onToggle = { viewModel.setItemChecked(item.id, !item.checked) },
-                            onMoveUp = { viewModel.moveItem(item.id, up = true) },
-                            onMoveDown = { viewModel.moveItem(item.id, up = false) },
-                            onRemove = { viewModel.removeItem(item.id) },
+                            onEdit = { editingItemId = item.id },
+                            onDelete = { viewModel.removeItem(item.id) },
+                            modifier = Modifier.reorderableItem(reorderState, item.id, this),
                         )
                     }
                 }
@@ -157,6 +167,22 @@ internal fun ChecklistDetailScreen(
                 showAppendDialog = false
                 viewModel.appendPreset(presetId)
             },
+        )
+    }
+
+    val editingItem = items.firstOrNull { it.id == editingItemId }
+    if (editingItem != null) {
+        TextEditDialog(
+            title = stringResource(R.string.checklist_edit_item_title),
+            label = stringResource(R.string.checklist_edit_item_label),
+            initialValue = editingItem.text,
+            confirmText = stringResource(R.string.checklist_save),
+            dismissText = stringResource(R.string.checklist_cancel),
+            onConfirm = { text ->
+                viewModel.renameItem(editingItem.id, text)
+                editingItemId = null
+            },
+            onDismiss = { editingItemId = null },
         )
     }
 
@@ -210,12 +236,10 @@ private fun ProgressHeader(
 @Composable
 private fun ChecklistItemRow(
     item: ChecklistItem,
-    isFirst: Boolean,
-    isLast: Boolean,
+    reorderState: ReorderableListState<ChecklistItem>,
     onToggle: () -> Unit,
-    onMoveUp: () -> Unit,
-    onMoveDown: () -> Unit,
-    onRemove: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -226,36 +250,26 @@ private fun ChecklistItemRow(
                 .padding(start = 4.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        ReorderHandle(state = reorderState, itemKey = item.id)
         Checkbox(checked = item.checked, onCheckedChange = { onToggle() })
         Text(
             text = item.text,
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f),
         )
-        if (!isFirst) {
-            ExplainableIcon(
-                icon = Icons.Filled.KeyboardArrowUp,
-                explanationRes = R.string.checklist_item_move_up,
-                targetSize = 40.dp,
-                iconSize = 20.dp,
-                onClick = onMoveUp,
-            )
-        }
-        if (!isLast) {
-            ExplainableIcon(
-                icon = Icons.Filled.KeyboardArrowDown,
-                explanationRes = R.string.checklist_item_move_down,
-                targetSize = 40.dp,
-                iconSize = 20.dp,
-                onClick = onMoveDown,
-            )
-        }
         ExplainableIcon(
-            icon = Icons.Filled.Close,
-            explanationRes = R.string.checklist_item_remove,
+            icon = Icons.Filled.Edit,
+            explanationRes = R.string.checklist_item_edit,
             targetSize = 40.dp,
             iconSize = 20.dp,
-            onClick = onRemove,
+            onClick = onEdit,
+        )
+        ExplainableIcon(
+            icon = Icons.Filled.Delete,
+            explanationRes = R.string.checklist_item_delete,
+            targetSize = 40.dp,
+            iconSize = 20.dp,
+            onClick = onDelete,
         )
     }
 }

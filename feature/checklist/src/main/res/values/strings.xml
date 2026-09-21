@@ -18,9 +18,11 @@
     <string name="checklist_no_items_message">Add items below or append a preset.</string>
     <string name="checklist_add_item_hint">Add item</string>
     <string name="checklist_add_item_action">Add item to checklist</string>
-    <string name="checklist_item_move_up">Move item up</string>
-    <string name="checklist_item_move_down">Move item down</string>
-    <string name="checklist_item_remove">Remove item</string>
+    <string name="checklist_item_edit">Edit item</string>
+    <string name="checklist_item_delete">Delete item</string>
+    <string name="checklist_edit_item_title">Edit item</string>
+    <string name="checklist_edit_item_label">Item</string>
+    <string name="checklist_save">Save</string>
 
     <string name="checklist_append_preset">Append preset</string>
     <string name="checklist_append_preset_title">Append a preset</string>

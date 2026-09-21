@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsluminous.cleartravel.core.data.repository.ChecklistPresetRepository
 import com.itsluminous.cleartravel.core.data.repository.ChecklistRepository
+import com.itsluminous.cleartravel.core.designsystem.component.moved
 import com.itsluminous.cleartravel.core.model.Checklist
 import com.itsluminous.cleartravel.core.model.ChecklistItem
 import com.itsluminous.cleartravel.core.model.ChecklistPreset
@@ -86,29 +87,35 @@ class ChecklistDetailViewModel
             viewModelScope.launch { checklistRepository.deleteItem(itemId) }
         }
 
+        /** Replaces an item's text (trimmed); blank or unchanged text is ignored. */
+        fun renameItem(
+            itemId: String,
+            text: String,
+        ) {
+            val trimmed = text.trim()
+            val item = items.value.firstOrNull { it.id == itemId } ?: return
+            if (trimmed.isEmpty() || trimmed == item.text) return
+            viewModelScope.launch { checklistRepository.saveItem(item.copy(text = trimmed)) }
+        }
+
         /**
-         * Moves an item one position up or down by swapping `sortOrder` with its
-         * neighbour (up/down buttons instead of drag — see the milestone notes).
+         * Drag-to-reorder drop: moves the item at [from] to [to] (ADR-021). Only the rows
+         * in the affected range are rewritten — each takes the `sortOrder` of the slot it
+         * now occupies, so the set of sort keys is unchanged. Out-of-range or same-index
+         * moves are no-ops.
          */
         fun moveItem(
-            itemId: String,
-            up: Boolean,
+            from: Int,
+            to: Int,
         ) {
             val current = items.value
-            val index = current.indexOfFirst { it.id == itemId }
-            if (index < 0) return
-            val neighbourIndex = if (up) index - 1 else index + 1
-            if (neighbourIndex !in current.indices) return
-            val item = current[index]
-            val neighbour = current[neighbourIndex]
-            viewModelScope.launch {
-                checklistRepository.saveItems(
-                    listOf(
-                        item.copy(sortOrder = neighbour.sortOrder),
-                        neighbour.copy(sortOrder = item.sortOrder),
-                    ),
-                )
-            }
+            if (from == to || from !in current.indices || to !in current.indices) return
+            val reordered = current.moved(from, to)
+            val changed =
+                (minOf(from, to)..maxOf(from, to)).map { index ->
+                    reordered[index].copy(sortOrder = current[index].sortOrder)
+                }
+            viewModelScope.launch { checklistRepository.saveItems(changed) }
         }
 
         /**

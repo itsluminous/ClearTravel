@@ -99,54 +99,98 @@ class ChecklistDetailViewModelTest {
         }
 
     @Test
-    fun `moveItem up swaps with the previous item`() =
+    fun `moveItem down re-inserts the item after the rows it passed`() =
         runTest {
-            seedItems("Tent", "Boots", "Headlamp")
+            seedItems("Tent", "Boots", "Headlamp", "Stove")
             val viewModel = viewModel()
-            val bootsId =
-                viewModel.items.value
-                    .first { it.text == "Boots" }
-                    .id
 
-            viewModel.moveItem(bootsId, up = true)
+            viewModel.moveItem(from = 0, to = 2)
+
+            val items = checklistRepository.currentItems(checklist.id)
+            assertThat(items.map { it.text }).containsExactly("Boots", "Headlamp", "Tent", "Stove").inOrder()
+            // Sort keys are the original slots — the set of orders is unchanged.
+            assertThat(items.map { it.sortOrder }).containsExactly(0, 1, 2, 3).inOrder()
+        }
+
+    @Test
+    fun `moveItem up re-inserts the item before the rows it passed`() =
+        runTest {
+            seedItems("Tent", "Boots", "Headlamp", "Stove")
+            val viewModel = viewModel()
+
+            viewModel.moveItem(from = 3, to = 1)
 
             assertThat(checklistRepository.currentItems(checklist.id).map { it.text })
-                .containsExactly("Boots", "Tent", "Headlamp")
+                .containsExactly("Tent", "Stove", "Boots", "Headlamp")
                 .inOrder()
         }
 
     @Test
-    fun `moveItem down swaps with the next item`() =
+    fun `moveItem only rewrites the affected range`() =
         runTest {
-            seedItems("Tent", "Boots", "Headlamp")
+            seedItems("Tent", "Boots", "Headlamp", "Stove")
             val viewModel = viewModel()
-            val bootsId =
-                viewModel.items.value
-                    .first { it.text == "Boots" }
-                    .id
+            checklistRepository.saveItemsCalls.clear()
 
-            viewModel.moveItem(bootsId, up = false)
+            viewModel.moveItem(from = 1, to = 2)
 
-            assertThat(checklistRepository.currentItems(checklist.id).map { it.text })
-                .containsExactly("Tent", "Headlamp", "Boots")
+            assertThat(checklistRepository.saveItemsCalls).hasSize(1)
+            assertThat(checklistRepository.saveItemsCalls.single().map { it.text })
+                .containsExactly("Headlamp", "Boots")
                 .inOrder()
         }
 
     @Test
-    fun `moveItem at the boundary is a no-op`() =
+    fun `moveItem with the same index or out of range is a no-op`() =
         runTest {
             seedItems("Tent", "Boots")
             val viewModel = viewModel()
-            val tentId =
-                viewModel.items.value
-                    .first { it.text == "Tent" }
-                    .id
+            checklistRepository.saveItemsCalls.clear()
 
-            viewModel.moveItem(tentId, up = true)
+            viewModel.moveItem(from = 1, to = 1)
+            viewModel.moveItem(from = 0, to = 2)
+            viewModel.moveItem(from = -1, to = 0)
 
+            assertThat(checklistRepository.saveItemsCalls).isEmpty()
             assertThat(checklistRepository.currentItems(checklist.id).map { it.text })
                 .containsExactly("Tent", "Boots")
                 .inOrder()
+        }
+
+    @Test
+    fun `renameItem saves the trimmed text and keeps order and checked state`() =
+        runTest {
+            seedItems("Tent", "Boots")
+            val viewModel = viewModel()
+            val bootsId =
+                viewModel.items.value
+                    .first { it.text == "Boots" }
+                    .id
+            viewModel.setItemChecked(bootsId, checked = true)
+
+            viewModel.renameItem(bootsId, "  Hiking boots ")
+
+            val items = checklistRepository.currentItems(checklist.id)
+            assertThat(items.map { it.text }).containsExactly("Tent", "Hiking boots").inOrder()
+            assertThat(items.last().checked).isTrue()
+        }
+
+    @Test
+    fun `renameItem ignores blank or unchanged text`() =
+        runTest {
+            seedItems("Tent")
+            val viewModel = viewModel()
+            val tentId =
+                viewModel.items.value
+                    .first()
+                    .id
+            checklistRepository.saveItemsCalls.clear()
+
+            viewModel.renameItem(tentId, "   ")
+            viewModel.renameItem(tentId, "Tent")
+            viewModel.renameItem("missing", "Tarp")
+
+            assertThat(checklistRepository.saveItemsCalls).isEmpty()
         }
 
     @Test
