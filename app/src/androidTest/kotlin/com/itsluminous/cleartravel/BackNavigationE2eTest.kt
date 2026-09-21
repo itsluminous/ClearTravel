@@ -45,7 +45,8 @@ class BackNavigationE2eTest {
     fun setUp() {
         hiltRule.inject()
         runBlocking {
-            trainRepository.save(TrainTicket(pnr = PNR, trainNumber = TRAIN_NUMBER, trainName = TRAIN_NAME))
+            // No train name: the card title is then exactly the train number.
+            trainRepository.save(TrainTicket(pnr = PNR, trainNumber = TRAIN_NUMBER))
         }
     }
 
@@ -66,7 +67,8 @@ class BackNavigationE2eTest {
         composeRule
             .onNodeWithContentDescription(composeRule.string(TrainsR.string.trains_card_seat_map))
             .performClick()
-        composeRule.waitForText(composeRule.string(TrainsR.string.trains_seatmap_warning))
+        // No coaches are seeded, so the seat map shows its "not fetched" empty state.
+        composeRule.waitForText(composeRule.string(TrainsR.string.trains_seatmap_no_coaches_title))
 
         Espresso.pressBack()
 
@@ -81,7 +83,7 @@ class BackNavigationE2eTest {
         composeRule.onNodeWithText(TRAIN_NUMBER).performClick()
         composeRule.waitForText(PNR)
         composeRule.onNodeWithText(composeRule.string(TrainsR.string.trains_detail_seat_map)).performClick()
-        composeRule.waitForText(composeRule.string(TrainsR.string.trains_seatmap_warning))
+        composeRule.waitForText(composeRule.string(TrainsR.string.trains_seatmap_no_coaches_title))
 
         // One level up: the detail sheet it was opened from.
         Espresso.pressBack()
@@ -127,7 +129,6 @@ class BackNavigationE2eTest {
     private companion object {
         const val PNR = "8524317690"
         const val TRAIN_NUMBER = "12951"
-        const val TRAIN_NAME = "Mumbai Rajdhani"
 
         @JvmStatic
         @BeforeClass
