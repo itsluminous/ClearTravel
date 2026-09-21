@@ -5,74 +5,67 @@
   },
   "rows": [
     {
-      "stationCode": "GTNR",
+      "stationCode": "gtnr",
       "stationName": "Gomati Nagar",
-      "arrival": "starts",
+      "arrival": "Starts",
       "departure": "15:20",
       "halt": "-",
-      "distance": "0",
-      "platform": "2",
-      "day": "1"
+      "distance": "",
+      "platform": "2"
     },
     {
-      "stationCode": "AY",
+      "stationCode": "ay",
       "stationName": "Ayodhya",
       "arrival": "17:15",
       "departure": "17:20",
       "halt": "5min",
       "distance": "127 km",
-      "platform": "1",
-      "day": "1"
+      "platform": "1"
     },
     {
-      "stationCode": "BSB",
+      "stationCode": "bsb",
       "stationName": "Varanasi Jn",
       "arrival": "19:50",
       "departure": "19:55",
       "halt": "5min",
       "distance": "316 km",
-      "platform": "7",
-      "day": "1"
+      "platform": "7"
     },
     {
-      "stationCode": "DDU",
+      "stationCode": "ddu",
       "stationName": "Dd Upadhyaya Jn",
       "arrival": "20:45",
       "departure": "20:50",
       "halt": "5min",
       "distance": "333 km",
-      "platform": "4",
-      "day": "1"
+      "platform": "4"
     },
     {
-      "stationCode": "BXR",
+      "stationCode": "bxr",
       "stationName": "Buxar",
       "arrival": "21:50",
       "departure": "21:52",
       "halt": "2min",
       "distance": "427 km",
-      "platform": "1",
-      "day": "1"
+      "platform": "1"
     },
     {
-      "stationCode": "ARA",
+      "stationCode": "ara",
       "stationName": "Ara Jn",
       "arrival": "22:33",
       "departure": "22:35",
       "halt": "2min",
       "distance": "495 km",
-      "platform": "1",
-      "day": "1"
+      "platform": "1"
     },
     {
-      "stationCode": "PNBE",
+      "stationCode": "pnbe",
       "stationName": "Patna Jn",
       "arrival": "23:45",
-      "departure": "ends",
+      "departure": "Ends",
       "halt": "-",
       "distance": "544 km",
-      "platform": "8",
-      "day": "1"
+      "platform": "8"
     }
   ]
 }
