@@ -117,6 +117,10 @@ class RouteFetchViewModel
          * `ScrapeEvent.Extracted` handler: maps + persists. A mapper null (rows
          * present but no usable stations) is treated exactly like a parse failure —
          * the stored route stays unchanged and the raw page stays visible.
+         * A blank ticket `trainName` is backfilled from the rule's extracted
+         * `trainName` field (manual tickets are often number-only) so the ticket
+         * card and offline route page read "12345 · Name"; a user-entered name is
+         * never overwritten.
          */
         fun onExtracted(
             ticketId: String,
@@ -129,8 +133,20 @@ class RouteFetchViewModel
             }
             viewModelScope.launch {
                 repository.replaceRouteStops(ticketId, stops)
+                backfillTrainName(ticketId, data)
                 state.value = RouteFetchUiState.Applied(stationCount = stops.size)
             }
+        }
+
+        private suspend fun backfillTrainName(
+            ticketId: String,
+            data: ScrapedData,
+        ) {
+            val scrapedName = data.fields[FIELD_TRAIN_NAME].orEmpty().trim()
+            if (scrapedName.isEmpty()) return
+            val ticket = repository.getTicket(ticketId) ?: return
+            if (ticket.trainName.isNotBlank()) return
+            repository.save(ticket.copy(trainName = scrapedName))
         }
 
         /** `ScrapeEvent.ParseFailed` handler: keep the raw page + failure banner. */
@@ -150,5 +166,8 @@ class RouteFetchViewModel
         companion object {
             /** Route sources in priority order — ixigo PRIMARY, erail fallback (ADR-019). */
             val RULE_IDS = listOf("ixigo-route", "erail-route")
+
+            /** Extracted-fields key both route rules use for the train's display name. */
+            private const val FIELD_TRAIN_NAME = "trainName"
         }
     }

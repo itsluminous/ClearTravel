@@ -70,9 +70,13 @@ class RouteFetchViewModelTest {
 
     private fun emptyRegistry(): RuleRegistry = RuleRegistry(InlineRuleSource(emptyMap()))
 
-    private fun usableData(): ScrapedData =
+    private fun usableData(trainName: String? = null): ScrapedData =
         ScrapedData(
-            fields = mapOf("trainNumber" to "22346"),
+            fields =
+                buildMap {
+                    put("trainNumber", "22346")
+                    if (trainName != null) put("trainName", trainName)
+                },
             rows =
                 listOf(
                     mapOf("stationName" to "Gomati Nagar", "arrival" to "starts", "departure" to "15:20", "day" to "1"),
@@ -161,6 +165,46 @@ class RouteFetchViewModelTest {
             val stored = repository.observeRouteStops(ticket.id).first()
             assertThat(stored.map { it.stationName }).containsExactly("Gomati Nagar", "Patna Jn").inOrder()
             assertThat(stored[0].departure).isEqualTo("15:20")
+        }
+
+    @Test
+    fun `extraction backfills a blank ticket train name from the scraped field`() =
+        runTest {
+            val ticket = Fixtures.trainTicket(trainName = "")
+            repository.seed(ticket)
+            val vm = RouteFetchViewModel(registryWithBothRules(), repository)
+            vm.start("22346")
+
+            vm.onExtracted(ticket.id, usableData(trainName = "Vande Bharat Exp"))
+
+            assertThat(repository.getTicket(ticket.id)?.trainName).isEqualTo("Vande Bharat Exp")
+        }
+
+    @Test
+    fun `extraction never overwrites a user-entered train name`() =
+        runTest {
+            val ticket = Fixtures.trainTicket(trainName = "My Custom Name")
+            repository.seed(ticket)
+            val vm = RouteFetchViewModel(registryWithBothRules(), repository)
+            vm.start("22346")
+
+            vm.onExtracted(ticket.id, usableData(trainName = "Vande Bharat Exp"))
+
+            assertThat(repository.getTicket(ticket.id)?.trainName).isEqualTo("My Custom Name")
+        }
+
+    @Test
+    fun `blank scraped train name leaves the ticket untouched`() =
+        runTest {
+            val ticket = Fixtures.trainTicket(trainName = "")
+            repository.seed(ticket)
+            val vm = RouteFetchViewModel(registryWithBothRules(), repository)
+            vm.start("22346")
+            val before = repository.getTicket(ticket.id)
+
+            vm.onExtracted(ticket.id, usableData(trainName = "  "))
+
+            assertThat(repository.getTicket(ticket.id)).isEqualTo(before)
         }
 
     @Test
