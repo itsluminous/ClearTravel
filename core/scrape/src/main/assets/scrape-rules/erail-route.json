@@ -1,30 +1,27 @@
 {
   "id": "erail-route",
   "displayName": "eRail.in Train Route",
-  "version": 1,
+  "version": 2,
   "kind": "train",
   "urlTemplate": "https://erail.in/train-enquiry/{trainNumber}",
   "prefill": [],
   "submitSelector": null,
   "readySignal": {
-    "jsCondition": "document.querySelectorAll('#divRouteList table.RouteList tr').length > 1"
+    "jsCondition": "document.querySelectorAll('#divResult table.DataTable tr').length > 1"
   },
   "extract": {
-    "trainNumber": { "selector": "#divRouteList > div:first-child", "regexChain": ["^([0-9]+)"], "required": true },
-    "trainName": { "selector": "#divRouteList > div:first-child", "regexChain": ["^[0-9]+\\s+(.+)$"] }
+    "trainNumber": { "selector": "title", "regexChain": ["^([0-9]+)"], "required": true },
+    "trainName": { "selector": "title", "regexChain": ["^[0-9]+\\s+(.+?)\\s+Train Route$"] }
   },
   "rows": {
-    "rowSelector": "#divRouteList table.RouteList tr:not(:first-child)",
+    "rowSelector": "#divResult table.DataTable tr:not(:first-child)",
     "minRows": 2,
     "fields": {
-      "stationCode": { "selector": "td:nth-child(2)" },
-      "stationName": { "selector": "td:nth-child(3) span" },
-      "arrival": { "selector": "td:nth-child(6)" },
-      "departure": { "selector": "td:nth-child(7)" },
-      "halt": { "selector": "td:nth-child(8)" },
-      "platform": { "selector": "td:nth-child(9)" },
-      "distance": { "selector": "td:nth-child(10)" },
-      "day": { "selector": "td:nth-child(11)" }
+      "stationName": { "selector": "td:nth-child(2)" },
+      "arrival": { "selector": "td:nth-child(3)" },
+      "departure": { "selector": "td:nth-child(4)" },
+      "distance": { "selector": "td:nth-child(5)" },
+      "platform": { "selector": "td:nth-child(6)" }
     }
   }
 }

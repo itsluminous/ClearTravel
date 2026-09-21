@@ -1,63 +1,414 @@
-<!--
-  Recon capture for ClearTravel core:scrape rule development.
-  Source: https://erail.in/train-enquiry/22346  (train 22346, VANDE BHARAT EXP, GTNR -> PNBE)
-  Captured: 2026-09-21, via read-only public browsing (Playwright).
-  TRIMMED: head reduced to essential meta/title/canonical/link tags + the page's own
-  `Init()` script (exposes ER.TrainNo/TrainName/TrainStnFrom/TrainStnTo as a JS fallback
-  signal). All Google Ad Manager / AdSense / AdPushup / GTM / Quantcast script tags,
-  ad-injected <style> tags, and origin-trial meta tags have been stripped — they are
-  irrelevant to the scrape rule and add noise. The route table section below is the
-  FULL, UNMODIFIED #divRouteList subtree — every row from the live page is intact.
-  This file is for building the core:scrape fixture; do not commit (per AGENTS.md,
-  scrape rule files need a matching fixture, but recon captures like this stay local).
--->
+
+
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<title>
+<head><title>
 	22346 VANDE BHARAT EXP Train Route
-</title>
-<meta charset="utf-8">
-<meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
-<link rel="shortcut icon" type="image/x-icon" href="/ico/eRail.ico">
-<meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1,viewport-fit=cover">
-<meta name="mobile-web-app-capable" content="yes">
-<meta name="Designer" content="eRail.in">
-<meta name="distribution" content="Global">
-<meta name="Robots" content="Index,Follow">
-<meta name="country" content="India">
-<meta name="description" content="Route details of 22346 VANDE BHARAT EXP  from Gomtinagar (Lucknow) to Patna Jn">
-<meta name="keywords" content="Indian Railways Reservation Enquiry, PNR Status, Running Status, Running History, Time Table, Train Route, Route Map, Arrival/Departure, Fare Table, Train Statistics, Fare Chart, Train Composition, Indian Rail, erail.in, etrain, indianrail">
-<meta name="twitter:card" content="summary">
-<meta name="twitter:site" content="@erail">
-<meta name="twitter:title" content="22346 VANDE BHARAT EXP Train Route">
-<meta name="twitter:description" content="Route details of 22346 VANDE BHARAT EXP  from Gomtinagar (Lucknow) to Patna Jn">
-<meta property="og:title" content="22346 VANDE BHARAT EXP Train Route">
-<meta property="og:type" content="website">
-<meta property="og:url" content="https://erail.in">
-<meta property="og:description" content="Route details of 22346 VANDE BHARAT EXP  from Gomtinagar (Lucknow) to Patna Jn">
-<link rel="alternate" hreflang="en" href="https://erail.in/train-enquiry/22346">
-<link rel="alternate" hreflang="hi" href="https://erail.in/hi/train-enquiry/22346">
-<link rel="alternate" hreflang="x-default" href="https://erail.in/train-enquiry/22346">
-<link rel="canonical" href="https://erail.in/train-enquiry/22346">
-<link href="/css/erail2.min.css?v=17092026" rel="stylesheet" type="text/css">
-<!-- Page-embedded JS globals -- usable as an alternate/fallback extraction signal
-     alongside the DOM table scrape below. Populated per-train on every load. -->
-<script>function Init() {;BaseURL='/train-enquiry';;ER.TrainNo='22346';ER.TrainStnFrom='GTNR';ER.TrainStnTo='PNBE';ER.TrainName='VANDE BHARAT EXP';;ER.Command=12;IsHindi=false;ER.UserEmail='';ER.UserName='';}</script>
+</title><meta charset="utf-8" /><meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" /><link rel="shortcut icon" type="image/x-icon" href="/ico/eRail.ico" /><meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1,viewport-fit=cover" /><meta name="mobile-web-app-capable" content="yes" /><meta name="Designer" content="eRail.in" /><meta name="distribution" content="Global" /><meta name="Robots" content="Index,Follow" /><meta name="facebook-domain-verification" content="jckls9f0e3su6ej4ox6za4wj33xhvt" /><meta name="country" content="India" />
+    <meta name="description" content='Route details of 22346 VANDE BHARAT EXP  from Gomtinagar (Lucknow) to Patna Jn' />
+    <meta name="keywords" content='Indian Railways Reservation Enquiry, PNR Status, Running Status, Running History, Time Table, Train Route, Route Map, Arrival/Departure, Fare Table, Train Statistics, Fare Chart, Train Composition, Indian Rail, erail.in, etrain, indianrail' />
+    <meta name="custom-desc" content="Indian Railways Reservation Enquiry, PNR Status, Running Status, Running History, Time Table, Train Route, Route Map, Arrival/Departure, Fare, Train Statistics, Fare Chart, Train Composition, Indian Rail (erail.in)" /><meta name="google-site-verification" content="HaTaTOhhluDat0sru7XQFgTjUZ1EsFU_2aHlSIuZcwg" /><meta name="twitter:card" content="summary" /><meta name="twitter:site" content="@erail" />
+    <meta name="twitter:title" content='22346 VANDE BHARAT EXP Train Route' />
+    <meta name="twitter:description" content='Route details of 22346 VANDE BHARAT EXP  from Gomtinagar (Lucknow) to Patna Jn' />
+    <meta name="twitter:image" content='https://erail.in/images/train/22346-VANDE-BHARAT-EXP.png' />
+    <meta property="og:title" content='22346 VANDE BHARAT EXP Train Route' />
+    <meta property="og:type" content="website" /><meta property="og:url" content="https://erail.in" />
+    <meta property="og:image" content='https://erail.in/images/train/22346-VANDE-BHARAT-EXP.png' />
+    <meta property="og:description" content='Route details of 22346 VANDE BHARAT EXP  from Gomtinagar (Lucknow) to Patna Jn' />
+    <link rel="chrome-webstore-item" href="https://chrome.google.com/webstore/detail/aopfgjfeiimeioiajeknfidlljpoebgc" /><link href="https://plus.google.com/b/106295958594262580279/+eRail" rel="publisher" />
+
+    <!-- warm up the third-party ad/analytics origins before their scripts ask for them -->
+    <link rel="preconnect" href="https://www.googletagmanager.com" /><link rel="preconnect" href="https://pagead2.googlesyndication.com" />
+
+    <script type="text/javascript" src='/js5/jquery-3.7.1.min.js'></script>
+
+<!-- Google tag (gtag.js) -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-7N0HPQWM6X"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+
+    gtag('config', 'G-7N0HPQWM6X');
+</script>
+
+    <!-- Google Tag Manager -->
+<script>(function (w, d, s, l, i) {
+        w[l] = w[l] || []; w[l].push({
+            'gtm.start':
+                new Date().getTime(), event: 'gtm.js'
+        }); var f = d.getElementsByTagName(s)[0],
+            j = d.createElement(s), dl = l != 'dataLayer' ? '&l=' + l : ''; j.async = true; j.src =
+                'https://www.googletagmanager.com/gtm.js?id=' + i + dl; f.parentNode.insertBefore(j, f);
+    })(window, document, 'script', 'dataLayer', 'GTM-5B88S7');</script>
+<!-- End Google Tag Manager -->
+
+    
+
+    <link rel="manifest" href="/manifest.json" /><link rel='alternate' hreflang='en' href='https://erail.in/train-enquiry/22346' /><link rel='alternate' hreflang='hi' href='https://erail.in/hi/train-enquiry/22346' /><link rel='alternate' hreflang='x-default' href='https://erail.in/train-enquiry/22346' /><link rel='canonical' href='https://erail.in/train-enquiry/22346'/><link href='/css/eRailMobileHTML.min.css?v=17092026' rel='stylesheet' type='text/css' /><script>function Init() {;BaseURL='/train-enquiry';;ER.TrainNo='22346';ER.TrainStnFrom='GTNR';ER.TrainStnTo='PNBE';ER.TrainName='VANDE BHARAT EXP';;ER.Command=12;IsHindi=false;ER.UserEmail='';ER.UserName='';}</script><script src='/js5/cmp/eRailMobileHTMLEN.js?v=17092026'></script>
+    <script src="/SignalR/js/requester_min.js?_=17"></script>
+    
+    
 </head>
 <body>
 
-<!-- ===================== FULL ROUTE TABLE SECTION (unmodified) ===================== -->
-<!-- This is the exact, complete outerHTML of #divRouteList as rendered on
-     https://erail.in/train-enquiry/22346 at capture time. All 7 route rows for
-     train 22346 (GTNR -> AY -> BSB -> DDU -> BXR -> ARA -> PNBE) are present and
-     intact. No ads/iframes/scripts are present inside this subtree in the live
-     page, so nothing needed to be stripped here. -->
-<div id="divRouteList" style="overflow: auto; height: 180.5px;">
-    <div style="text-align:center; font-weight:bold; font-size:14px; padding:5px;">22346 VANDE BHARAT EXP</div>
-    <table class="DataTable DataTableHeader stickyTrainListHeader RouteList" "="">
-    <tbody><tr height="15px"><th title3="Serial Number">#</th><th title3="1">Code</th><th title3="Station Name">Stn Name</th><th title3="Zone">Zone</th><th title3="Div.">Div.</th><th title3="Arrival Time">Arr.</th><th title3="Departure Time">Dep.</th><th title3="Halt Time ( in minutes )">Halt</th><th title3="">PF</th><th title3="">Dist.</th><th title3="">Day</th><th title3="">Remark</th></tr><tr style="background:#FFF4BF;font-weight:bold;"><td>1</td><td>GTNR</td><td><span title="Code=GTNR, Zone=NE, Division=LJN">Gomtinagar (Lucknow)</span></td><td>NE</td><td>LJN</td><td>First</td><td>15.20</td><td>0</td><td id="tdPFGTNR">2</td><td>0</td><td>1</td><td><a style="color:black" id="aRunGTNR" href="#"></a> </td></tr><tr><td>2</td><td>AY</td><td><span title="Code=AY, Zone=NR, Division=LKO">Ayodhya Dham Jn</span></td><td>NR</td><td>LKO</td><td>17.15</td><td>17.20</td><td>5</td><td id="tdPFAY">1</td><td>127</td><td>1</td><td><a style="color:black" id="aRunAY" href="#"></a> </td></tr><tr><td>3</td><td>BSB</td><td><span title="Code=BSB, Zone=NR, Division=LKO">Varanasi Jn</span></td><td>NR</td><td>LKO</td><td>19.50</td><td>19.55</td><td>5</td><td id="tdPFBSB">7</td><td>316</td><td>1</td><td><a style="color:black" id="aRunBSB" href="#"></a> </td></tr><tr><td>4</td><td>DDU</td><td><span title="Code=DDU, Zone=ECR, Division=DDU">Dd Upadhyaya Jn</span></td><td>ECR</td><td>DDU</td><td>20.45</td><td>20.50</td><td>5</td><td id="tdPFDDU">4</td><td>333</td><td>1</td><td><a style="color:black" id="aRunDDU" href="#"></a> </td></tr><tr><td>5</td><td>BXR</td><td><span title="Code=BXR, Zone=ECR, Division=DNR">Buxar</span></td><td>ECR</td><td>DNR</td><td>21.50</td><td>21.52</td><td>2</td><td id="tdPFBXR">1</td><td>427</td><td>1</td><td><a style="color:black" id="aRunBXR" href="#"></a> </td></tr><tr><td>6</td><td>ARA</td><td><span title="Code=ARA, Zone=ECR, Division=DNR">Ara</span></td><td>ECR</td><td>DNR</td><td>22.33</td><td>22.35</td><td>2</td><td id="tdPFARA">1</td><td>495</td><td>1</td><td><a style="color:black" id="aRunARA" href="#"></a> </td></tr><tr style="background:#FFF4BF;font-weight:bold;"><td>7</td><td>PNBE</td><td><span title="Code=PNBE, Zone=ECR, Division=DNR">Patna Jn</span></td><td>ECR</td><td>DNR</td><td>23.45</td><td>Last</td><td>0</td><td id="tdPFPNBE">8</td><td>544</td><td>1</td><td><a style="color:black" id="aRunPNBE" href="#"></a> </td></tr></tbody></table></div>
-<!-- ===================== END ROUTE TABLE SECTION ===================== -->
+    <!-- Google Tag Manager (noscript) -->
+<noscript><iframe src="https://www.googletagmanager.com/ns.html?id=GTM-5B88S7"
+height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+<!-- End Google Tag Manager (noscript) -->
 
+    <div id="mobileMenu" class="topmenuMobile">
+        <a class='sidemenu' href='/'><i class='icon-home-1'></i></a><h1>22346 VANDE BHARAT EXP Route</h1>
+    </div>
+    <div id="divTopMargin" style="height: 10px; width: 100%;"></div>
+    <header id="mobileheader">
+        <div class="contentSize">
+
+            <nav id="mainnav">
+                <div class='menuHome2'><a href='/'><i class='icon-home-1'></i>&nbsp;Home</a></div><div><a href='/train-running-status' title='IRCTC Online Train Running Status'><i class='icon-train'></i>&nbsp;Spot Train</a></div><div><a href='/pnr-status' title='IRCTC Online PNR Status'><i class='icon-list-bullet'></i>&nbsp;PNR</a></div><div><a href='/trains-between-stations' title='IRCTC Enquiry Trains between Stations'><i class='icon-train'></i><i class='demo-icon2 icon-train'></i>&nbsp;Trains/Seats</a></div><div class='active'><a href='/train-enquiry' title='IRCTC Online Train Route'><i class='icon-map-signs'></i>&nbsp;Route</a></div><div><a href='/train-seats' title='IRCTC Online Seat Availability'><i class='icon-users'></i>&nbsp;Seats</a></div><div><a href='/train-fare' title='IRCTC Online Train Fare'><i class='icon-ticket'></i>&nbsp;Fare</a></div><div><a href='/station-live' title='Trains departing / arriving at the station'><i class='icon-home'></i>&nbsp;Station</a></div><div><a href='/railway-ticket-cancellation-charges' title='IRCTC Online Ticket Cancellation Charges'><i class='icon-ccw'></i> &nbsp;Refund</a></div><div><a href='/hi/train-enquiry/22346'><h1>22346 VANDE BHARAT EXP Route</h1></a></div><div id='divLogin' class='menuLogin'><a href='/Login.aspx?_=639255657610579871' title='Login for personalisation'><i class='icon-users'></i>&nbsp;Login</a></div>
+            </nav>
+
+            <div>
+                &nbsp;
+            </div>
+        </div>
+    </header>
+
+    
+    
+
+    <div id="panelMobile">
+	
+        <div style="margin:auto;max-width:1000px">
+        <div id="divContainer" class="railcontainer contentSize">
+            <div id="divContentContainer" class="divContentContainer">
+                
+                <div class='trgap'></div>
+                
+                
+
+                <div class="data">
+                    
+
+    <div id="divTrainSearch" class="HomeSection">
+    
+    <div id='txtTrainSearch' class="searchInput">Train No / Name</div>
+    <div class='TrainTypeSelect'>
+    <a href='#' class='btn green bigbutton' id='ancFindTrain'>Route</a><a href='#' class='btn  bigbutton' id='ancFindLive'>Live</a><a href='#' class='btn  bigbutton' id='ancFindSeats'>Seats</a><a href='#' class='btn  bigbutton' id='ancFindFare'>Fare</a>
+    
+    </div>
+</div>
+
+
+
+
+
+
+
+
+<div class="HomeSection" style="display: none">
+
+    Search ID
+    <div class="InputArea">
+        <input class="searchInput" id="Search1" value="" type="search" autocomplete="off">
+        <div><a href="#" class="btn green bigbutton">Find</a>        </div>
+    </div>
+</div>
+
+
+
+
+
+
+    <div id="divResult">
+        <div class='trgap'></div><div ><table class='table zebra DataTable fixHeader'><tr><th></th><th>Station</th><th>Arr</th><th>Dep</th><th>Dist.</th><th>PF</th></tr><tr class='targetstn'><td>1</td><td >Gomtinagar (Lucknow)</td><td>First</td><td>15.20</td><td>0</td><td>2</td></tr><tr><td>2</td><td >Ayodhya Dham Jn</td><td>17.15</td><td>17.20</td><td>127</td><td>1</td></tr><tr><td>3</td><td >Varanasi Jn</td><td>19.50</td><td>19.55</td><td>316</td><td>7</td></tr><tr><td>4</td><td >Dd Upadhyaya Jn</td><td>20.45</td><td>20.50</td><td>333</td><td>4</td></tr><tr><td>5</td><td >Buxar</td><td>21.50</td><td>21.52</td><td>427</td><td>1</td></tr><tr><td>6</td><td >Ara</td><td>22.33</td><td>22.35</td><td>495</td><td>1</td></tr><tr><td>7</td><td >Patna Jn</td><td>23.45</td><td>Last</td><td>544</td><td>8</td></tr></table></div><div style='width:100%;overflow:auto;margin-top:5px;'>Coach Composition (Historic data)<div id='tableRake'><div><img src='/ico/eRail_left.gif' width='16' height='11' style='max-width: initial;' /></div><div  id='C1' class='C'>C1</div><div  id='C2' class='C'>C2</div><div  id='C3' class='C'>C3</div><div  id='C4' class='C'>C4</div><div  id='C5' class='C'>C5</div><div  id='E1' class='E'>E1</div><div  id='C6' class='C'>C6</div><div  id='C7' class='C'>C7</div></div></div><br/><div style='display:flex'><div role='tab' data-class='CC' class='tabButton btn orange'>CC</div></div><div id='divLayoutCC'><table class="seatmap">
+<tr>
+<td>
+<table>
+<tr>
+<td class="W B_L B_B B_R">1</td>
+<td class="A B_B B_L B_R">2</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_B B_L B_R">3</td>
+<td class="M B_B B_L B_R">4</td>
+<td class="W B_B B_R B_L">5</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+
+<tr>
+<td class="W B_L B_R B_B">6&nbsp;</td>
+<td class="A B_R B_L B_B">7</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_L B_R B_B">8</td>
+<td class="M B_L B_R B_B">9</td>
+<td class="W B_L B_R B_B">10</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="W B_L B_R B_B">11</td>
+<td class="A B_L B_R B_B">12</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_B B_L B_R">13</td>
+<td class="M B_L B_R B_B">14</td>
+<td class="W B_L B_R B_B">15</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="W B_L B_R B_B">16</td>
+<td class="A B_L B_R B_B">17</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_B B_L B_R">18</td>
+<td class="M B_L B_R B_B">19</td>
+<td class="W B_L B_R B_B">20</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="W B_L B_R B_B">21</td>
+<td class="A B_L B_R B_B">22</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_B B_L B_R">23</td>
+<td class="M B_L B_R B_B">24</td>
+<td class="W B_L B_R B_B">25</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="W B_L B_R B_B">26</td>
+<td class="A B_L B_R B_B">27</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_B B_L B_R">28</td>
+<td class="M B_L B_R B_B">29</td>
+<td class="W B_L B_R B_B">30</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="W B_L B_R B_B">31</td>
+<td class="A B_L B_R B_B">2</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_B B_L B_R">33</td>
+<td class="M B_L B_R B_B">34</td>
+<td class="W B_L B_R B_B">35</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="W B_L B_R B_B">36</td>
+<td class="A B_L B_R B_B">37</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_B B_L B_R">38</td>
+<td class="M B_L B_R B_B">39</td>
+<td class="W B_L B_R B_B">40</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="W B_L B_R B_B">41</td>
+<td class="A B_L B_R B_B">42</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_B B_L B_R">43</td>
+<td class="M B_L B_R B_B">44</td>
+<td class="W B_L B_R B_B">45</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="W B_L B_R B_B">46</td>
+<td class="A B_L B_R B_B">47</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_B B_L B_R">48</td>
+<td class="M B_L B_R B_B">44</td>
+<td class="W B_L B_R B_B">50</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="W B_L B_R B_B">51</td>
+<td class="A B_L B_R B_B">52</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_B B_L B_R">53</td>
+<td class="M B_L B_R B_B">54</td>
+<td class="W B_L B_R B_B">55</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="W B_L B_R B_B">56</td>
+<td class="A B_L B_R B_B">57</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_B B_L B_R">58</td>
+<td class="M B_L B_R B_B">59</td>
+<td class="W B_L B_R B_B">60</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="W B_L B_R B_B">61</td>
+<td class="A B_L B_R B_B">62</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_B B_L B_R">63</td>
+<td class="M B_L B_R B_B">64</td>
+<td class="W B_L B_R B_B">65</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="W B_L B_R B_B">66</td>
+<td class="A B_L B_R B_B">67</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_B B_L B_R">68</td>
+<td class="M B_L B_R B_B">69</td>
+<td class="W B_L B_R B_B">70</td>
+</tr>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td class="W B_L B_R B_B">71</td>
+<td class="A B_L B_R B_B">72</td>
+<td>&nbsp;&nbsp;&nbsp;</td>
+<td class="A B_B B_L B_R">73</td>
+<td class="M B_L B_R B_B">74</td>
+<td class="W B_L B_R B_B">75</td>
+</tr>
+</table>
+</td>
+<td class='legends'>
+<div>CC<br />Shatabdi<br />शताब्दी</div>
+<div class="A">Aisle<br />गलियारा</div>
+<div class="M">Middle<br />मध्य</div>
+<div class="W">Window<br />खिड़की</div>
+</td>
+</tr>
+</table></div><h2>Abount Train 22346 VANDE BHARAT EXP</h2>22346 VANDE BHARAT EXP, Gomtinagar (Lucknow) to Patna Jn  runs Except Fri, has classes CC EC. Pantry is not available. Fare does not include  food cost. Total travel time of the train is 8 hr, 25 min. Average speed is 65 km/hr. Advance reservation period (ARP) is 60 days. 22346 VANDE BHARAT EXP is owned by ECOR (ECOR). Its rake is shared with <a href='/train-enquiry/'></a>, . Shatabdi fare is applicable.22346 VANDE BHARAT EXP category type is Intercity Express. It is a Broad Gauge train.<br/><br/><div class='panel-footer'>This is historic data and does not represent current status.</div><script type="application/ld+json">{ "@context": "http://schema.org", "@type": "Article","mainEntityOfPage": "https://erail.in/train-enquiry/22346","headline": "22346 VANDE BHARAT EXP Train Route","datePublished": "2026-09-21","dateModified": "2026-09-21","description": "Route details of 22346 VANDE BHARAT EXP  from Gomtinagar (Lucknow) to Patna Jn","author": { "@type": "Person", "name": "system" },"image": { "@type": "ImageObject", "url": "https://erail.in/images/erail-logo-1024.jpg", "width": "1024", "height": "1024" },"publisher": { "@type": "Organization", "name": "eRail.in","logo": { "@type": "ImageObject", "url": "https://erail.in/images/erail-logo-amp.jpg", "width": "600", "height": "60"}}}</script><script type="application/ld+json">{ "@context": "http://schema.org", "@type": "TrainTrip", "mainEntityOfPage": "https://erail.in/train-enquiry/22346", "trainName": "VANDE BHARAT EXP", "trainNumber": "22346", "description": "<h2>Abount Train 22346 VANDE BHARAT EXP</h2>22346 VANDE BHARAT EXP, Gomtinagar (Lucknow) to Patna Jn  runs Except Fri, has classes CC EC. Pantry is not available. Fare does not include  food cost. Total travel time of the train is 8 hr, 25 min. Average speed is 65 km/hr. Advance reservation period (ARP) is 60 days. 22346 VANDE BHARAT EXP is owned by ECOR (ECOR). Its rake is shared with <a href='/train-enquiry/'></a>, . Shatabdi fare is applicable.22346 VANDE BHARAT EXP category type is Intercity Express. It is a Broad Gauge train.", "image": { "@type": "ImageObject", "url": "https://erail.in/images/train/22346-VANDE-BHARAT-EXP.png", "width": "1200", "height": "675" },"departurePlatform": "2", "departureStation": { "@type": "TrainStation", "name": "Gomtinagar (Lucknow) Railway Station", "description": "From Gomtinagar (Lucknow) Railway Station 90 trains arrive & depart. Get Live status of trains with delays. Late running trains","openingHours": "Mo-Su","branchCode": "GTNR","telephone": "+91 139","publicAccess": "true","address": {"@type": "PostalAddress","addressCountry": "IN","addressLocality":"Gomtinagar (Lucknow)"},"geo": {"@type": "GeoCoordinates","latitude": "26.8606150555981","longitude": "81.0033667087555"},"url": "https://erail.in/station-live/gomtinagar-(lucknow)" },"arrivalPlatform": "8", "arrivalStation": { "@type": "TrainStation", "name": "Patna Jn Railway Station", "description": "From Patna Jn Railway Station 778 trains arrive & depart. Get Live status of trains with delays. Late running trains","openingHours": "Mo-Su","branchCode": "PNBE","telephone": "+91 139","publicAccess": "true","address": {"@type": "PostalAddress","addressCountry": "IN","addressLocality":"Patna Jn"},"geo": {"@type": "GeoCoordinates","latitude": "25.6024924626833","longitude": "85.1373159885406"},"url": "https://erail.in/station-live/patna-jn" } } </script>
+    </div>
+
+
+    
+
+    
+
+
+                </div>
+                <div class="data">
+                    
+                </div>
+                <footer>
+                    <a href='#' onclick="return LoadURL('/pnr-status')" title='IRCTC Online PNR Status'>PNR Status</a><a href='#' onclick="return LoadURL('/train-running-status')" title='IRCTC Online Train Running Status'>Train Running Status</a><a href='#' onclick="return LoadURL('/train-seats')"  title='IRCTC Online Seat Availability'>Seats Availablity</a><a href='#' onclick="return LoadURL('/trains-between-stations')" title='IRCTC Enquiry Trains between Stations'>Trains between Stations / Seats</a><a href='#' onclick="return LoadURL('/train-enquiry')" title='IRCTC Online Train Route'>Train route</a><a href='#' onclick="return LoadURL('/train-fare')" title='IRCTC Online Train Fare'>Train Fare</a><a href='#' onclick="return LoadURL('/railway-ticket-cancellation-charges')"  title='IRCTC Online Ticket Cancellation Charges'>Ticket Refund</a><a href='#' onclick="return LoadURL('/?desktop=1')"  title='eRail.in Desktop View'>Desktop View</a>
+                </footer>
+            </div>
+            <div>
+            <div class='RightContent'><div class="rightContent1">
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9629311196237402" crossorigin="anonymous"></script>
+<!-- eRail.in 336x280 Right Top -->
+<ins class="adsbygoogle" style="display:inline-block;width:336px;height:280px" data-ad-client="ca-pub-9629311196237402" data-ad-slot="8724929890"></ins>
+<script> (adsbygoogle = window.adsbygoogle || []).push({});</script>
+</div>
+<div class="rightContent2">
+<!-- eRail.in 336x280 Right Middle -->
+<ins class="adsbygoogle" style="display:inline-block;width:336px;height:280px" data-ad-client="ca-pub-9629311196237402" data-ad-slot="1201663097"></ins>
+<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+</div>
+<div class="rightContent2">
+<!-- eRail.in 336x228 Right Bottom -->
+<ins class="adsbygoogle" style="display:inline-block;width:336px;height:280px" data-ad-client="ca-pub-9629311196237402" data-ad-slot="5631862694"></ins>
+<script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+</div></div>
+                </div>
+        </div>
+            </div>
+    
+</div>
+
+    
+    <!-- Native (Capacitor) bridge — no-op in a browser; activates push/geolocation inside the app -->
+    <script src="/js5/native.js?v=18"></script>
 </body>
 </html>

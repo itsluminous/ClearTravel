@@ -141,7 +141,7 @@ class ScrapeSessionTest {
         assertThat(rule.prefill).isEmpty()
         assertThat(session.submitJavaScript()).isNull()
         assertThat(session.dismissJavaScript()).isNull()
-        assertThat(session.readySignalJavaScript()).contains("RouteList")
+        assertThat(session.readySignalJavaScript()).contains("DataTable")
     }
 }
 

@@ -5,74 +5,53 @@
   },
   "rows": [
     {
-      "stationCode": "GTNR",
       "stationName": "Gomtinagar (Lucknow)",
       "arrival": "First",
       "departure": "15.20",
-      "halt": "0",
-      "platform": "2",
       "distance": "0",
-      "day": "1"
+      "platform": "2"
     },
     {
-      "stationCode": "AY",
       "stationName": "Ayodhya Dham Jn",
       "arrival": "17.15",
       "departure": "17.20",
-      "halt": "5",
-      "platform": "1",
       "distance": "127",
-      "day": "1"
+      "platform": "1"
     },
     {
-      "stationCode": "BSB",
       "stationName": "Varanasi Jn",
       "arrival": "19.50",
       "departure": "19.55",
-      "halt": "5",
-      "platform": "7",
       "distance": "316",
-      "day": "1"
+      "platform": "7"
     },
     {
-      "stationCode": "DDU",
       "stationName": "Dd Upadhyaya Jn",
       "arrival": "20.45",
       "departure": "20.50",
-      "halt": "5",
-      "platform": "4",
       "distance": "333",
-      "day": "1"
+      "platform": "4"
     },
     {
-      "stationCode": "BXR",
       "stationName": "Buxar",
       "arrival": "21.50",
       "departure": "21.52",
-      "halt": "2",
-      "platform": "1",
       "distance": "427",
-      "day": "1"
+      "platform": "1"
     },
     {
-      "stationCode": "ARA",
       "stationName": "Ara",
       "arrival": "22.33",
       "departure": "22.35",
-      "halt": "2",
-      "platform": "1",
       "distance": "495",
-      "day": "1"
+      "platform": "1"
     },
     {
-      "stationCode": "PNBE",
       "stationName": "Patna Jn",
       "arrival": "23.45",
       "departure": "Last",
-      "halt": "0",
-      "platform": "8",
       "distance": "544",
-      "day": "1"
+      "platform": "8"
     }
   ]
 }
