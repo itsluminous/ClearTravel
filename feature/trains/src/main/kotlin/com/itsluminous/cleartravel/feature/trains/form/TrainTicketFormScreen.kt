@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.feature.trains.R
 import com.itsluminous.cleartravel.feature.trains.list.formatDate
@@ -290,21 +291,21 @@ private fun PassengerRowEditor(
             OutlinedTextField(
                 value = row.coach,
                 onValueChange = { value -> onUpdate { it.copy(coach = value) } },
-                label = { Text(stringResource(R.string.trains_form_passenger_coach)) },
+                label = { AutoShrinkText(stringResource(R.string.trains_form_passenger_coach)) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
             OutlinedTextField(
                 value = row.seatBerth,
                 onValueChange = { value -> onUpdate { it.copy(seatBerth = value) } },
-                label = { Text(stringResource(R.string.trains_form_passenger_seat)) },
+                label = { AutoShrinkText(stringResource(R.string.trains_form_passenger_seat)) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
             OutlinedTextField(
                 value = row.bookingStatus,
                 onValueChange = { value -> onUpdate { it.copy(bookingStatus = value) } },
-                label = { Text(stringResource(R.string.trains_form_passenger_status)) },
+                label = { AutoShrinkText(stringResource(R.string.trains_form_passenger_status)) },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
             )
