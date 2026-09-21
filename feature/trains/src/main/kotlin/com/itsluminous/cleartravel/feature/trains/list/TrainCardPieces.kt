@@ -101,7 +101,9 @@ private fun bandCenterText(
 
 /**
  * Body lines of a train card: bold `number - name` title, `PNR …`, class/quota when
- * known, and the tertiary-toned "Updated X ago" freshness line.
+ * known, and — when [showFreshness] — the tertiary-toned "Updated X ago" freshness
+ * line. The shared image turns it off: "Updated 3 minutes ago" is meaningless to a
+ * recipient reading the picture hours later.
  */
 @Composable
 internal fun TicketBodyLines(
@@ -109,6 +111,7 @@ internal fun TicketBodyLines(
     now: Instant,
     modifier: Modifier = Modifier,
     trailingTitleContent: (@Composable () -> Unit)? = null,
+    showFreshness: Boolean = true,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -136,7 +139,9 @@ internal fun TicketBodyLines(
             )
         }
         val fetched = ticket.lastFetchedAt
-        if (fetched != null) {
+        if (!showFreshness) {
+            // Nothing: the freshness line is an in-app affordance only.
+        } else if (fetched != null) {
             Text(
                 text = updatedAgoText(relativeAge(fetched, now)),
                 style = MaterialTheme.typography.bodyLarge,

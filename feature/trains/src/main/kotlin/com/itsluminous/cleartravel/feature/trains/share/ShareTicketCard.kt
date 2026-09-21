@@ -25,9 +25,10 @@ import java.time.Instant
 
 /**
  * The self-contained card that is rendered OFF-SCREEN into the share image: header
- * band, title, PNR, freshness line and status pills — no action icons (they'd be
- * meaningless in a picture). Reuses the list card's pieces so the shared image looks
- * exactly like what the user sees in the app.
+ * band, title, PNR, class/quota and status pills — no action icons and NO "Updated X
+ * ago" freshness line (both are meaningless in a picture read later by someone
+ * else). Reuses the list card's pieces so the shared image otherwise looks exactly
+ * like what the user sees in the app.
  */
 @Composable
 internal fun ShareTicketCard(
@@ -54,7 +55,7 @@ internal fun ShareTicketCard(
                             .background(MaterialTheme.colorScheme.tertiary),
                 )
                 Column(modifier = Modifier.weight(1f).padding(start = 12.dp, top = 12.dp, end = 16.dp, bottom = 16.dp)) {
-                    TicketBodyLines(ticket = ticket, now = now)
+                    TicketBodyLines(ticket = ticket, now = now, showFreshness = false)
                     StatusPillRow(passengers = passengers, modifier = Modifier.padding(top = 10.dp))
                 }
             }
