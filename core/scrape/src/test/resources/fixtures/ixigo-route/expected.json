@@ -1,0 +1,78 @@
+{
+  "fields": {
+    "trainNumber": "22346",
+    "trainName": "Vande Bharat Exp"
+  },
+  "rows": [
+    {
+      "stationCode": "GTNR",
+      "stationName": "Gomati Nagar",
+      "arrival": "starts",
+      "departure": "15:20",
+      "halt": "-",
+      "distance": "0",
+      "platform": "2",
+      "day": "1"
+    },
+    {
+      "stationCode": "AY",
+      "stationName": "Ayodhya",
+      "arrival": "17:15",
+      "departure": "17:20",
+      "halt": "5min",
+      "distance": "127 km",
+      "platform": "1",
+      "day": "1"
+    },
+    {
+      "stationCode": "BSB",
+      "stationName": "Varanasi Jn",
+      "arrival": "19:50",
+      "departure": "19:55",
+      "halt": "5min",
+      "distance": "316 km",
+      "platform": "7",
+      "day": "1"
+    },
+    {
+      "stationCode": "DDU",
+      "stationName": "Dd Upadhyaya Jn",
+      "arrival": "20:45",
+      "departure": "20:50",
+      "halt": "5min",
+      "distance": "333 km",
+      "platform": "4",
+      "day": "1"
+    },
+    {
+      "stationCode": "BXR",
+      "stationName": "Buxar",
+      "arrival": "21:50",
+      "departure": "21:52",
+      "halt": "2min",
+      "distance": "427 km",
+      "platform": "1",
+      "day": "1"
+    },
+    {
+      "stationCode": "ARA",
+      "stationName": "Ara Jn",
+      "arrival": "22:33",
+      "departure": "22:35",
+      "halt": "2min",
+      "distance": "495 km",
+      "platform": "1",
+      "day": "1"
+    },
+    {
+      "stationCode": "PNBE",
+      "stationName": "Patna Jn",
+      "arrival": "23:45",
+      "departure": "ends",
+      "halt": "-",
+      "distance": "544 km",
+      "platform": "8",
+      "day": "1"
+    }
+  ]
+}

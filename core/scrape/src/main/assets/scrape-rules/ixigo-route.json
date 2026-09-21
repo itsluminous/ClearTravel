@@ -1,0 +1,31 @@
+{
+  "id": "ixigo-route",
+  "displayName": "ixigo Train Route",
+  "version": 1,
+  "kind": "train",
+  "urlTemplate": "https://www.ixigo.com/trains/{trainNumber}",
+  "dismissSelectors": [".close-banner"],
+  "prefill": [],
+  "submitSelector": null,
+  "readySignal": {
+    "jsCondition": "document.querySelectorAll('table.schedule-table tbody tr').length > 1"
+  },
+  "extract": {
+    "trainNumber": { "selector": "h1 span.name", "regexChain": ["([0-9]+)\\s+Train$"], "required": true },
+    "trainName": { "selector": "h1 span.name", "regexChain": ["^(.+?)\\s+[0-9]+\\s+Train$"] }
+  },
+  "rows": {
+    "rowSelector": "table.schedule-table tbody tr",
+    "minRows": 2,
+    "fields": {
+      "stationCode": { "selector": "td.table-cell.code" },
+      "stationName": { "selector": "td.table-cell.station-name a" },
+      "arrival": { "selector": "td:nth-child(3)" },
+      "departure": { "selector": "td:nth-child(4)" },
+      "halt": { "selector": "td:nth-child(5)" },
+      "distance": { "selector": "td:nth-child(6)" },
+      "platform": { "selector": "td.table-cell.platform" },
+      "day": { "selector": "td.table-cell.day" }
+    }
+  }
+}
