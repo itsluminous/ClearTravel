@@ -1133,3 +1133,62 @@ taken to the existing ticket. Shares/links always end on Journeys. Re-opening a
 check never auto-completes. ERS PDFs import passengers with statuses. Test fakes of
 `TrainRepository` (feature:trains, feature:itinerary, core:google) implement
 `findByPnr`.
+
+## ADR-025 — Flight de-duplication (2026-09-21)
+
+**Context.** ADR-024 closed the duplicate-PNR hole for trains and explicitly deferred
+flights: every add path (manual, boarding-pass import, booking-confirmation import,
+share-sheet intake) created a fresh `FlightJourney` row, so importing a boarding pass
+for a flight already typed in produced two cards. Flights have no single natural key
+like a PNR — the same booking reference covers several legs — so the identity is the
+**airline IATA + flight number + local date**. BCBP barcodes carry the flight number
+WITHOUT leading zeros (`101`) while manual entry and some OCR captures keep them
+(`0101`); both must denote the same flight.
+
+**Decisions.**
+
+1. **`FlightRepository.findByFlight(airlineIata, flightNumber, date)`** (additive,
+   frozen-contract rule): live journey — archived INCLUDED, tombstones EXCLUDED —
+   matching the normalized identity, or null. Normalization lives in the new
+   `FlightIdentity` object in `core:data` (`normalizeAirline` = trim + upper-case;
+   `normalizeFlightNumber` = trim + upper-case + drop leading zeros) so production
+   and every test fake compare identically. DAO `findLiveByFlight` normalizes the
+   stored columns in SQL (`UPPER(TRIM(airline_iata))`,
+   `LTRIM(UPPER(TRIM(flight_number)), '0')`, `date = :date`) so legacy rows with
+   stray spaces or zero-padded numbers match. An all-zero flight number normalizes
+   to the empty string and is never matched (it is not a real flight either way).
+2. **Guard in `FlightFormViewModel.save()`** — the single funnel every add path
+   uses. After validation and before ANY write (journey row, boarding-pass copy,
+   booking attachment) it looks up the identity; a match whose id differs from the
+   journey being edited refuses the save, writes nothing, resets `isBusy` and emits
+   `FlightFormEvent.DuplicateFlight(existingFlightId)` on the ViewModel's new
+   `events: SharedFlow` (saves stay callback-based — unchanged API). Editing keeps
+   its own identity; re-pointing an edit at ANOTHER journey's identity is refused;
+   a tombstoned journey frees its slot.
+3. **Hosts.** `FlightFormScreen` gained `onDuplicate: (existingFlightId) -> Unit`
+   (defaulted, collects the event). The in-tab host (`FlightsContent`) returns to
+   the list and hands `FlightListScreen` a `DuplicateFlightNotice(existingId,
+   nonce)`; the list shows `flights_form_duplicate` ("Flight already exists") with a
+   "View" action (`flights_form_duplicate_view`) that expands the existing journey's
+   detail sheet. The sheet is NOT opened automatically (a modal sheet would cover
+   the explanation). The notice is cleared whenever the list is left so it never
+   re-fires on a later return. The two ADR-024 trains papercuts do not apply here:
+   the flights list snackbar lives in the list `Scaffold` (Material places it above
+   the FAB automatically) and is unmounted while the form is shown (no stale
+   snackbar can sit over the form's buttons).
+4. **Intake landing.** `FlightsExternalEntry.onDone` now reports a
+   `FlightsEntryResult` (`Saved(flightId)` / `DuplicateFlight(existingId)` /
+   `Cancelled`) instead of a nullable id — mirrors `TrainsEntryResult`. The shell
+   maps it via `JourneysDeepLink.forFlightsEntry(result)` (unit-tested) with the
+   new `flightsAction: FlightsLandingAction` (`OPEN_DETAIL` default = unchanged,
+   `DUPLICATE_FLIGHT` = list + notice); `FlightsContent` gained `initialAction`
+   accordingly and suppresses the auto-detail for a duplicate landing. A refused
+   duplicate arriving via share-sheet intake therefore still lands on
+   Journeys/Flights with the notice.
+
+**Consequences.** Adding a flight that already exists — by any path, with or without
+zero padding, any airline-code case, archived or not — is impossible; the user is
+told and can jump to the existing card. Test fakes of `FlightRepository`
+(feature:flights, feature:itinerary, core:google) implement `findByFlight` through
+`FlightIdentity`. E2E: `FlightsE2eTest.addSameFlightTwice_isRefusedWithNotice_andKeepsOneCard`
+(second pass types `0777` against a stored `777`).

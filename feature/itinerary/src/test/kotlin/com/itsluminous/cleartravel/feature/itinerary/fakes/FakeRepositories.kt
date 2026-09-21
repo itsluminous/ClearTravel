@@ -2,6 +2,7 @@ package com.itsluminous.cleartravel.feature.itinerary.fakes
 
 import com.itsluminous.cleartravel.core.data.provider.FlightStatusResult
 import com.itsluminous.cleartravel.core.data.provider.TrainStatusResult
+import com.itsluminous.cleartravel.core.data.repository.FlightIdentity
 import com.itsluminous.cleartravel.core.data.repository.FlightRepository
 import com.itsluminous.cleartravel.core.data.repository.ItineraryRepository
 import com.itsluminous.cleartravel.core.data.repository.TrainRepository
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import java.time.LocalDate
 
 /** In-memory [TripRepository] fake: a single backing StateFlow, hard deletes. */
 class FakeTripRepository : TripRepository {
@@ -138,6 +140,18 @@ class FakeFlightRepository : FlightRepository {
     override fun observeFlight(id: String): Flow<FlightJourney?> = flights.map { list -> list.firstOrNull { it.id == id } }
 
     override suspend fun getFlight(id: String): FlightJourney? = flights.value.firstOrNull { it.id == id }
+
+    override suspend fun findByFlight(
+        airlineIata: String,
+        flightNumber: String,
+        date: LocalDate,
+    ): FlightJourney? =
+        flights.value.firstOrNull {
+            it.deletedAt == null &&
+                FlightIdentity.normalizeAirline(it.airlineIata) == FlightIdentity.normalizeAirline(airlineIata) &&
+                FlightIdentity.normalizeFlightNumber(it.flightNumber) == FlightIdentity.normalizeFlightNumber(flightNumber) &&
+                it.date == date
+        }
 
     override suspend fun save(flight: FlightJourney): FlightJourney {
         flights.value = flights.value.filterNot { it.id == flight.id } + flight

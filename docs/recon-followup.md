@@ -201,9 +201,14 @@ discoverable for WL/RAC tickets.
       capture is RAC/WL, so the `CNF/B4/32/LB` coach/berth path is still only
       covered by the hand-written fixtures 1/2.
 
-### TODO — flight de-duplication (ADR-024 follow-up)
-- [ ] Mirror the train PNR guard for flights: `FlightRepository.findByFlight(airlineIata,
-      flightNumber, date)` (live, archived included) + a `FlightFormViewModel.save()`
-      refusal routed through a new `FlightFormScreen` callback so the host shows a
-      notice and opens the existing flight. Not done in this wave because the flights
-      form reports saves via callbacks (no event flow) and touches three hosts.
+### Flight de-duplication (ADR-024 follow-up) — DONE as ADR-025
+- [x] Mirror the train PNR guard for flights: `FlightRepository.findByFlight(airlineIata,
+      flightNumber, date)` (live, archived included; airline case-folded, flight number
+      leading-zero normalized via `FlightIdentity`) + a `FlightFormViewModel.save()`
+      refusal emitted as `FlightFormEvent.DuplicateFlight` and routed through the new
+      `FlightFormScreen.onDuplicate` callback. Both hosts handled: in-tab
+      (`FlightsContent` → list snackbar "Flight already exists" + View) and the
+      share-sheet intake (`FlightsExternalEntry` → `FlightsEntryResult.DuplicateFlight`
+      → `JourneysDeepLink.forFlightsEntry` → Flights segment with the notice). Unit,
+      Robolectric DAO and e2e (`addSameFlightTwice…`) coverage; see `docs/decisions.md`
+      ADR-025.

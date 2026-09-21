@@ -10,6 +10,24 @@ import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
 import com.itsluminous.cleartravel.core.model.TrainTicket
 import kotlinx.coroutines.flow.Flow
+import java.time.LocalDate
+
+/**
+ * How a flight is identified for de-duplication (ADR-025): airline IATA + flight
+ * number + local date. Shared by [FlightRepository] implementations (production and
+ * test fakes) so every lookup normalizes exactly the same way.
+ */
+object FlightIdentity {
+    /** Trimmed, upper-cased airline code ("ai " → "AI"). */
+    fun normalizeAirline(raw: String): String = raw.trim().uppercase()
+
+    /**
+     * Trimmed, upper-cased flight number without leading zeros ("0101" → "101",
+     * " 2345a" → "2345A"). BCBP barcodes strip leading zeros while manual entry and
+     * some OCR captures keep them; both must denote the same flight.
+     */
+    fun normalizeFlightNumber(raw: String): String = raw.trim().uppercase().trimStart('0')
+}
 
 /** Train tickets aggregate: ticket + passengers + route stops (ADR-004) + coaches (ADR-022). */
 interface TrainRepository {
@@ -83,6 +101,19 @@ interface FlightRepository {
     fun observeFlight(id: String): Flow<FlightJourney?>
 
     suspend fun getFlight(id: String): FlightJourney?
+
+    /**
+     * Live (non-tombstoned) journey — archived included — flying [airlineIata]
+     * [flightNumber] on [date], or null. Inputs are normalized per [FlightIdentity]
+     * (airline trimmed + case-folded; flight number trimmed, case-folded, leading
+     * zeros dropped so a BCBP-stripped "101" matches a hand-typed "0101"). Duplicate
+     * guard for every add path (ADR-025); a tombstoned journey frees its slot.
+     */
+    suspend fun findByFlight(
+        airlineIata: String,
+        flightNumber: String,
+        date: LocalDate,
+    ): FlightJourney?
 
     /** Upserts [flight] with a bumped `updatedAt`; returns the stored copy. */
     suspend fun save(flight: FlightJourney): FlightJourney

@@ -6,10 +6,26 @@ import com.itsluminous.cleartravel.core.data.repository.FlightRepository
 import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.feature.flights.checkin.CheckInRuleSource
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+/** One-shot outcomes of the flight form that hosts react to (saves stay callback-based). */
+sealed interface FlightFormEvent {
+    /**
+     * Save refused: a live journey (archived included) already flies this airline +
+     * flight number on this date (ADR-025). Nothing was written; the host shows a
+     * notice and offers to open [existingFlightId] instead of creating a second card
+     * for the same flight.
+     */
+    data class DuplicateFlight(
+        val existingFlightId: String,
+    ) : FlightFormEvent
+}
 
 @HiltViewModel
 class FlightFormViewModel
@@ -27,6 +43,9 @@ class FlightFormViewModel
 
         /** True while a boarding-pass prefill or a save is running. */
         val isBusy: StateFlow<Boolean> = busy
+
+        private val eventsFlow = MutableSharedFlow<FlightFormEvent>(extraBufferCapacity = 4)
+        val events: SharedFlow<FlightFormEvent> = eventsFlow.asSharedFlow()
 
         /** Blank add form. */
         fun startBlank() {
@@ -80,7 +99,12 @@ class FlightFormViewModel
          * Validates and persists. Invalid input surfaces via [FlightFormState.errors]
          * and calls back nothing; success invokes [onSaved] with the journey id so the
          * caller can close the form or chain straight into the status-check flow
-         * ("Save & fetch details").
+         * ("Save & fetch details"). When another live journey already has this
+         * airline + flight number + date, NOTHING is written and
+         * [FlightFormEvent.DuplicateFlight] is emitted instead (ADR-025) — editing a
+         * journey never trips on its own identity, only re-pointing it at ANOTHER
+         * journey's does. Every add path (manual, boarding pass, booking confirmation,
+         * share-sheet intake) funnels through here, so the guard covers all of them.
          */
         fun save(onSaved: (flightId: String) -> Unit) {
             val current = state.value
@@ -89,8 +113,19 @@ class FlightFormViewModel
                 state.value = current.copy(errors = errors)
                 return
             }
+            // Validation guarantees a parseable date; a null here cannot happen.
+            val date = FlightFormState.parseDate(current.dateText) ?: return
             busy.value = true
             viewModelScope.launch {
+                val duplicate =
+                    repository
+                        .findByFlight(current.airlineIata, current.flightNumber, date)
+                        ?.takeIf { it.id != current.editingId }
+                if (duplicate != null) {
+                    busy.value = false
+                    eventsFlow.tryEmit(FlightFormEvent.DuplicateFlight(existingFlightId = duplicate.id))
+                    return@launch
+                }
                 val journey = buildJourney(current)
                 val passPath =
                     current.pendingPassUri?.let { importer.store(it, journey.id) }

@@ -2,6 +2,7 @@ package com.itsluminous.cleartravel.feature.flights
 
 import com.itsluminous.cleartravel.core.data.provider.FlightStatusResult
 import com.itsluminous.cleartravel.core.data.repository.AttachmentRepository
+import com.itsluminous.cleartravel.core.data.repository.FlightIdentity
 import com.itsluminous.cleartravel.core.data.repository.FlightRepository
 import com.itsluminous.cleartravel.core.model.Attachment
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import java.time.Instant
+import java.time.LocalDate
 
 /** In-memory [FlightRepository] mirroring the Room implementation's merge semantics. */
 class FakeFlightRepository : FlightRepository {
@@ -45,6 +47,22 @@ class FakeFlightRepository : FlightRepository {
     override fun observeFlight(id: String): Flow<FlightJourney?> = flights.map { it[id] }
 
     override suspend fun getFlight(id: String): FlightJourney? = flights.value[id]?.takeIf { it.deletedAt == null }
+
+    override suspend fun findByFlight(
+        airlineIata: String,
+        flightNumber: String,
+        date: LocalDate,
+    ): FlightJourney? {
+        val airline = FlightIdentity.normalizeAirline(airlineIata)
+        val number = FlightIdentity.normalizeFlightNumber(flightNumber)
+        if (airline.isEmpty() || number.isEmpty()) return null
+        return flights.value.values.firstOrNull {
+            it.deletedAt == null &&
+                FlightIdentity.normalizeAirline(it.airlineIata) == airline &&
+                FlightIdentity.normalizeFlightNumber(it.flightNumber) == number &&
+                it.date == date
+        }
+    }
 
     override suspend fun save(flight: FlightJourney): FlightJourney {
         val stamped = flight.copy(updatedAt = Instant.now())

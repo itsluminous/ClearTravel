@@ -27,8 +27,10 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +61,16 @@ import com.itsluminous.cleartravel.feature.flights.status.CheckOutcome
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcomeKind
 import kotlinx.coroutines.launch
 
+/**
+ * A refused duplicate save (ADR-025) to explain over the list: the existing journey's
+ * card is already on screen; the snackbar's "View" opens its detail sheet. [nonce]
+ * makes two consecutive refusals of the same journey distinct so the notice re-fires.
+ */
+data class DuplicateFlightNotice(
+    val existingFlightId: String,
+    val nonce: Long = System.nanoTime(),
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FlightListScreen(
@@ -81,6 +93,8 @@ fun FlightListScreen(
      * flight's detail sheet — which renders the outcome line — plus a snackbar.
      */
     lastCheckOutcome: CheckOutcome? = null,
+    /** Duplicate-save notice (ADR-025) with a "View" action for the existing journey. */
+    duplicateNotice: DuplicateFlightNotice? = null,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -105,6 +119,22 @@ fun FlightListScreen(
                     CheckOutcomeKind.FAILED -> checkFailedSnackbar
                 },
             )
+        }
+    }
+
+    // The sheet is NOT opened automatically: a modal sheet would cover the snackbar
+    // and hide the explanation. Scaffold places the snackbar above the FAB.
+    val duplicateMessage = stringResource(R.string.flights_form_duplicate)
+    val duplicateViewLabel = stringResource(R.string.flights_form_duplicate_view)
+    LaunchedEffect(duplicateNotice) {
+        if (duplicateNotice != null) {
+            val result =
+                snackbarHostState.showSnackbar(
+                    message = duplicateMessage,
+                    actionLabel = duplicateViewLabel,
+                    duration = SnackbarDuration.Long,
+                )
+            if (result == SnackbarResult.ActionPerformed) detailFlightId = duplicateNotice.existingFlightId
         }
     }
 

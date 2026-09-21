@@ -27,17 +27,50 @@ sealed interface FlightsEntryRequest {
 }
 
 /**
+ * How an external entry ended (ADR-024/025). The shell uses it to land the user on
+ * the Journeys tab's Flights segment with the right follow-up instead of dropping
+ * them back on whatever tab was open.
+ */
+sealed interface FlightsEntryResult {
+    /** The user backed out; nothing was written. */
+    data object Cancelled : FlightsEntryResult
+
+    /** A journey was saved (plain save, or "Save & check status" after the check closed). */
+    data class Saved(
+        val flightId: String,
+    ) : FlightsEntryResult
+
+    /** Save refused — a live journey with the same airline + number + date exists (ADR-025). */
+    data class DuplicateFlight(
+        val existingFlightId: String,
+    ) : FlightsEntryResult
+}
+
+/**
+ * What the Flights segment should do on arrival for a given journey (integration
+ * contract for the Journeys shell, ADR-024/025). Mirrors [FlightsEntryResult] so
+ * the shell can forward an entry outcome without knowing the segment's internals.
+ */
+enum class FlightsLandingAction {
+    /** Expand the journey's detail sheet (notification deep links, plain saves). */
+    OPEN_DETAIL,
+
+    /** Show the list with a duplicate notice whose "View" opens the EXISTING journey. */
+    DUPLICATE_FLIGHT,
+}
+
+/**
  * PUBLIC external entry point (integration contract for the app module): the
  * add-flight form prefilled per [request]. "Save & check status" chains into the
- * interactive status-check screen exactly like the in-tab flow; [onDone] fires once
- * when the user cancels (null), after a plain save, or when the status check closes
- * — with the saved flight id so the shell can land on Journeys/Flights showing it
- * (ADR-024).
+ * interactive status-check screen exactly like the in-tab flow; [onDone] fires
+ * exactly once with how the entry ended — saved (after a plain save or when the
+ * status check closes), refused as a duplicate, or cancelled — so the shell can land
+ * on Journeys/Flights showing the right journey (ADR-024/025).
  */
 @Composable
 fun FlightsExternalEntry(
     request: FlightsEntryRequest,
-    onDone: (savedFlightId: String?) -> Unit,
+    onDone: (FlightsEntryResult) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var checkingFlightId by remember { mutableStateOf<String?>(null) }
@@ -45,7 +78,7 @@ fun FlightsExternalEntry(
     if (checking != null) {
         StatusCheckScreen(
             flightId = checking,
-            onClose = { onDone(checking) },
+            onClose = { onDone(FlightsEntryResult.Saved(checking)) },
             modifier = modifier,
         )
     } else {
@@ -53,9 +86,10 @@ fun FlightsExternalEntry(
             editId = null,
             importUri = (request as? FlightsEntryRequest.BoardingPass)?.uri,
             bookingUri = (request as? FlightsEntryRequest.BookingConfirmation)?.uri,
-            onClose = { onDone(null) },
-            onSaved = { id -> onDone(id) },
+            onClose = { onDone(FlightsEntryResult.Cancelled) },
+            onSaved = { id -> onDone(FlightsEntryResult.Saved(id)) },
             onSavedAndCheck = { id -> checkingFlightId = id },
+            onDuplicate = { existingId -> onDone(FlightsEntryResult.DuplicateFlight(existingId)) },
             modifier = modifier,
         )
     }

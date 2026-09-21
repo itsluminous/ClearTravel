@@ -3,6 +3,7 @@ package com.itsluminous.cleartravel.core.data.repository.offline
 import com.itsluminous.cleartravel.core.data.provider.FlightStatusResult
 import com.itsluminous.cleartravel.core.data.provider.TrainStatusResult
 import com.itsluminous.cleartravel.core.data.repository.AttachmentRepository
+import com.itsluminous.cleartravel.core.data.repository.FlightIdentity
 import com.itsluminous.cleartravel.core.data.repository.FlightRepository
 import com.itsluminous.cleartravel.core.data.repository.TrainRepository
 import com.itsluminous.cleartravel.core.database.dao.AttachmentDao
@@ -20,6 +21,7 @@ import com.itsluminous.cleartravel.core.model.TrainTicket
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.Clock
+import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -180,6 +182,17 @@ class OfflineFlightRepository
         override fun observeFlight(id: String): Flow<FlightJourney?> = flightDao.observeById(id).map { it?.toModel() }
 
         override suspend fun getFlight(id: String): FlightJourney? = flightDao.getById(id)?.toModel()
+
+        override suspend fun findByFlight(
+            airlineIata: String,
+            flightNumber: String,
+            date: LocalDate,
+        ): FlightJourney? {
+            val airline = FlightIdentity.normalizeAirline(airlineIata)
+            val number = FlightIdentity.normalizeFlightNumber(flightNumber)
+            if (airline.isEmpty() || number.isEmpty()) return null
+            return flightDao.findLiveByFlight(airline, number, date)?.toModel()
+        }
 
         override suspend fun save(flight: FlightJourney): FlightJourney {
             val stamped = flight.copy(updatedAt = clock.instant())

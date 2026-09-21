@@ -9,6 +9,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.itsluminous.cleartravel.feature.flights.form.FlightFormScreen
+import com.itsluminous.cleartravel.feature.flights.list.DuplicateFlightNotice
 import com.itsluminous.cleartravel.feature.flights.list.FlightListScreen
 import com.itsluminous.cleartravel.feature.flights.pass.BoardingPassViewerScreen
 import com.itsluminous.cleartravel.feature.flights.polling.FlightPollScheduler
@@ -42,19 +43,26 @@ private sealed interface FlightsRoute {
  * Trains segment under a segmented control; this module never references
  * `feature:trains`.
  *
- * [initialFlightId] is the notification deep-link hook (integration contract): when
- * non-null the list opens with that flight's detail sheet expanded. Defaulted so
- * existing call sites are untouched.
+ * [initialFlightId] is the deep-link hook (integration contract): when non-null the
+ * segment arrives on that journey per [initialAction] — detail sheet expanded
+ * (notification deep links, saves) or the list with a duplicate notice whose "View"
+ * opens the existing journey (ADR-025). Both defaulted so existing call sites are
+ * untouched.
  */
 @Composable
 fun FlightsContent(
     modifier: Modifier = Modifier,
     initialFlightId: String? = null,
+    initialAction: FlightsLandingAction = FlightsLandingAction.OPEN_DETAIL,
 ) {
     var route by remember { mutableStateOf<FlightsRoute>(FlightsRoute.Journeys) }
     // Transient (per D2 decision — no DB column): outcome of the last completed
     // status-check attempt, surfaced as a snackbar + detail-sheet line on return.
     var checkOutcome by remember { mutableStateOf<CheckOutcome?>(null) }
+    // Transient: a refused duplicate save (ADR-025) — the list shows the notice with
+    // a "View" action for the existing journey. Cleared whenever the list is left so
+    // it never re-fires on a later return.
+    var duplicateNotice by remember { mutableStateOf<DuplicateFlightNotice?>(null) }
     val context = LocalContext.current
 
     // Feature-local WorkManager wiring: make sure a poll chain exists (ADR-013).
@@ -62,8 +70,16 @@ fun FlightsContent(
         FlightPollScheduler.ensureScheduled(context, nextDeparture = null)
     }
 
-    LaunchedEffect(initialFlightId) {
-        if (initialFlightId != null) route = FlightsRoute.Journeys
+    LaunchedEffect(initialFlightId, initialAction) {
+        if (initialFlightId == null) return@LaunchedEffect
+        route = FlightsRoute.Journeys
+        if (initialAction == FlightsLandingAction.DUPLICATE_FLIGHT) {
+            duplicateNotice = DuplicateFlightNotice(existingFlightId = initialFlightId)
+        }
+    }
+
+    LaunchedEffect(route) {
+        if (route !is FlightsRoute.Journeys) duplicateNotice = null
     }
 
     when (val current = route) {
@@ -82,8 +98,11 @@ fun FlightsContent(
                     route = FlightsRoute.PassViewer(path, titleRes = R.string.flights_booking_viewer_title)
                 },
                 modifier = modifier,
-                initialDetailFlightId = initialFlightId,
+                // A duplicate landing must NOT auto-open the sheet: a modal sheet would
+                // cover the notice that explains why nothing was added.
+                initialDetailFlightId = initialFlightId.takeIf { initialAction == FlightsLandingAction.OPEN_DETAIL },
                 lastCheckOutcome = checkOutcome,
+                duplicateNotice = duplicateNotice,
             )
 
         is FlightsRoute.Form ->
@@ -95,6 +114,12 @@ fun FlightsContent(
                 onSavedAndCheck = { id ->
                     checkOutcome = null
                     route = FlightsRoute.StatusCheck(id)
+                },
+                onDuplicate = { existingId ->
+                    // Nothing was written (ADR-025): back to the list, which already
+                    // shows the existing journey, with the notice + a "View" action.
+                    duplicateNotice = DuplicateFlightNotice(existingFlightId = existingId)
+                    route = FlightsRoute.Journeys
                 },
                 modifier = modifier,
             )

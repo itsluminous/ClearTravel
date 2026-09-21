@@ -2,6 +2,8 @@ package com.itsluminous.cleartravel.ui
 
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.notifications.DeepLinkContract
+import com.itsluminous.cleartravel.feature.flights.FlightsEntryResult
+import com.itsluminous.cleartravel.feature.flights.FlightsLandingAction
 import com.itsluminous.cleartravel.feature.trains.TrainsEntryResult
 import com.itsluminous.cleartravel.feature.trains.TrainsLandingAction
 import org.junit.Test
@@ -46,9 +48,28 @@ class JourneysDeepLinkTest {
     }
 
     @Test
-    fun `flights entry lands on Flights, with the saved flight when there is one`() {
-        assertThat(JourneysDeepLink.forFlightsEntry("f1").target).isEqualTo(DeepLinkContract.TARGET_FLIGHT)
-        assertThat(JourneysDeepLink.forFlightsEntry("f1").entityId).isEqualTo("f1")
-        assertThat(JourneysDeepLink.forFlightsEntry(null).entityId).isNull()
+    fun `saved flight lands on Flights with its detail sheet`() {
+        val link = JourneysDeepLink.forFlightsEntry(FlightsEntryResult.Saved(flightId = "f1"))
+
+        assertThat(link.target).isEqualTo(DeepLinkContract.TARGET_FLIGHT)
+        assertThat(link.entityId).isEqualTo("f1")
+        assertThat(link.flightsAction).isEqualTo(FlightsLandingAction.OPEN_DETAIL)
+    }
+
+    @Test
+    fun `duplicate flight lands on Flights pointing at the EXISTING journey with the notice`() {
+        val link = JourneysDeepLink.forFlightsEntry(FlightsEntryResult.DuplicateFlight(existingFlightId = "existing"))
+
+        assertThat(link.target).isEqualTo(DeepLinkContract.TARGET_FLIGHT)
+        assertThat(link.entityId).isEqualTo("existing")
+        assertThat(link.flightsAction).isEqualTo(FlightsLandingAction.DUPLICATE_FLIGHT)
+    }
+
+    @Test
+    fun `cancelled flights entry still lands on the Flights segment without an entity`() {
+        val link = JourneysDeepLink.forFlightsEntry(FlightsEntryResult.Cancelled)
+
+        assertThat(link.target).isEqualTo(DeepLinkContract.TARGET_FLIGHT)
+        assertThat(link.entityId).isNull()
     }
 }

@@ -19,6 +19,7 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.time.Clock
+import java.time.LocalDate
 import java.time.ZoneOffset
 
 @RunWith(RobolectricTestRunner::class)
@@ -300,6 +301,31 @@ class OfflineFlightRepositoryTest {
 
             assertThat(saved.updatedAt).isEqualTo(clock.instant())
             assertThat(flights.getFlight(saved.id)).isEqualTo(saved)
+        }
+
+    @Test
+    fun `findByFlight matches live journeys case, whitespace and leading-zero insensitively, archived included`() =
+        runTest {
+            val date = LocalDate.of(2026, 9, 25)
+            val saved = flights.save(Fixtures.flightJourney(airlineIata = "AI", flightNumber = "0101", date = date))
+            flights.setArchived(saved.id, true)
+
+            assertThat(flights.findByFlight("ai ", " 101", date)?.id).isEqualTo(saved.id)
+            assertThat(flights.findByFlight("AI", "0101", date)?.id).isEqualTo(saved.id)
+            assertThat(flights.findByFlight("AI", "101", date.plusDays(1))).isNull()
+            assertThat(flights.findByFlight("6E", "101", date)).isNull()
+            assertThat(flights.findByFlight("AI", "1010", date)).isNull()
+            assertThat(flights.findByFlight("  ", "101", date)).isNull()
+        }
+
+    @Test
+    fun `findByFlight ignores tombstoned journeys so a deleted flight can be re-added`() =
+        runTest {
+            val date = LocalDate.of(2026, 9, 25)
+            val saved = flights.save(Fixtures.flightJourney(airlineIata = "AI", flightNumber = "101", date = date))
+            flights.delete(saved.id)
+
+            assertThat(flights.findByFlight("AI", "101", date)).isNull()
         }
 
     @Test

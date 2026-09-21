@@ -1,5 +1,6 @@
 package com.itsluminous.cleartravel.feature.flights.form
 
+import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.model.FlightStatus
@@ -23,6 +24,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.time.LocalDate
 
 class FlightFormViewModelTest {
     @get:Rule
@@ -267,5 +269,150 @@ class FlightFormViewModelTest {
                     .observeForOwner(AttachmentOwnerType.FLIGHT, saved!!)
                     .first(),
             ).isEmpty()
+        }
+
+    // ---- flight de-duplication (ADR-025) ----
+
+    private val flightDate: LocalDate = LocalDate.parse("2026-09-25")
+
+    private fun fillNewFlight(
+        airline: String,
+        number: String,
+        date: String = flightDate.toString(),
+    ) {
+        viewModel.startBlank()
+        viewModel.update { it.copy(airlineIata = airline, flightNumber = number, dateText = date) }
+    }
+
+    @Test
+    fun `new flight duplicating a live journey is refused with a DuplicateFlight event and writes nothing`() =
+        runTest {
+            val existing = Fixtures.flightJourney(airlineIata = "AI", flightNumber = "101", date = flightDate)
+            repository.seed(existing)
+            fillNewFlight("AI", "101")
+
+            var saved: String? = null
+            viewModel.events.test {
+                viewModel.save { saved = it }
+                val event = awaitItem() as FlightFormEvent.DuplicateFlight
+                assertThat(event.existingFlightId).isEqualTo(existing.id)
+            }
+            assertThat(saved).isNull()
+            assertThat(repository.savedIds).isEmpty()
+            assertThat(importer.stored).isEmpty()
+            assertThat(viewModel.isBusy.value).isFalse()
+        }
+
+    @Test
+    fun `duplicate check is airline case-insensitive and includes archived journeys`() =
+        runTest {
+            val existing = Fixtures.flightJourney(airlineIata = "AI", flightNumber = "101", date = flightDate, archived = true)
+            repository.seed(existing)
+            fillNewFlight(" ai", "101")
+
+            viewModel.events.test {
+                viewModel.save {}
+                assertThat((awaitItem() as FlightFormEvent.DuplicateFlight).existingFlightId).isEqualTo(existing.id)
+            }
+            assertThat(repository.savedIds).isEmpty()
+        }
+
+    @Test
+    fun `duplicate check ignores leading zeros in the flight number (AI 0101 is AI 101)`() =
+        runTest {
+            val existing = Fixtures.flightJourney(airlineIata = "AI", flightNumber = "101", date = flightDate)
+            repository.seed(existing)
+            fillNewFlight("AI", "0101")
+
+            viewModel.events.test {
+                viewModel.save {}
+                assertThat((awaitItem() as FlightFormEvent.DuplicateFlight).existingFlightId).isEqualTo(existing.id)
+            }
+            assertThat(repository.savedIds).isEmpty()
+        }
+
+    @Test
+    fun `boarding-pass import with a stripped number still trips on a zero-padded manual entry`() =
+        runTest {
+            val existing = Fixtures.flightJourney(airlineIata = "AI", flightNumber = "0101", date = flightDate)
+            repository.seed(existing)
+            importer.extraction =
+                BoardingPassExtraction(
+                    carrier = ExtractedField.of("AI", ExtractionConfidence.HIGH),
+                    flightNumber = ExtractedField.of("101", ExtractionConfidence.HIGH),
+                    flightDate = ExtractedField.of(flightDate.toString(), ExtractionConfidence.HIGH),
+                    source = BoardingPassSource.BARCODE,
+                )
+            viewModel.startFromBoardingPass("content://picked/pass")
+
+            viewModel.events.test {
+                viewModel.save {}
+                assertThat((awaitItem() as FlightFormEvent.DuplicateFlight).existingFlightId).isEqualTo(existing.id)
+            }
+            assertThat(repository.savedIds).isEmpty()
+            assertThat(importer.stored).isEmpty()
+        }
+
+    @Test
+    fun `same flight on a different date is not a duplicate`() =
+        runTest {
+            repository.seed(Fixtures.flightJourney(airlineIata = "AI", flightNumber = "101", date = flightDate))
+            fillNewFlight("AI", "101", date = flightDate.plusDays(1).toString())
+
+            var saved: String? = null
+            viewModel.save { saved = it }
+
+            assertThat(saved).isNotNull()
+            assertThat(repository.savedIds).containsExactly(saved)
+        }
+
+    @Test
+    fun `editing a journey keeps its own identity without tripping the duplicate check`() =
+        runTest {
+            val journey = Fixtures.flightJourney(airlineIata = "AI", flightNumber = "101", date = flightDate, seat = "1A")
+            repository.seed(journey)
+            viewModel.startEdit(journey.id)
+            viewModel.update { it.copy(seat = "2B") }
+
+            var saved: String? = null
+            viewModel.save { saved = it }
+
+            assertThat(saved).isEqualTo(journey.id)
+            assertThat(repository.getFlight(journey.id)!!.seat).isEqualTo("2B")
+        }
+
+    @Test
+    fun `editing a journey onto ANOTHER journey's identity is refused`() =
+        runTest {
+            val other = Fixtures.flightJourney(airlineIata = "AI", flightNumber = "101", date = flightDate)
+            val journey = Fixtures.flightJourney(airlineIata = "6E", flightNumber = "2345", date = flightDate)
+            repository.seed(other, journey)
+            viewModel.startEdit(journey.id)
+            viewModel.update { it.copy(airlineIata = "AI", flightNumber = "101") }
+
+            var saved: String? = null
+            viewModel.events.test {
+                viewModel.save { saved = it }
+                assertThat((awaitItem() as FlightFormEvent.DuplicateFlight).existingFlightId).isEqualTo(other.id)
+            }
+            assertThat(saved).isNull()
+            assertThat(repository.savedIds).isEmpty()
+            assertThat(repository.getFlight(journey.id)!!.airlineIata).isEqualTo("6E")
+        }
+
+    @Test
+    fun `a tombstoned journey's identity can be added again`() =
+        runTest {
+            val deleted = Fixtures.flightJourney(airlineIata = "AI", flightNumber = "101", date = flightDate)
+            repository.seed(deleted)
+            repository.delete(deleted.id)
+            fillNewFlight("AI", "101")
+
+            var saved: String? = null
+            viewModel.save { saved = it }
+
+            assertThat(saved).isNotNull()
+            assertThat(saved).isNotEqualTo(deleted.id)
+            assertThat(repository.savedIds).containsExactly(saved)
         }
 }

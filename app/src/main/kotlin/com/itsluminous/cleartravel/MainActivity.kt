@@ -114,8 +114,8 @@ class MainActivity : ComponentActivity() {
                             Surface {
                                 FlightsExternalEntry(
                                     request = entry.request,
-                                    onDone = { savedFlightId ->
-                                        pendingDeepLink.value = JourneysDeepLink.forFlightsEntry(savedFlightId)
+                                    onDone = { result ->
+                                        pendingDeepLink.value = JourneysDeepLink.forFlightsEntry(result)
                                         pendingEntry.value = null
                                     },
                                 )

@@ -46,9 +46,23 @@ fun FlightFormScreen(
     bookingUri: String? = null,
     /** Plain "Save" completion with the journey id; defaults to [onClose] so existing call sites are untouched. */
     onSaved: (flightId: String) -> Unit = { onClose() },
+    /**
+     * Save refused as a duplicate (ADR-025): nothing was written, [existingFlightId]
+     * is the journey already carrying this airline + number + date. Hosts show a
+     * notice with a "View" action; defaulted so existing call sites are untouched.
+     */
+    onDuplicate: (existingFlightId: String) -> Unit = {},
 ) {
     val state by viewModel.formState.collectAsStateWithLifecycle()
     val busy by viewModel.isBusy.collectAsStateWithLifecycle()
+
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is FlightFormEvent.DuplicateFlight -> onDuplicate(event.existingFlightId)
+            }
+        }
+    }
 
     LaunchedEffect(editId, importUri, bookingUri) {
         when {

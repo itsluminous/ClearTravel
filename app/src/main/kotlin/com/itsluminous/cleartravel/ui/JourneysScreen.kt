@@ -22,6 +22,7 @@ import androidx.navigation.compose.composable
 import com.itsluminous.cleartravel.R
 import com.itsluminous.cleartravel.core.notifications.DeepLinkContract
 import com.itsluminous.cleartravel.feature.flights.FlightsContent
+import com.itsluminous.cleartravel.feature.flights.FlightsLandingAction
 import com.itsluminous.cleartravel.feature.trains.TrainsContent
 import com.itsluminous.cleartravel.feature.trains.TrainsLandingAction
 
@@ -59,6 +60,7 @@ private fun JourneysScreen(
     var trainDeepLinkId by rememberSaveable { mutableStateOf<String?>(null) }
     var trainAction by rememberSaveable { mutableStateOf(TrainsLandingAction.OPEN_DETAIL) }
     var flightDeepLinkId by rememberSaveable { mutableStateOf<String?>(null) }
+    var flightAction by rememberSaveable { mutableStateOf(FlightsLandingAction.OPEN_DETAIL) }
 
     LaunchedEffect(deepLink) {
         if (deepLink != null) {
@@ -71,6 +73,7 @@ private fun JourneysScreen(
                 DeepLinkContract.TARGET_FLIGHT -> {
                     segment = JourneysSegment.FLIGHTS
                     flightDeepLinkId = deepLink.entityId
+                    flightAction = deepLink.flightsAction
                 }
             }
             onDeepLinkConsumed()
@@ -108,7 +111,7 @@ private fun JourneysScreen(
         }
         when (segment) {
             JourneysSegment.TRAINS -> TrainsContent(initialTicketId = trainDeepLinkId, initialAction = trainAction)
-            JourneysSegment.FLIGHTS -> FlightsContent(initialFlightId = flightDeepLinkId)
+            JourneysSegment.FLIGHTS -> FlightsContent(initialFlightId = flightDeepLinkId, initialAction = flightAction)
         }
     }
 }
