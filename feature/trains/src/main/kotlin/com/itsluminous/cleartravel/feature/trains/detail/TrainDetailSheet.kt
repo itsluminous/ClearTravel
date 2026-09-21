@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
 import com.itsluminous.cleartravel.feature.trains.R
@@ -142,19 +143,21 @@ internal fun TrainDetailSheet(
             OutlinedButton(onClick = onSeatMap, modifier = Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.trains_detail_seat_map))
             }
+            // Three equal-width buttons: the longer "Unarchive" must shrink to stay on
+            // one line rather than wrap, and its siblings get the same treatment.
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.trains_detail_edit))
+                    AutoShrinkText(stringResource(R.string.trains_detail_edit))
                 }
                 OutlinedButton(onClick = onArchiveToggle, modifier = Modifier.weight(1f)) {
-                    Text(
+                    AutoShrinkText(
                         stringResource(
                             if (ticket.archived) R.string.trains_detail_unarchive else R.string.trains_detail_archive,
                         ),
                     )
                 }
                 OutlinedButton(onClick = { showDeleteConfirm = true }, modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.trains_detail_delete))
+                    AutoShrinkText(stringResource(R.string.trains_detail_delete))
                 }
             }
         }

@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.feature.flights.R
 import com.itsluminous.cleartravel.feature.flights.list.FlightStatusChip
@@ -212,18 +213,20 @@ fun FlightDetailSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                // Three equal-width buttons: the longer "Unarchive" must shrink to
+                // stay on one line rather than wrap; siblings get the same treatment.
                 OutlinedButton(onClick = onEdit, modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.flights_action_edit))
+                    AutoShrinkText(stringResource(R.string.flights_action_edit))
                 }
                 OutlinedButton(onClick = onArchiveToggle, modifier = Modifier.weight(1f)) {
-                    Text(
+                    AutoShrinkText(
                         stringResource(
                             if (flight.archived) R.string.flights_action_unarchive else R.string.flights_action_archive,
                         ),
                     )
                 }
                 OutlinedButton(onClick = { confirmDelete = true }, modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.flights_action_delete))
+                    AutoShrinkText(stringResource(R.string.flights_action_delete))
                 }
             }
         }
