@@ -797,3 +797,79 @@ file + fixture and gives a one-tap escape hatch when ixigo's markup changes. The
 offline page enforces the offline-first rule for routes (the old flow re-opened the
 website every time the user wanted to LOOK at a route); deriving halt keeps the
 contract-frozen schema untouched at zero information loss.
+
+## ADR-020: Train card redesign, ticket sharing (image + PNR link), share-sheet file intake
+
+**What.** Three UX additions modelled on a reference train-tracker card, per user
+steering (2026-09-21):
+
+- **Card redesign** (`feature:trains` `list/`): every train ticket card is now a
+  header band (origin code · journey date + departure time · destination code,
+  `primaryContainer`), a slim `tertiary` accent stripe, body lines (bold
+  `number - name`, `PNR …`, class/quota, italic tertiary "Updated X ago") with
+  compact filled status pills (`RAC - 10`, `WL - 45`, `CNF B4-32`), and a VERTICAL
+  action column of `ExplainableIcon`s: refresh (PNR check), seat (opens the detail
+  sheet — the seat data lives there), place pin (route, ADR-019) and share. All
+  formatting is pure (`TrainCardFormat.kt`: `stationCode` — `Name (CODE)` → `CODE`;
+  `relativeAge`; `passengerPillLabel`; `departureTime` from the first stored route
+  stop). **Chart status is deliberately NOT shown**: `TrainStatusResult.chartPrepared`
+  is never persisted (the frozen `TrainTicket` has no column, ADR-004/005) and a
+  guess from per-passenger status would be wrong for RAC/WL; class/quota takes that
+  line instead. Schema untouched. The band, body and pill composables are shared
+  with the share image so the picture matches the list.
+- **Share = image + caption.** The card's share action renders a self-contained
+  `ShareTicketCard` (no action icons) OFF-SCREEN into a PNG (`ShareImageRenderer`:
+  a throw-away INVISIBLE `ComposeView` attached to the activity decor view, measured
+  at 1080 px, laid out, drawn onto a software canvas and removed — all synchronously
+  in one main-thread call, so it never reaches a visible frame). Chosen over
+  `GraphicsLayer.toImageBitmap()` because it needs no placement inside the live
+  composition and works on every Compose version the project pins. Always the LIGHT
+  scheme (the image lands in other apps' chat bubbles). PNG → `cacheDir/share/` →
+  app `FileProvider` (`<applicationId>.fileprovider`, `res/xml/file_paths.xml`,
+  declared in the app manifest — the feature builds the authority from
+  `packageName`) → `ACTION_SEND image/png` + `EXTRA_TEXT` caption
+  (`trains_share_text`: "Check out my train ticket (PNR …): <link>") via the
+  chooser. Render/IO failure degrades to a TEXT-ONLY share of the same caption —
+  never a dead button.
+- **PNR deep-link format** (`TicketShareLinks`, pure build + parse in ONE place):
+  `https://itsluminous.github.io/ClearTravel/pnr/<pnr>` is what we share, plus the
+  custom-scheme twin `cleartravel://pnr/<pnr>`; both are `ACTION_VIEW`/`BROWSABLE`
+  intent filters on `MainActivity`. **Not `autoVerify`**: there is no owned domain
+  serving `assetlinks.json` yet, so the system chooser (browser vs. app) is the
+  intended behaviour; the https shape was still chosen so recipients WITHOUT the app
+  get a real URL. An incoming link opens the train ADD form carrying only the PNR
+  (`TrainTicketFormViewModel.startWithPnr`); the recipient saves and then runs the
+  captcha-gated PNR check — auto-fetch is impossible by design (ADR-011). **User
+  follow-up:** publish a GitHub Pages landing page at that path (and, later,
+  `assetlinks.json` to enable `autoVerify`).
+- **Share-sheet FILE intake** (app module — the only place trains AND flights are
+  composed): the `ACTION_SEND` filter now also accepts `image/*` and
+  `application/pdf`. Shared TEXT keeps its direct train-SMS route; a shared file
+  opens a "What's this file?" dialog (Train ticket / Flight boarding pass / Flight
+  booking confirmation / Cancel). Before the user picks, a cheap auto-detect
+  PRESELECTS the likely type: `OcrSharedDocProbe` runs the PUBLIC
+  `OcrPrefillService` boarding-pass path first (barcode-first — a decoded BCBP
+  short-circuits everything), else the train and booking extractors concurrently;
+  pure `pickLikelyDocType` then applies: barcode wins → else the extractor with the
+  most non-empty HIGH/MEDIUM fields (LOW is too noisy to steer) → all-zero or a tie
+  → no preselection. The probe reuses the three existing pipelines instead of
+  duplicating extraction logic; the cost is up to three OCR runs of the same file
+  (follow-up: a single-pass probe in `core:ocr`, out of this wave's ownership).
+  Confirmed choice → the EXISTING prefill flows through new additive public entries:
+  `TrainsExternalEntry(TrainsEntryRequest.Text|File|Pnr)` (of which
+  `TrainsSharedTextEntry` is now a thin wrapper) and
+  `FlightsExternalEntry(FlightsEntryRequest.BoardingPass|BookingConfirmation)`
+  (hosts `FlightFormScreen` and chains "Save & check status" into
+  `StatusCheckScreen`). The app's `MainActivity` owns a single `ExternalEntry`
+  state for all of these.
+
+**Why.** The reference card puts every per-ticket action one tap away and makes the
+share output self-explanatory; reusing the card's own composables for the share
+image keeps the two in lock-step for free. Keeping chart status off the card avoids
+inventing data the schema doesn't hold. The https-plus-custom-scheme link pair gives
+a shareable URL today without waiting for domain ownership, while parsing both
+shapes in one pure object keeps the format a single testable contract. Routing the
+file intake through the existing prefill entries (rather than new import code)
+honours the no-duplication rule and the feature ownership boundaries: the app module
+only composes, `core:ocr` is untouched, and each feature gained exactly one
+additive public entry composable.

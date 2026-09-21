@@ -125,6 +125,8 @@ dependencies {
     implementation(project(":core:data"))
     implementation(project(":core:notifications"))
     implementation(project(":core:google"))
+    // Share-sheet file intake auto-detect runs the public OCR prefill API.
+    implementation(project(":core:ocr"))
     implementation(project(":feature:trains"))
     implementation(project(":feature:flights"))
     implementation(project(":feature:itinerary"))
@@ -134,6 +136,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
 
     implementation(platform(libs.compose.bom))

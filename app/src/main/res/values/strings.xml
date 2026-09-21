@@ -11,4 +11,15 @@
     <!-- Journeys tab segmented control. -->
     <string name="journeys_segment_trains">Trains</string>
     <string name="journeys_segment_flights">Flights</string>
+
+    <!-- Share-sheet file intake ("What's this file?"). -->
+    <string name="intake_title">What\'s this file?</string>
+    <string name="intake_message">Choose how to import the shared file.</string>
+    <string name="intake_detecting">Looking at the file…</string>
+    <string name="intake_suggested">Suggested</string>
+    <string name="intake_option_train_ticket">Train ticket</string>
+    <string name="intake_option_boarding_pass">Flight boarding pass</string>
+    <string name="intake_option_booking_confirmation">Flight booking confirmation</string>
+    <string name="intake_confirm">Continue</string>
+    <string name="intake_cancel">Cancel</string>
 </resources>

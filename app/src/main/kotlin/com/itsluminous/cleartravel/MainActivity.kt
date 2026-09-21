@@ -2,6 +2,7 @@ package com.itsluminous.cleartravel
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -16,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.IntentCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
@@ -23,19 +25,26 @@ import com.itsluminous.cleartravel.core.designsystem.theme.ClearTravelTheme
 import com.itsluminous.cleartravel.core.model.ThemeMode
 import com.itsluminous.cleartravel.core.notifications.NotificationChannelRegistrar
 import com.itsluminous.cleartravel.core.notifications.NotificationPermissions
-import com.itsluminous.cleartravel.feature.trains.TrainsSharedTextEntry
+import com.itsluminous.cleartravel.feature.flights.FlightsEntryRequest
+import com.itsluminous.cleartravel.feature.flights.FlightsExternalEntry
+import com.itsluminous.cleartravel.feature.trains.TrainsEntryRequest
+import com.itsluminous.cleartravel.feature.trains.TrainsExternalEntry
+import com.itsluminous.cleartravel.feature.trains.share.TicketShareLinks
 import com.itsluminous.cleartravel.startup.AppStartupTasks
 import com.itsluminous.cleartravel.ui.ClearTravelApp
 import com.itsluminous.cleartravel.ui.JourneysDeepLink
 import com.itsluminous.cleartravel.ui.ThemeViewModel
+import com.itsluminous.cleartravel.ui.intake.IntakeRoute
+import com.itsluminous.cleartravel.ui.intake.SharedFileIntakeDialog
+import com.itsluminous.cleartravel.ui.intake.SharedFileIntakeViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
  * Single-activity Compose shell. `singleTask` in the manifest, so notification deep
- * links and share-sheet sends arrive here — cold via [onCreate]'s intent, warm via
- * [onNewIntent] — instead of stacking duplicate instances.
+ * links, PNR share links and share-sheet sends arrive here — cold via [onCreate]'s
+ * intent, warm via [onNewIntent] — instead of stacking duplicate instances.
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -48,8 +57,15 @@ class MainActivity : ComponentActivity() {
     /** Pending notification deep link (ADR-013 contract); cleared once consumed. */
     private val pendingDeepLink = mutableStateOf<JourneysDeepLink?>(null)
 
-    /** Pending ACTION_SEND text (IRCTC SMS/email share); cleared when the form closes. */
-    private val pendingSharedText = mutableStateOf<String?>(null)
+    /**
+     * Pending external entry into a feature form — shared IRCTC text or a confirmed
+     * shared file for trains, a PNR share link (ADR-020), or a confirmed shared file
+     * for flights. Cleared when the hosted form closes.
+     */
+    private val pendingEntry = mutableStateOf<ExternalEntry?>(null)
+
+    /** A shared image/PDF awaiting the "What's this file?" intake dialog. */
+    private val pendingSharedFile = mutableStateOf<Uri?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // AndroidX splash (Theme.ClearTravel.Splash): must be installed before
@@ -68,26 +84,37 @@ class MainActivity : ComponentActivity() {
         consumeIntent(intent)
 
         val themeViewModel: ThemeViewModel by viewModels()
+        val intakeViewModel: SharedFileIntakeViewModel by viewModels()
         setContent {
             val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
             NotificationPermissionEffect()
             ClearTravelTheme(darkTheme = themeMode.resolveDarkTheme()) {
-                val sharedText = pendingSharedText.value
-                if (sharedText != null) {
-                    // Share-sheet entry: the trains add form, prefilled from the
-                    // shared text, rendered over the shell until saved/cancelled.
-                    Surface {
-                        TrainsSharedTextEntry(
-                            sharedText = sharedText,
-                            onDone = { pendingSharedText.value = null },
+                when (val entry = pendingEntry.value) {
+                    // External entry: a feature's add form rendered over the shell
+                    // until saved/cancelled.
+                    is ExternalEntry.Trains ->
+                        Surface {
+                            TrainsExternalEntry(request = entry.request, onDone = { pendingEntry.value = null })
+                        }
+                    is ExternalEntry.Flights ->
+                        Surface {
+                            FlightsExternalEntry(request = entry.request, onDone = { pendingEntry.value = null })
+                        }
+                    null ->
+                        ClearTravelApp(
+                            journeysDeepLink = pendingDeepLink.value,
+                            onJourneysDeepLinkConsumed = { pendingDeepLink.value = null },
                         )
-                    }
-                } else {
-                    ClearTravelApp(
-                        journeysDeepLink = pendingDeepLink.value,
-                        onJourneysDeepLinkConsumed = { pendingDeepLink.value = null },
-                    )
                 }
+                SharedFileIntakeHost(
+                    viewModel = intakeViewModel,
+                    sharedFile = pendingSharedFile.value,
+                    onRouted = { route ->
+                        pendingSharedFile.value = null
+                        pendingEntry.value = route.toExternalEntry()
+                    },
+                    onCancelled = { pendingSharedFile.value = null },
+                )
             }
         }
     }
@@ -97,21 +124,91 @@ class MainActivity : ComponentActivity() {
         consumeIntent(intent)
     }
 
-    /** Routes an arriving intent: ACTION_SEND text vs. notification deep link. */
+    /**
+     * Routes an arriving intent: ACTION_SEND text (train SMS → form directly),
+     * ACTION_SEND image/PDF (→ intake dialog), ACTION_VIEW PNR link (→ train form
+     * carrying the PNR), else a notification deep link.
+     */
     private fun consumeIntent(intent: Intent?) {
         intent ?: return
-        if (intent.action == Intent.ACTION_SEND && intent.type == MIME_TEXT_PLAIN) {
-            intent
-                .getStringExtra(Intent.EXTRA_TEXT)
-                ?.takeIf(String::isNotBlank)
-                ?.let { pendingSharedText.value = it }
-            return
+        when (intent.action) {
+            Intent.ACTION_SEND -> {
+                if (intent.type == MIME_TEXT_PLAIN) {
+                    intent
+                        .getStringExtra(Intent.EXTRA_TEXT)
+                        ?.takeIf(String::isNotBlank)
+                        ?.let { pendingEntry.value = ExternalEntry.Trains(TrainsEntryRequest.Text(it)) }
+                } else {
+                    IntentCompat
+                        .getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)
+                        ?.let { pendingSharedFile.value = it }
+                }
+                return
+            }
+            Intent.ACTION_VIEW -> {
+                TicketShareLinks.parsePnr(intent.dataString)?.let { pnr ->
+                    pendingEntry.value = ExternalEntry.Trains(TrainsEntryRequest.Pnr(pnr))
+                    return
+                }
+            }
         }
         JourneysDeepLink.fromIntent(intent)?.let { pendingDeepLink.value = it }
     }
 
     private companion object {
         const val MIME_TEXT_PLAIN = "text/plain"
+    }
+}
+
+/** Which feature form an external launch (share sheet / link) is hosting. */
+private sealed interface ExternalEntry {
+    data class Trains(
+        val request: TrainsEntryRequest,
+    ) : ExternalEntry
+
+    data class Flights(
+        val request: FlightsEntryRequest,
+    ) : ExternalEntry
+}
+
+private fun IntakeRoute.toExternalEntry(): ExternalEntry =
+    when (this) {
+        is IntakeRoute.TrainTicket -> ExternalEntry.Trains(TrainsEntryRequest.File(Uri.parse(uri)))
+        is IntakeRoute.FlightBoardingPass -> ExternalEntry.Flights(FlightsEntryRequest.BoardingPass(uri))
+        is IntakeRoute.FlightBookingConfirmation -> ExternalEntry.Flights(FlightsEntryRequest.BookingConfirmation(uri))
+    }
+
+/**
+ * Drives the "What's this file?" intake: starts detection when a shared file
+ * arrives, shows the dialog while active, and hands the confirmed route back.
+ */
+@Composable
+private fun SharedFileIntakeHost(
+    viewModel: SharedFileIntakeViewModel,
+    sharedFile: Uri?,
+    onRouted: (IntakeRoute) -> Unit,
+    onCancelled: () -> Unit,
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(sharedFile) {
+        if (sharedFile != null) viewModel.start(sharedFile.toString()) else viewModel.reset()
+    }
+    LaunchedEffect(state.route) {
+        state.route?.let { route ->
+            onRouted(route)
+            viewModel.reset()
+        }
+    }
+    if (state.active && state.route == null) {
+        SharedFileIntakeDialog(
+            state = state,
+            onSelect = viewModel::select,
+            onConfirm = viewModel::confirm,
+            onCancel = {
+                viewModel.reset()
+                onCancelled()
+            },
+        )
     }
 }
 

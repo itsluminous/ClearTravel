@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- FileProvider roots: only the share-image scratch directory is exposed. -->
+<paths>
+    <cache-path
+        name="share"
+        path="share/" />
+</paths>
