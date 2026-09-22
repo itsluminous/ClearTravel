@@ -85,7 +85,7 @@ fun FlightListScreen(
     documentsViewModel: FlightDocumentsViewModel = hiltViewModel(),
     /** Third add path (ADR-017): picked booking-confirmation file to prefill from. */
     onImportBooking: (uriString: String) -> Unit = {},
-    /** Opens an attached booking confirmation in the full-brightness viewer. */
+    /** Opens an attached booking confirmation in the document viewer. */
     onViewBooking: (path: String) -> Unit = {},
     /** Deep-link hook: opens this flight's detail sheet on first composition. */
     initialDetailFlightId: String? = null,

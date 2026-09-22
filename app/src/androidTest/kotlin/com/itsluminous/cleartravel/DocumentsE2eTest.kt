@@ -1,24 +1,37 @@
 package com.itsluminous.cleartravel
 
+import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.data.repository.TravelDocumentRepository
 import com.itsluminous.cleartravel.core.data.repository.TravelDocumentStorage
+import com.itsluminous.cleartravel.core.designsystem.component.DOCUMENT_VIEWER_CONTENT_TEST_TAG
+import com.itsluminous.cleartravel.core.designsystem.component.DOCUMENT_VIEWER_RAIL_TEST_TAG
+import com.itsluminous.cleartravel.core.designsystem.component.DOCUMENT_VIEWER_TOOLBAR_TEST_TAG
 import com.itsluminous.cleartravel.core.model.TravelDocument
 import com.itsluminous.cleartravel.core.model.TravelDocumentType
 import com.itsluminous.cleartravel.feature.documents.DOCUMENTS_SEARCH_TEST_TAG
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.runBlocking
+import org.junit.After
 import org.junit.Before
 import org.junit.BeforeClass
 import org.junit.Rule
@@ -33,7 +46,7 @@ import com.itsluminous.cleartravel.feature.documents.R as DocumentsR
 /**
  * Documents tab happy path (ADR-027, hermetic — in-memory Room): a passport seeded
  * through the real repository with a real PNG under `filesDir/documents/` shows up
- * as a card (name, type label, expiry line); tapping it opens the full-brightness
+ * as a card (name, type label, expiry line); tapping it opens the shared
  * viewer (title = document name, Close control, ADR-030 rotate/share/save actions,
  * no page bar for a single image); rotate keeps the image; Close returns to the list.
  */
@@ -112,6 +125,75 @@ class DocumentsE2eTest {
         composeRule
             .onNodeWithContentDescription(composeRule.string(DocumentsR.string.documents_add_fab))
             .assertExists()
+    }
+
+    /**
+     * ADR-034 fullscreen: the toolbar icon hides EVERY piece of chrome — the viewer's
+     * top bar and the app's NavigationBar — leaving the content; a single tap on the
+     * content brings it all back.
+     */
+    @Test
+    fun viewer_fullscreenToggle_hidesAllChrome_andTapRestoresIt() {
+        openSeededDocumentInViewer()
+        val toolbar = composeRule.onNodeWithTag(DOCUMENT_VIEWER_TOOLBAR_TEST_TAG)
+        toolbar.assertExists()
+        composeRule.onNodeWithText(composeRule.string(R.string.nav_documents)).assertIsDisplayed()
+
+        composeRule.onNodeWithContentDescription(composeRule.string(DesignR.string.designsystem_viewer_fullscreen)).performClick()
+        composeRule.onAllNodesWithTag(DOCUMENT_VIEWER_TOOLBAR_TEST_TAG).assertCountEquals(0)
+        composeRule.onAllNodesWithContentDescription(composeRule.string(DesignR.string.designsystem_viewer_rotate)).assertCountEquals(0)
+        composeRule.onAllNodesWithText(composeRule.string(R.string.nav_documents)).assertCountEquals(0)
+        // The content now owns the whole root.
+        val root = composeRule.onRoot().getBoundsInRoot()
+        val content = composeRule.onNodeWithTag(DOCUMENT_VIEWER_CONTENT_TEST_TAG).getBoundsInRoot()
+        assertThat((content.bottom - content.top).value).isAtLeast((root.bottom - root.top - 1.dp).value)
+
+        composeRule.onNodeWithTag(DOCUMENT_VIEWER_CONTENT_TEST_TAG).performTouchInput { click(center) }
+        composeRule.waitUntil(timeoutMillis = E2e.WAIT_TIMEOUT_MILLIS) {
+            composeRule.onAllNodesWithTag(DOCUMENT_VIEWER_TOOLBAR_TEST_TAG).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText(composeRule.string(R.string.nav_documents)).assertIsDisplayed()
+    }
+
+    /**
+     * ADR-034 landscape: no top bar; the actions live in a slim end-side rail and the
+     * content keeps the whole height (≥ 85% of the short axis is the steering bar; the
+     * rail is beside it, so it is 100% minus insets).
+     */
+    @Test
+    fun viewer_inLandscape_usesSideRail_andContentKeepsTheShortAxis() {
+        openSeededDocumentInViewer()
+        composeRule.activityRule.scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+        composeRule.waitUntil(timeoutMillis = E2e.WAIT_TIMEOUT_MILLIS) {
+            composeRule.onAllNodesWithTag(DOCUMENT_VIEWER_RAIL_TEST_TAG).fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onAllNodesWithTag(DOCUMENT_VIEWER_TOOLBAR_TEST_TAG).assertCountEquals(0)
+        composeRule.onNodeWithContentDescription(composeRule.string(DesignR.string.designsystem_viewer_rotate)).assertExists()
+        composeRule.onNodeWithContentDescription(composeRule.string(DesignR.string.designsystem_viewer_close)).assertExists()
+
+        val root = composeRule.onRoot().getBoundsInRoot()
+        val rail = composeRule.onNodeWithTag(DOCUMENT_VIEWER_RAIL_TEST_TAG).getBoundsInRoot()
+        val content = composeRule.onNodeWithTag(DOCUMENT_VIEWER_CONTENT_TEST_TAG).getBoundsInRoot()
+        val rootHeight = (root.bottom - root.top).value
+        assertThat((rail.right - rail.left).value).isAtMost(57.dp.value)
+        // Rail beside the content: the content's height is the tab's whole height minus the NavigationBar.
+        assertThat((content.bottom - content.top).value).isAtLeast(rootHeight * 0.85f - 80.dp.value)
+        assertThat(content.right.value).isAtMost(rail.left.value + 1f)
+    }
+
+    @After
+    fun restoreOrientation() {
+        composeRule.activityRule.scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    }
+
+    private fun openSeededDocumentInViewer() {
+        composeRule.onNodeWithText(composeRule.string(R.string.nav_documents)).performClick()
+        composeRule.waitForText(DOCUMENT_NAME)
+        composeRule.onNodeWithText(DOCUMENT_NAME).performClick()
+        val image = composeRule.string(DesignR.string.designsystem_viewer_image_description)
+        composeRule.waitUntil(timeoutMillis = E2e.WAIT_TIMEOUT_MILLIS) {
+            composeRule.onAllNodesWithContentDescription(image).fetchSemanticsNodes().isNotEmpty()
+        }
     }
 
     /**

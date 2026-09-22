@@ -67,7 +67,7 @@ const val DOCUMENTS_SEARCH_TEST_TAG = "documents_search"
 
 /**
  * The Documents tab (ADR-027): cards (type icon + name + expiry line), FAB → system
- * file picker → details dialog → copy + save; tap opens the full-brightness viewer;
+ * file picker → details dialog → copy + save; tap opens the document viewer;
  * long-press or the overflow icon offers edit/delete (delete confirms).
  */
 @Composable

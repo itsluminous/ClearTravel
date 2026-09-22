@@ -70,7 +70,7 @@ internal fun DocumentsTabHost(modifier: Modifier = Modifier) {
     }
 }
 
-/** Resolves the route's document from Room and shows the shared full-brightness viewer. */
+/** Resolves the route's document from Room and shows the shared document viewer. */
 @Composable
 internal fun DocumentViewerRoute(
     onClose: () -> Unit,

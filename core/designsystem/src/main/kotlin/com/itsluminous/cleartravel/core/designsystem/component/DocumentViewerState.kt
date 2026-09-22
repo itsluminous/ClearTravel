@@ -28,6 +28,7 @@ class DocumentViewerState(
     pageCount: Int = 1,
     initialPage: Int = 0,
     initialRotationDegrees: Int = 0,
+    initialFullscreen: Boolean = false,
 ) {
     /** Zoom factor, always within [MIN_SCALE]..[MAX_SCALE]. */
     var scale: Float by mutableFloatStateOf(MIN_SCALE)
@@ -47,6 +48,14 @@ class DocumentViewerState(
 
     /** Total pages; `1` for images, updated once a PDF has been opened. */
     var pageCount: Int by mutableIntStateOf(max(1, pageCount))
+        private set
+
+    /**
+     * ADR-034 distraction-free mode: every piece of chrome (toolbar/rail, page bar,
+     * system bars) is hidden and only the zoomable content stays. Toggled by the
+     * toolbar icon or a single tap on the content; Back leaves it before closing.
+     */
+    var isFullscreen: Boolean by mutableStateOf(initialFullscreen)
         private set
 
     val isZoomed: Boolean get() = scale > MIN_SCALE + EPSILON
@@ -131,6 +140,21 @@ class DocumentViewerState(
         offset = Offset.Zero
     }
 
+    fun toggleFullscreen() {
+        isFullscreen = !isFullscreen
+    }
+
+    fun enterFullscreen() {
+        isFullscreen = true
+    }
+
+    /** Leaves fullscreen; returns whether there was anything to leave. */
+    fun exitFullscreen(): Boolean {
+        if (!isFullscreen) return false
+        isFullscreen = false
+        return true
+    }
+
     /** Rotates the VIEW by +90°, cycling 0 → 90 → 180 → 270 → 0, and resets zoom. */
     fun rotateClockwise() {
         rotationDegrees = normalizeRotation(rotationDegrees + ROTATION_STEP)
@@ -184,12 +208,20 @@ class DocumentViewerState(
 
         internal fun normalizeRotation(degrees: Int): Int = ((degrees % FULL_TURN) + FULL_TURN) % FULL_TURN / ROTATION_STEP * ROTATION_STEP
 
-        /** Survives rotation/process death: page and view rotation are kept, zoom is not. */
+        /** Survives rotation/process death: page, view rotation and fullscreen are kept, zoom is not. */
         val Saver =
             listSaver<DocumentViewerState, Int>(
-                save = { listOf(it.pageCount, it.pageIndex, it.rotationDegrees) },
-                restore = { DocumentViewerState(pageCount = it[0], initialPage = it[1], initialRotationDegrees = it[2]) },
+                save = { listOf(it.pageCount, it.pageIndex, it.rotationDegrees, if (it.isFullscreen) 1 else 0) },
+                restore = {
+                    DocumentViewerState(
+                        pageCount = it[0],
+                        initialPage = it[1],
+                        initialRotationDegrees = it[2],
+                        initialFullscreen = it.getOrNull(FULLSCREEN_SLOT) == 1,
+                    )
+                },
             )
+        private const val FULLSCREEN_SLOT = 3
     }
 }
 

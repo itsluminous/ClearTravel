@@ -16,8 +16,10 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -28,6 +30,8 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.itsluminous.cleartravel.R
 import com.itsluminous.cleartravel.core.data.crosstab.JourneyAddResult
+import com.itsluminous.cleartravel.core.designsystem.component.LocalShellChrome
+import com.itsluminous.cleartravel.core.designsystem.component.ShellChromeController
 import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.feature.checklist.CHECKLIST_ROUTE
 import com.itsluminous.cleartravel.feature.checklist.checklistGraph
@@ -99,47 +103,53 @@ fun ClearTravelApp(
         if (tripsLanding != null) switchTab(TRIPS_ROUTE)
     }
 
+    // ADR-034: the fullscreen document viewer asks for a chrome-free shell.
+    val shellChrome = remember { ShellChromeController() }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         bottomBar = {
-            NavigationBar {
-                topLevelDestinations.forEach { destination ->
-                    val selected =
-                        currentDestination?.hierarchy?.any { it.route == destination.route } == true
-                    val label = stringResource(destination.labelRes)
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = { switchTab(destination.route) },
-                        icon = { Icon(imageVector = destination.icon, contentDescription = null) },
-                        label = { Text(label) },
-                    )
+            if (!shellChrome.hidden) {
+                NavigationBar {
+                    topLevelDestinations.forEach { destination ->
+                        val selected =
+                            currentDestination?.hierarchy?.any { it.route == destination.route } == true
+                        val label = stringResource(destination.labelRes)
+                        NavigationBarItem(
+                            selected = selected,
+                            onClick = { switchTab(destination.route) },
+                            icon = { Icon(imageVector = destination.icon, contentDescription = null) },
+                            label = { Text(label) },
+                        )
+                    }
                 }
             }
         },
     ) { padding ->
-        NavHost(
-            navController = navController,
-            startDestination = TRIPS_ROUTE,
-            modifier =
-                Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .consumeWindowInsets(padding),
-        ) {
-            tripsGraph(
-                landing = tripsLanding,
-                onLandingConsumed = onTripsLandingConsumed,
-                onOpenJourney = onOpenJourney,
-            )
-            journeysGraph(
-                deepLink = journeysDeepLink,
-                onDeepLinkConsumed = onJourneysDeepLinkConsumed,
-                onJourneyAddDone = onJourneyAddDone,
-                onOpenTrip = onOpenTrip,
-            )
-            checklistGraph()
-            documentsGraph()
-            menuGraph()
+        CompositionLocalProvider(LocalShellChrome provides shellChrome) {
+            NavHost(
+                navController = navController,
+                startDestination = TRIPS_ROUTE,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .consumeWindowInsets(padding),
+            ) {
+                tripsGraph(
+                    landing = tripsLanding,
+                    onLandingConsumed = onTripsLandingConsumed,
+                    onOpenJourney = onOpenJourney,
+                )
+                journeysGraph(
+                    deepLink = journeysDeepLink,
+                    onDeepLinkConsumed = onJourneysDeepLinkConsumed,
+                    onJourneyAddDone = onJourneyAddDone,
+                    onOpenTrip = onOpenTrip,
+                )
+                checklistGraph()
+                documentsGraph()
+                menuGraph()
+            }
         }
     }
 }

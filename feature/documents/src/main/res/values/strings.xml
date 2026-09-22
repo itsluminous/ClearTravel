@@ -4,7 +4,7 @@
     <string name="documents_title">Documents</string>
     <string name="documents_add_fab">Add document</string>
     <string name="documents_empty_title">No documents yet</string>
-    <string name="documents_empty_message">Keep scans of your passport, visas, insurance and tickets here — available offline, shown at full brightness when you need them.</string>
+    <string name="documents_empty_message">Keep scans of your passport, visas, insurance and tickets here — available offline whenever you need them.</string>
 
     <!-- Search box docked at the bottom of the list (filters by name + type). -->
     <string name="documents_search_hint">Search documents</string>

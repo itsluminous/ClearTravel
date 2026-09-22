@@ -1,5 +1,6 @@
 package com.itsluminous.cleartravel.ui
 
+import android.content.res.Configuration
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -17,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -25,6 +27,7 @@ import androidx.navigation.compose.composable
 import com.itsluminous.cleartravel.R
 import com.itsluminous.cleartravel.core.data.crosstab.JourneyAddRequest
 import com.itsluminous.cleartravel.core.data.crosstab.JourneyAddResult
+import com.itsluminous.cleartravel.core.designsystem.component.LocalShellChrome
 import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.core.notifications.DeepLinkContract
 import com.itsluminous.cleartravel.feature.flights.FlightsAddRequest
@@ -146,11 +149,16 @@ private fun JourneysScreen(
                 }
             }
         }
+        // ADR-034: gone while the fullscreen viewer owns the screen; in landscape the
+        // row keeps its 40dp height but drops the vertical padding — the short axis is
+        // precious there.
+        val isLandscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        if (LocalShellChrome.current.hidden) return@Column
         SingleChoiceSegmentedButtonRow(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .padding(horizontal = 16.dp, vertical = if (isLandscape) 2.dp else 8.dp)
                     .testTag(JOURNEYS_SEGMENT_TEST_TAG),
         ) {
             JourneysSegment.entries.forEachIndexed { index, entry ->

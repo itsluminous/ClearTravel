@@ -27,7 +27,7 @@ optional Google account link for Calendar/Drive sync.
   (append multiple presets, track packed counts).
 - **Travel documents** — keep scans of your passport, visas, ID, insurance and
   tickets as local files with typed labels and optional expiry dates (expiring-soon
-  and expired flags), opened in a full-brightness viewer. Stored on-device only and
+  and expired flags), opened in a document viewer. Stored on-device only and
   included in backups.
 - **Backup & restore** — versioned local export/import with tombstone-aware merge
   (see `docs/backup-format.md`), plus optional Google Drive backups with a restore

@@ -214,4 +214,48 @@ class DocumentViewerStateTest {
         assertThat(restored.rotationDegrees).isEqualTo(180)
         assertThat(restored.scale).isEqualTo(1f)
     }
+
+    @Test
+    fun `fullscreen starts off, toggles, and exit reports whether it changed anything`() {
+        val state = DocumentViewerState()
+        assertThat(state.isFullscreen).isFalse()
+        assertThat(state.exitFullscreen()).isFalse()
+
+        state.toggleFullscreen()
+        assertThat(state.isFullscreen).isTrue()
+        state.toggleFullscreen()
+        assertThat(state.isFullscreen).isFalse()
+
+        state.enterFullscreen()
+        state.enterFullscreen()
+        assertThat(state.isFullscreen).isTrue()
+        assertThat(state.exitFullscreen()).isTrue()
+        assertThat(state.isFullscreen).isFalse()
+    }
+
+    @Test
+    fun `fullscreen leaves zoom, rotation and page untouched`() {
+        val state = DocumentViewerState(pageCount = 3, initialPage = 1, initialRotationDegrees = 90)
+        val fitted = state.fittedContentSize(portrait, viewport)
+        state.applyGesture(Offset(500f, 1000f), Offset.Zero, 2f, fitted, viewport)
+
+        state.toggleFullscreen()
+        assertThat(state.scale).isEqualTo(2f)
+        assertThat(state.rotationDegrees).isEqualTo(90)
+        assertThat(state.pageIndex).isEqualTo(1)
+        state.exitFullscreen()
+        assertThat(state.scale).isEqualTo(2f)
+    }
+
+    @Test
+    fun `saver keeps fullscreen, and restores pre-ADR-034 saved lists as not fullscreen`() {
+        val state = DocumentViewerState()
+        state.enterFullscreen()
+        val saved = with(DocumentViewerState.Saver) { SaverScope { true }.save(state) }
+        assertThat(checkNotNull(DocumentViewerState.Saver.restore(checkNotNull(saved))).isFullscreen).isTrue()
+
+        val legacy = checkNotNull(DocumentViewerState.Saver.restore(listOf(4, 2, 180)))
+        assertThat(legacy.isFullscreen).isFalse()
+        assertThat(legacy.pageIndex).isEqualTo(2)
+    }
 }

@@ -50,7 +50,7 @@ import com.itsluminous.cleartravel.feature.flights.status.FlightStatusFallbacks
  * "Check status" (scrape flow), "Open web check-in" (per-airline URL from the
  * check-in data file, web-search fallback), "View boarding pass" — plus the
  * documents row (boarding pass + attached booking confirmations, each opening the
- * full-brightness viewer) and "Attach booking confirmation" (ADR-017).
+ * document viewer) and "Attach booking confirmation" (ADR-017).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,7 +67,7 @@ fun FlightDetailSheet(
     lastCheckOutcome: CheckOutcome? = null,
     /** Documents list (boarding pass + attachments); see [buildFlightDocuments]. */
     documents: List<FlightDocument> = emptyList(),
-    /** Opens a documents-row entry in the full-brightness viewer. */
+    /** Opens a documents-row entry in the document viewer. */
     onOpenDocument: (FlightDocument) -> Unit = {},
     /** Launches the picker to attach a booking confirmation to THIS flight. */
     onAttachBooking: () -> Unit = {},
