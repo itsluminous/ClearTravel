@@ -48,7 +48,7 @@
     <string name="menu_backup_restore_subtitle">Export or import your data</string>
     <string name="menu_backup_title">Backup &amp; Restore</string>
     <string name="menu_backup_export_title">Backup</string>
-    <string name="menu_backup_export_description">Save all trips, journeys, checklists and attachments into a single backup file. A copy of the latest backup is also kept inside the app.</string>
+    <string name="menu_backup_export_description">Save all trips, journeys, checklists, documents and attachments into a single backup file, encrypted with your ClearTravel password. A copy of the latest backup is also kept inside the app.</string>
     <string name="menu_backup_export_action">Export backup</string>
     <string name="menu_backup_export_done">Backup saved (%1$d records)</string>
     <string name="menu_backup_last_backup">Last backup: %1$s (%2$s)</string>
@@ -65,6 +65,13 @@
     <string name="menu_backup_error_unreadable">This file isn’t a readable ClearTravel backup.</string>
     <string name="menu_backup_error_io">Couldn’t read or write the backup file. Try again.</string>
     <string name="menu_backup_in_progress">Working…</string>
+    <!-- ADR-031: encrypted backups -->
+    <string name="menu_backup_password_title">Backup password needed</string>
+    <string name="menu_backup_password_message">This backup was created with a different password, on another device, or before your password was changed. Enter the ClearTravel password it was created with.</string>
+    <string name="menu_backup_password_label">Backup password</string>
+    <string name="menu_backup_password_confirm">Unlock backup</string>
+    <string name="menu_backup_error_wrong_password">That password doesn’t open this backup.</string>
+    <string name="menu_backup_error_locked">Unlock ClearTravel first.</string>
 
     <string name="menu_google_section">Google account</string>
     <string name="menu_google_not_configured">Google features are not set up in this build. A Google Cloud OAuth web client id is required — see docs/google-setup.md in the project repository.</string>

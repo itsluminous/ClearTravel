@@ -5,6 +5,9 @@ import com.itsluminous.cleartravel.core.data.repository.FlightRepository
 import com.itsluminous.cleartravel.core.google.auth.GoogleLinkStore
 import com.itsluminous.cleartravel.core.model.Attachment
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
+import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
+import com.itsluminous.cleartravel.core.security.file.PortableCipher
+import com.itsluminous.cleartravel.core.security.vault.KeyVault
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import java.io.File
@@ -51,6 +54,13 @@ sealed interface DriveUploadResult {
  * Drive folder. The local file stays the primary offline source; a missing local
  * file is skipped (it can never upload). Failures leave the row pending, so the
  * next pass — worker retry with backoff, or the periodic drain — picks it up again.
+ *
+ * ADR-031: what reaches Drive is a **portable envelope** (`CTEB`, keyed by the app
+ * password, like backups) — never the on-device `CTEF` bytes, whose key is
+ * per-install and would make the file useless after a reinstall. Each upload is
+ * decrypted from disk and re-sealed into a scratch file that is deleted afterwards;
+ * the Drive name gains the [ENVELOPE_SUFFIX] and an opaque MIME type so nothing
+ * outside this app tries to open it. Requires an unlocked vault (the worker checks).
  */
 class DriveUploadEngine(
     private val linkStore: GoogleLinkStore,
@@ -58,6 +68,10 @@ class DriveUploadEngine(
     private val flightRepository: FlightRepository,
     private val driveClient: DriveClient,
     private val folderResolver: DriveFolderResolver,
+    private val keyVault: KeyVault,
+    private val fileCipher: LocalFileCipher,
+    /** Scratch space for the sealed copies (`cacheDir/drive-uploads`). */
+    private val scratchDir: File,
 ) {
     suspend fun processQueue(): DriveUploadResult {
         val snapshot = linkStore.current()
@@ -71,16 +85,21 @@ class DriveUploadEngine(
         val folderId = folderResolver.ensureFolder()
         var uploaded = 0
         var failed = 0
+        val portableKey = keyVault.portableKey()
         for (attachment in pending) {
             val file = File(attachment.localPath)
             if (!file.isFile) continue // Nothing to upload; the restore ladder owns missing files.
+            val sealed = File(scratchDir.apply { mkdirs() }, file.name + ENVELOPE_SUFFIX)
             try {
+                PortableCipher.encryptingStream(sealed.outputStream().buffered(), portableKey).use { out ->
+                    fileCipher.decryptTo(file, out)
+                }
                 val fileId =
                     driveClient.uploadFile(
-                        name = file.name,
-                        mimeType = attachment.mimeType.ifBlank { DEFAULT_MIME },
+                        name = sealed.name,
+                        mimeType = ENVELOPE_MIME,
                         parentId = folderId,
-                        sourceFile = file,
+                        sourceFile = sealed,
                     )
                 attachmentRepository.save(attachment.copy(driveFileId = fileId))
                 uploaded++
@@ -88,6 +107,8 @@ class DriveUploadEngine(
                 throw e
             } catch (e: Exception) {
                 failed++
+            } finally {
+                sealed.delete()
             }
         }
         return DriveUploadResult.Done(uploaded = uploaded, failed = failed)
@@ -123,7 +144,11 @@ class DriveUploadEngine(
             else -> DEFAULT_MIME
         }
 
-    private companion object {
-        const val DEFAULT_MIME = "application/octet-stream"
+    companion object {
+        private const val DEFAULT_MIME = "application/octet-stream"
+
+        /** Drive-side name suffix marking a ClearTravel portable envelope. */
+        const val ENVELOPE_SUFFIX = ".cteb"
+        const val ENVELOPE_MIME = "application/octet-stream"
     }
 }

@@ -16,4 +16,7 @@
     <string name="designsystem_viewer_previous_page">Previous page</string>
     <string name="designsystem_viewer_next_page">Next page</string>
     <string name="designsystem_viewer_page_indicator">Page %1$d of %2$d</string>
+    <!-- ADR-031 shared password field -->
+    <string name="designsystem_password_show">Show password</string>
+    <string name="designsystem_password_hide">Hide password</string>
 </resources>

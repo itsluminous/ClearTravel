@@ -51,6 +51,12 @@ sealed interface BackupRestoreEvent {
 
     /** A Drive backup could not be downloaded (offline / revoked). */
     data object DriveDownloadFailed : BackupRestoreEvent
+
+    /** The typed source password did not open the backup (ADR-031). */
+    data object WrongBackupPassword : BackupRestoreEvent
+
+    /** The vault is locked — cannot happen behind the app lock, mapped defensively. */
+    data object VaultLocked : BackupRestoreEvent
 }
 
 /**
@@ -64,6 +70,11 @@ sealed interface BackupRestoreEvent {
  * when linked, the screen lists the Drive backups for manual restore, and a
  * fresh-ish install (zero trips/journeys/checklists) with a Drive backup available
  * gets a one-time restore prompt showing its date + size.
+ *
+ * ADR-031: a v2 backup written under another password/salt (another device, a
+ * fresh install, a changed password) raises `PasswordRequired`; the screen then asks
+ * for the SOURCE password ([UiState.passwordPrompt]) and the step is retried with it
+ * through [submitSourcePassword]. A wrong password is a snackbar and the prompt stays.
  */
 @HiltViewModel
 class BackupRestoreViewModel
@@ -82,9 +93,20 @@ class BackupRestoreViewModel
             val preview: ImportPreview,
         )
 
+        /** Which step to retry once the source password is known (ADR-031). */
+        enum class PasswordStep { PREVIEW, APPLY }
+
+        /** The backup at [uri] needs the password it was created with before [step] can run. */
+        data class PasswordPrompt(
+            val uri: Uri,
+            val step: PasswordStep,
+        )
+
         data class UiState(
             /** True while an export or import is running (buttons disabled). */
             val inProgress: Boolean = false,
+            /** Non-null: ask the user for the backup's source password (ADR-031). */
+            val passwordPrompt: PasswordPrompt? = null,
             /** Newest backup in app storage; null = never backed up. */
             val lastBackup: LocalBackupInfo? = null,
             val pendingImport: PendingImport? = null,
@@ -145,32 +167,78 @@ class BackupRestoreViewModel
         /** Parses the manifest of the picked file into a confirmation preview. */
         fun requestImport(uri: Uri) {
             if (_uiState.value.inProgress) return
-            viewModelScope.launch {
-                _uiState.update { it.copy(inProgress = true) }
-                try {
-                    val preview = backupManager.importPreview(uri)
-                    _uiState.update { it.copy(pendingImport = PendingImport(uri, preview)) }
-                } catch (e: BackupException) {
-                    eventChannel.send(e.toEvent())
-                } finally {
-                    _uiState.update { it.copy(inProgress = false) }
-                }
-            }
+            viewModelScope.launch { preview(uri, sourcePassword = null) }
         }
 
         /** Applies the previewed import — the LWW merge, never a wipe (ADR-015). */
         fun confirmImport() {
             val pending = _uiState.value.pendingImport ?: return
             viewModelScope.launch {
-                _uiState.update { it.copy(inProgress = true, pendingImport = null) }
-                try {
-                    val summary = backupManager.importApply(pending.uri)
-                    eventChannel.send(BackupRestoreEvent.ImportDone(summary))
-                } catch (e: BackupException) {
-                    eventChannel.send(e.toEvent())
-                } finally {
-                    _uiState.update { it.copy(inProgress = false) }
+                _uiState.update { it.copy(pendingImport = null) }
+                apply(pending.uri, sourcePassword = null)
+            }
+        }
+
+        /** Retries the prompted step with the source [password] the user typed (ADR-031). */
+        fun submitSourcePassword(password: String) {
+            val prompt = _uiState.value.passwordPrompt ?: return
+            if (_uiState.value.inProgress) return
+            viewModelScope.launch {
+                _uiState.update { it.copy(passwordPrompt = null) }
+                when (prompt.step) {
+                    PasswordStep.PREVIEW -> preview(prompt.uri, password.toCharArray())
+                    PasswordStep.APPLY -> apply(prompt.uri, password.toCharArray())
                 }
+            }
+        }
+
+        fun dismissPasswordPrompt() {
+            _uiState.update { it.copy(passwordPrompt = null) }
+        }
+
+        private suspend fun preview(
+            uri: Uri,
+            sourcePassword: CharArray?,
+        ) {
+            _uiState.update { it.copy(inProgress = true) }
+            try {
+                val preview = backupManager.importPreview(uri, sourcePassword)
+                _uiState.update { it.copy(pendingImport = PendingImport(uri, preview)) }
+            } catch (e: BackupException) {
+                handleImportFailure(e, uri, PasswordStep.PREVIEW)
+            } finally {
+                _uiState.update { it.copy(inProgress = false) }
+            }
+        }
+
+        private suspend fun apply(
+            uri: Uri,
+            sourcePassword: CharArray?,
+        ) {
+            _uiState.update { it.copy(inProgress = true) }
+            try {
+                val summary = backupManager.importApply(uri, sourcePassword)
+                eventChannel.send(BackupRestoreEvent.ImportDone(summary))
+            } catch (e: BackupException) {
+                handleImportFailure(e, uri, PasswordStep.APPLY)
+            } finally {
+                _uiState.update { it.copy(inProgress = false) }
+            }
+        }
+
+        /** Password problems keep/raise the prompt; everything else is a snackbar. */
+        private suspend fun handleImportFailure(
+            error: BackupException,
+            uri: Uri,
+            step: PasswordStep,
+        ) {
+            when (error) {
+                is BackupException.PasswordRequired -> _uiState.update { it.copy(passwordPrompt = PasswordPrompt(uri, step)) }
+                is BackupException.WrongPassword -> {
+                    eventChannel.send(BackupRestoreEvent.WrongBackupPassword)
+                    _uiState.update { it.copy(passwordPrompt = PasswordPrompt(uri, step)) }
+                }
+                else -> eventChannel.send(error.toEvent())
             }
         }
 
@@ -201,24 +269,18 @@ class BackupRestoreViewModel
             }
         }
 
-        /** Fresh-install prompt confirm: download + apply the offered backup directly. */
+        /**
+         * Fresh-install prompt confirm: download + apply the offered backup directly.
+         * A fresh install has a NEW vault salt, so a Drive backup from the previous
+         * install always asks for the old password once (ADR-031).
+         */
         fun confirmFreshRestore() {
             val backup = _uiState.value.freshRestorePrompt ?: return
             viewModelScope.launch {
                 _uiState.update { it.copy(inProgress = true, freshRestorePrompt = null) }
-                try {
-                    val uri = downloadToUri(backup)
-                    if (uri == null) {
-                        eventChannel.send(BackupRestoreEvent.DriveDownloadFailed)
-                    } else {
-                        val summary = backupManager.importApply(uri)
-                        eventChannel.send(BackupRestoreEvent.ImportDone(summary))
-                    }
-                } catch (e: BackupException) {
-                    eventChannel.send(e.toEvent())
-                } finally {
-                    _uiState.update { it.copy(inProgress = false) }
-                }
+                val uri = downloadToUri(backup)
+                _uiState.update { it.copy(inProgress = false) }
+                if (uri == null) eventChannel.send(BackupRestoreEvent.DriveDownloadFailed) else apply(uri, sourcePassword = null)
             }
         }
 
@@ -255,5 +317,9 @@ class BackupRestoreViewModel
                 is BackupException.UnsupportedSchemaVersion -> BackupRestoreEvent.BackupVersionTooNew
                 is BackupException.CorruptedBackup -> BackupRestoreEvent.BackupUnreadable
                 is BackupException.Io -> BackupRestoreEvent.IoFailed
+                is BackupException.WrongPassword -> BackupRestoreEvent.WrongBackupPassword
+                is BackupException.Locked -> BackupRestoreEvent.VaultLocked
+                // Only reachable through handleImportFailure, which raises the prompt instead.
+                is BackupException.PasswordRequired -> BackupRestoreEvent.BackupUnreadable
             }
     }

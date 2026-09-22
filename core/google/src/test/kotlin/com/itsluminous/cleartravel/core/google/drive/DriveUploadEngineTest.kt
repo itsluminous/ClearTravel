@@ -9,7 +9,16 @@ import com.itsluminous.cleartravel.core.google.auth.GoogleLinkSnapshot
 import com.itsluminous.cleartravel.core.model.Attachment
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.security.crypto.CryptoPrimitives
+import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
+import com.itsluminous.cleartravel.core.security.file.PortableCipher
+import com.itsluminous.cleartravel.core.security.vault.DefaultKeyVault
+import com.itsluminous.cleartravel.core.security.vault.InMemoryKeyFileStore
+import com.itsluminous.cleartravel.core.security.vault.PortableKey
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Rule
@@ -83,9 +92,41 @@ class FakeDriveClient : DriveClient {
     }
 }
 
+/** An unlocked test vault (password "pw", cheap KDF) plus its file cipher — ADR-031 fixtures. */
+@OptIn(ExperimentalCoroutinesApi::class)
+internal class TestVault(
+    password: String = "pw",
+) {
+    val vault: DefaultKeyVault =
+        DefaultKeyVault(InMemoryKeyFileStore(), iterations = 1_000, ioDispatcher = UnconfinedTestDispatcher()).also {
+            runBlocking { it.setUp(password.toCharArray()) }
+        }
+    val cipher: LocalFileCipher = LocalFileCipher(key = { vault.fileKey() })
+
+    /** Writes [content] the way the app stores files: CTEF-encrypted under this vault. */
+    fun storeEncrypted(
+        file: File,
+        content: String,
+    ): File = file.also { cipher.encryptTo(content.byteInputStream(), it) }
+
+    fun plaintextOf(file: File): String = cipher.openDecrypted(file).use { it.readBytes().decodeToString() }
+
+    /** A CTEB envelope of [content] as another install with [password] would upload it. */
+    fun envelopeFrom(
+        content: String,
+        key: PortableKey = vault.portableKey(),
+    ): ByteArray {
+        val out = java.io.ByteArrayOutputStream()
+        PortableCipher.encryptingStream(out, key).use { it.write(content.encodeToByteArray()) }
+        return out.toByteArray()
+    }
+}
+
 class DriveUploadEngineTest {
     @get:Rule
     val tmp = TemporaryFolder()
+
+    private val testVault = TestVault()
 
     private lateinit var linkStore: FakeGoogleLinkStore
     private lateinit var attachments: FakeAttachmentRepository
@@ -109,10 +150,19 @@ class DriveUploadEngineTest {
 
     private fun engine(): DriveUploadEngine {
         val resolver = DriveFolderResolver(linkStore, drive, "ClearTravel")
-        return DriveUploadEngine(linkStore, attachments, flights, drive, resolver)
+        return DriveUploadEngine(
+            linkStore = linkStore,
+            attachmentRepository = attachments,
+            flightRepository = flights,
+            driveClient = drive,
+            folderResolver = resolver,
+            keyVault = testVault.vault,
+            fileCipher = testVault.cipher,
+            scratchDir = File(tmp.root, "scratch"),
+        )
     }
 
-    private fun localFile(name: String): File = tmp.newFile(name).apply { writeText("bytes-of-$name") }
+    private fun localFile(name: String): File = testVault.storeEncrypted(tmp.newFile(name), "bytes-of-$name")
 
     @Test
     fun `skips when uploads are disabled or not linked`() =
@@ -144,6 +194,26 @@ class DriveUploadEngineTest {
             assertThat(drive.folders.values).containsExactly("ClearTravel")
             assertThat(attachments.getAttachment(attachment.id)!!.driveFileId).isEqualTo("file-1")
             assertThat(attachments.getPendingDriveUploads()).isEmpty()
+        }
+
+    @Test
+    fun `what reaches drive is a password envelope of the plaintext, never the on-device bytes`() =
+        runTest {
+            val file = localFile("ticket.pdf")
+            attachments.save(Attachment(ownerType = AttachmentOwnerType.TRAIN, ownerId = "t", localPath = file.absolutePath))
+
+            engine().processQueue()
+
+            val stored = drive.files.single()
+            assertThat(stored.name).isEqualTo("ticket.pdf" + DriveUploadEngine.ENVELOPE_SUFFIX)
+            assertThat(stored.bytes.copyOf(4)).isEqualTo(PortableCipher.MAGIC)
+            assertThat(stored.bytes).isNotEqualTo(file.readBytes()) // not the CTEF file
+            val opened =
+                PortableCipher
+                    .openDecrypted(tmp.newFile("dl").apply { writeBytes(stored.bytes) }, testVault.vault.portableKey())
+                    .use { it.readBytes().decodeToString() }
+            assertThat(opened).isEqualTo("bytes-of-ticket.pdf")
+            assertThat(File(tmp.root, "scratch").listFiles().orEmpty()).isEmpty() // scratch copy removed
         }
 
     @Test
@@ -206,6 +276,7 @@ class AttachmentFileResolverTest {
     @get:Rule
     val tmp = TemporaryFolder()
 
+    private val testVault = TestVault()
     private lateinit var attachments: FakeAttachmentRepository
     private lateinit var drive: FakeDriveClient
 
@@ -213,9 +284,11 @@ class AttachmentFileResolverTest {
     fun setUp() {
         attachments = FakeAttachmentRepository()
         drive = FakeDriveClient()
+        // Default Drive body: an envelope from THIS vault, as the upload engine writes it.
+        drive.downloadBody = testVault.envelopeFrom("drive-bytes")
     }
 
-    private fun resolver() = AttachmentFileResolver(attachments, drive, File(tmp.root, "attachments"))
+    private fun resolver() = AttachmentFileResolver(attachments, drive, File(tmp.root, "attachments"), testVault.vault, testVault.cipher)
 
     @Test
     fun `existing local file wins without touching drive`() =
@@ -241,8 +314,54 @@ class AttachmentFileResolverTest {
             val result = resolver().resolve(attachment)
 
             val available = result as ResolvedAttachment.Available
-            assertThat(available.file.readBytes()).isEqualTo(drive.downloadBody)
+            // Stored like every local file: CTEF under this install's key, plaintext restored.
+            assertThat(testVault.cipher.isEncrypted(available.file)).isTrue()
+            assertThat(testVault.plaintextOf(available.file)).isEqualTo("drive-bytes")
             assertThat(attachments.getAttachment(attachment.id)!!.localPath).isEqualTo(available.file.absolutePath)
+            assertThat(File(tmp.root, "attachments").listFiles()!!.map { it.name }).containsExactly(attachment.id)
+        }
+
+    @Test
+    fun `a legacy plaintext drive upload is encrypted on the way in`() =
+        runTest {
+            drive.downloadBody = "plain-old-upload".encodeToByteArray()
+            val attachment =
+                attachments.save(
+                    Attachment(ownerType = AttachmentOwnerType.TRAIN, ownerId = "t", localPath = "/gone.pdf", driveFileId = "file-9"),
+                )
+
+            val available = resolver().resolve(attachment) as ResolvedAttachment.Available
+
+            assertThat(testVault.cipher.isEncrypted(available.file)).isTrue()
+            assertThat(testVault.plaintextOf(available.file)).isEqualTo("plain-old-upload")
+        }
+
+    @Test
+    fun `an envelope from another password needs the source password and is not kept`() =
+        runTest {
+            val other = TestVault(password = "someone-else")
+            drive.downloadBody = other.envelopeFrom("foreign", other.vault.portableKey())
+            val attachment =
+                attachments.save(
+                    Attachment(ownerType = AttachmentOwnerType.TRAIN, ownerId = "t", localPath = "/gone.pdf", driveFileId = "file-9"),
+                )
+
+            assertThat(resolver().resolve(attachment)).isEqualTo(ResolvedAttachment.NeedsSourcePassword)
+            assertThat(File(tmp.root, "attachments").listFiles().orEmpty()).isEmpty()
+            assertThat(attachments.getAttachment(attachment.id)!!.localPath).isEqualTo("/gone.pdf")
+
+            // Once the source password has been proven elsewhere (e.g. a backup restore),
+            // the adopted key resolves it silently.
+            val foreignKey = other.vault.portableKey()
+            testVault.vault.adoptPortableKey(
+                PortableKey(
+                    foreignKey.salt,
+                    foreignKey.iterations,
+                    CryptoPrimitives.aesKey(foreignKey.key.encoded),
+                ),
+            )
+            val available = resolver().resolve(attachment) as ResolvedAttachment.Available
+            assertThat(testVault.plaintextOf(available.file)).isEqualTo("foreign")
         }
 
     @Test

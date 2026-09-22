@@ -8,6 +8,7 @@ import com.itsluminous.cleartravel.core.data.repository.FlightRepository
 import com.itsluminous.cleartravel.core.data.repository.ItineraryRepository
 import com.itsluminous.cleartravel.core.data.repository.TrainRepository
 import com.itsluminous.cleartravel.core.data.repository.TripRepository
+import com.itsluminous.cleartravel.core.data.security.AppFileLayout
 import com.itsluminous.cleartravel.core.google.auth.DataStoreGoogleLinkStore
 import com.itsluminous.cleartravel.core.google.auth.DefaultGoogleAccountManager
 import com.itsluminous.cleartravel.core.google.auth.GoogleAccessTokenProvider
@@ -33,6 +34,8 @@ import com.itsluminous.cleartravel.core.google.drive.DriveFolderResolver
 import com.itsluminous.cleartravel.core.google.drive.DriveUploadEngine
 import com.itsluminous.cleartravel.core.google.drive.RestDriveClient
 import com.itsluminous.cleartravel.core.google.work.WorkManagerGoogleSyncScheduler
+import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
+import com.itsluminous.cleartravel.core.security.vault.KeyVault
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -104,12 +107,25 @@ abstract class GoogleModule {
         @Provides
         @Singleton
         fun provideDriveUploadEngine(
+            @ApplicationContext context: Context,
             linkStore: GoogleLinkStore,
             attachmentRepository: AttachmentRepository,
             flightRepository: FlightRepository,
             driveClient: DriveClient,
             folderResolver: DriveFolderResolver,
-        ): DriveUploadEngine = DriveUploadEngine(linkStore, attachmentRepository, flightRepository, driveClient, folderResolver)
+            keyVault: KeyVault,
+            fileCipher: LocalFileCipher,
+        ): DriveUploadEngine =
+            DriveUploadEngine(
+                linkStore = linkStore,
+                attachmentRepository = attachmentRepository,
+                flightRepository = flightRepository,
+                driveClient = driveClient,
+                folderResolver = folderResolver,
+                keyVault = keyVault,
+                fileCipher = fileCipher,
+                scratchDir = File(context.cacheDir, "drive-uploads"),
+            )
 
         @Provides
         @Singleton
@@ -117,11 +133,15 @@ abstract class GoogleModule {
             @ApplicationContext context: Context,
             attachmentRepository: AttachmentRepository,
             driveClient: DriveClient,
+            keyVault: KeyVault,
+            fileCipher: LocalFileCipher,
         ): AttachmentFileResolver =
             AttachmentFileResolver(
                 attachmentRepository = attachmentRepository,
                 driveClient = driveClient,
-                attachmentsDir = File(context.filesDir, "attachments"),
+                attachmentsDir = AppFileLayout.attachments(context.filesDir),
+                keyVault = keyVault,
+                fileCipher = fileCipher,
             )
 
         @Provides
@@ -139,7 +159,7 @@ abstract class GoogleModule {
                 backupManager = backupManager,
                 driveClient = driveClient,
                 folderResolver = folderResolver,
-                backupsDir = File(context.filesDir, "backups"),
+                backupsDir = AppFileLayout.backups(context.filesDir),
                 downloadDir = File(context.cacheDir, "drive-backups"),
                 driveFolderName = stringsFactory.driveFolderName(),
             )

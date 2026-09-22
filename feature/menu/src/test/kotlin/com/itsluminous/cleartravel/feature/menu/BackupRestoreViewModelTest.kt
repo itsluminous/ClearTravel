@@ -45,6 +45,20 @@ private class FakeBackupManager : BackupManager {
     val exportedTo = mutableListOf<Uri>()
     val appliedFrom = mutableListOf<Uri>()
 
+    /** Non-null: the backup is a foreign v2 envelope that only this password opens (ADR-031). */
+    var requiredPassword: String? = null
+    val passwordsSeen = mutableListOf<String?>()
+
+    private fun gate(sourcePassword: CharArray?) {
+        val required = requiredPassword ?: return
+        passwordsSeen += sourcePassword?.concatToString()
+        when {
+            sourcePassword == null -> throw BackupException.PasswordRequired()
+            sourcePassword.concatToString() != required -> throw BackupException.WrongPassword()
+            else -> requiredPassword = null // the manager adopts the proven key
+        }
+    }
+
     override suspend fun exportToUri(uri: Uri): ExportResult {
         exportError?.let { throw it }
         exportedTo += uri
@@ -59,6 +73,7 @@ private class FakeBackupManager : BackupManager {
         sourcePassword: CharArray?,
     ): ImportPreview {
         previewError?.let { throw it }
+        gate(sourcePassword)
         return preview
     }
 
@@ -67,6 +82,7 @@ private class FakeBackupManager : BackupManager {
         sourcePassword: CharArray?,
     ): MergeSummary {
         applyError?.let { throw it }
+        gate(sourcePassword)
         appliedFrom += uri
         return mergeSummary
     }
@@ -383,5 +399,60 @@ class BackupRestoreViewModelTest {
 
                 assertThat(awaitItem()).isEqualTo(BackupRestoreEvent.DriveDownloadFailed)
             }
+        }
+
+    @Test
+    fun `foreign v2 backup asks for the source password, rejects a wrong one, then previews and applies silently`() =
+        runTest {
+            backupManager.requiredPassword = "old-secret"
+            val viewModel = viewModel()
+
+            viewModel.requestImport(uri)
+            val prompt = viewModel.uiState.value.passwordPrompt
+            assertThat(prompt?.uri).isEqualTo(uri)
+            assertThat(prompt?.step).isEqualTo(BackupRestoreViewModel.PasswordStep.PREVIEW)
+            assertThat(viewModel.uiState.value.pendingImport).isNull()
+
+            viewModel.events.test {
+                viewModel.submitSourcePassword("nope")
+                assertThat(awaitItem()).isEqualTo(BackupRestoreEvent.WrongBackupPassword)
+                assertThat(viewModel.uiState.value.passwordPrompt).isNotNull() // prompt stays
+
+                viewModel.submitSourcePassword("old-secret")
+                assertThat(viewModel.uiState.value.passwordPrompt).isNull()
+                assertThat(
+                    viewModel.uiState.value.pendingImport
+                        ?.preview
+                        ?.totalRows,
+                ).isEqualTo(3)
+
+                viewModel.confirmImport() // adopted key: no second prompt
+                assertThat(awaitItem()).isEqualTo(BackupRestoreEvent.ImportDone(backupManager.mergeSummary))
+            }
+            assertThat(backupManager.passwordsSeen).containsExactly(null, "nope", "old-secret").inOrder()
+        }
+
+    @Test
+    fun `fresh-install drive restore asks for the previous install's password before applying`() =
+        runTest {
+            backupManager.requiredPassword = "previous"
+            detector.fresh = true
+            driveService.backups = listOf(driveBackup)
+            driveService.downloadFile = File.createTempFile("cleartravel-test", ".zip")
+            linkGoogle()
+            val viewModel = viewModel()
+            assertThat(viewModel.uiState.value.freshRestorePrompt).isEqualTo(driveBackup)
+
+            viewModel.confirmFreshRestore()
+
+            assertThat(
+                viewModel.uiState.value.passwordPrompt
+                    ?.step,
+            ).isEqualTo(BackupRestoreViewModel.PasswordStep.APPLY)
+            viewModel.events.test {
+                viewModel.submitSourcePassword("previous")
+                assertThat(awaitItem()).isEqualTo(BackupRestoreEvent.ImportDone(backupManager.mergeSummary))
+            }
+            assertThat(backupManager.appliedFrom).hasSize(1)
         }
 }

@@ -27,7 +27,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -38,6 +41,8 @@ import com.itsluminous.cleartravel.core.data.backup.BackupEntries
 import com.itsluminous.cleartravel.core.data.backup.ImportPreview
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
+import com.itsluminous.cleartravel.core.designsystem.component.PasswordField
+import com.itsluminous.cleartravel.core.designsystem.component.PasswordFieldRole
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupInfo
 import java.time.Instant
 import java.time.ZoneId
@@ -98,6 +103,10 @@ internal fun BackupRestoreScreen(
                     snackbarHostState.showSnackbar(context.getString(R.string.menu_backup_error_io))
                 BackupRestoreEvent.DriveDownloadFailed ->
                     snackbarHostState.showSnackbar(context.getString(R.string.menu_backup_drive_download_failed))
+                BackupRestoreEvent.WrongBackupPassword ->
+                    snackbarHostState.showSnackbar(context.getString(R.string.menu_backup_error_wrong_password))
+                BackupRestoreEvent.VaultLocked ->
+                    snackbarHostState.showSnackbar(context.getString(R.string.menu_backup_error_locked))
             }
         }
     }
@@ -239,6 +248,16 @@ internal fun BackupRestoreScreen(
         )
     }
 
+    // ADR-031: the backup was sealed under another password (other device / fresh
+    // install / changed password) — ask for the password it was created with.
+    if (uiState.passwordPrompt != null) {
+        BackupPasswordDialog(
+            inProgress = uiState.inProgress,
+            onSubmit = viewModel::submitSourcePassword,
+            onDismiss = viewModel::dismissPasswordPrompt,
+        )
+    }
+
     if (uiState.showDriveList) {
         DriveBackupListDialog(
             backups = uiState.driveBackups,
@@ -315,6 +334,42 @@ private fun DriveBackupListDialog(
             }
         },
         confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.menu_cancel)) }
+        },
+    )
+}
+
+/** Source-password prompt for a backup from another password/device (ADR-031). */
+@Composable
+private fun BackupPasswordDialog(
+    inProgress: Boolean,
+    onSubmit: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var password by rememberSaveable { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.menu_backup_password_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(stringResource(R.string.menu_backup_password_message))
+                PasswordField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = stringResource(R.string.menu_backup_password_label),
+                    role = PasswordFieldRole.EXISTING,
+                    enabled = !inProgress,
+                    onImeAction = { if (password.isNotEmpty()) onSubmit(password) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSubmit(password) }, enabled = password.isNotEmpty() && !inProgress) {
+                Text(stringResource(R.string.menu_backup_password_confirm))
+            }
+        },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.menu_cancel)) }
         },
