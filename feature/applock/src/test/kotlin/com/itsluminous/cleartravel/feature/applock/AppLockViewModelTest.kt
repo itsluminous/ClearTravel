@@ -11,6 +11,7 @@ import com.itsluminous.cleartravel.core.security.vault.InMemoryKeyFileStore
 import com.itsluminous.cleartravel.core.security.vault.VaultState
 import com.itsluminous.cleartravel.core.testing.MainDispatcherRule
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -111,7 +112,11 @@ class AppLockViewModelTest {
             assertThat(store.current).isNotNull()
             assertThat(viewModel.feedback.value.awaitingBiometricEnrolment).isTrue()
             assertThat(initializer.calls).isEqualTo(0)
-            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Locked(biometricEnabled = false))
+            // ADR-034: the gate must KEEP step 1 on screen — it hosts the prompt. (The
+            // pre-fix state here was Locked(false): the UI lock is still engaged, so the
+            // setup screen was disposed and the prompt never ran.)
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Setup)
+            assertThat(lockController.locked.value).isTrue()
 
             viewModel.completeBiometricEnrolment(viewModel.biometricEnrolCipher()!!)
 
@@ -129,6 +134,7 @@ class AppLockViewModelTest {
             val viewModel = viewModel(vault)
             viewModel.setUp("long-enough-1", "long-enough-1", enableBiometric = true)
             assertThat(viewModel.feedback.value.awaitingBiometricEnrolment).isTrue()
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Setup)
 
             viewModel.skipBiometricEnrolment()
 
@@ -136,6 +142,56 @@ class AppLockViewModelTest {
             assertThat(store.current!!.biometricWrap).isNull()
             assertThat(initializer.calls).isEqualTo(1)
             assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Onboarding)
+        }
+
+    @Test
+    fun setUp_withFingerprintToggle_neverShowsTheUnlockScreen_untilStorageIsOpen() =
+        runTest {
+            // ADR-034 regression: every state the gate emits between "Create password"
+            // and the wizard must be Setup or Preparing — a Locked emission disposes the
+            // setup screen (and its BiometricPrompt) and asks for the password again.
+            val vault = vault()
+            val viewModel = viewModel(vault)
+            val seen = mutableListOf<AppLockUiState>()
+            val job =
+                backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                    viewModel.uiState.collect { seen += it }
+                }
+
+            viewModel.setUp("long-enough-1", "long-enough-1", enableBiometric = true)
+            viewModel.completeBiometricEnrolment(viewModel.biometricEnrolCipher()!!)
+
+            assertThat(seen.filterIsInstance<AppLockUiState.Locked>()).isEmpty()
+            assertThat(seen.last()).isEqualTo(AppLockUiState.Onboarding)
+            assertThat(vault.state.value).isEqualTo(VaultState.Unlocked(biometricEnabled = true))
+            job.cancel()
+
+            // The enrolled wrap survives a cold start: the unlock screen offers biometrics.
+            lockController.lock()
+            val relaunched = viewModel(vault())
+            assertThat(relaunched.uiState.value).isEqualTo(AppLockUiState.Locked(biometricEnabled = true))
+        }
+
+    @Test
+    fun setUp_withFingerprintToggle_enrolmentFailure_continuesWithoutBiometrics_noLockedGap() =
+        runTest {
+            val vault = vault()
+            val viewModel = viewModel(vault)
+            val seen = mutableListOf<AppLockUiState>()
+            val job =
+                backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                    viewModel.uiState.collect { seen += it }
+                }
+
+            viewModel.setUp("long-enough-1", "long-enough-1", enableBiometric = true)
+            // An uninitialised cipher makes the wrap throw — the Keystore failure path.
+            viewModel.completeBiometricEnrolment(Cipher.getInstance("AES/GCM/NoPadding"))
+
+            assertThat(seen.filterIsInstance<AppLockUiState.Locked>()).isEmpty()
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Onboarding)
+            assertThat(vault.state.value).isEqualTo(VaultState.Unlocked(biometricEnabled = false))
+            assertThat(initializer.calls).isEqualTo(1)
+            job.cancel()
         }
 
     @Test

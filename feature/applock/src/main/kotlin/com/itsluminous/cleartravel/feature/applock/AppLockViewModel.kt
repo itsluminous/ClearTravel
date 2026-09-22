@@ -77,6 +77,15 @@ class AppLockViewModel
         private val settingsRepository: SettingsRepository,
     ) : ViewModel() {
         private val preparing = MutableStateFlow(false)
+
+        /**
+         * ADR-034: step 1 handed over to BiometricPrompt. The vault already exists
+         * (Unlocked) while the UI lock is still engaged, so without this flag the gate
+         * would flip to [AppLockUiState.Locked] and dispose the setup screen — the very
+         * screen that hosts the prompt — before it ever ran. Cleared once storage
+         * preparation starts (Preparing wins), so there is no Locked gap in between.
+         */
+        private val enrollingBiometric = MutableStateFlow(false)
         private val _feedback = MutableStateFlow(AppLockFeedback())
         val feedback: StateFlow<AppLockFeedback> = _feedback
 
@@ -85,12 +94,14 @@ class AppLockViewModel
                 keyVault.state,
                 lockController.locked,
                 preparing,
+                enrollingBiometric,
                 settingsRepository.onboardingPending,
-            ) { vault, uiLocked, isPreparing, onboardingPending ->
+            ) { vault, uiLocked, isPreparing, enrolling, onboardingPending ->
                 when {
                     vault is VaultState.NotSetUp -> AppLockUiState.Setup
                     vault is VaultState.Locked -> AppLockUiState.Locked(vault.biometricEnabled)
                     isPreparing -> AppLockUiState.Preparing
+                    enrolling -> AppLockUiState.Setup
                     uiLocked -> AppLockUiState.Locked((vault as VaultState.Unlocked).biometricEnabled)
                     onboardingPending -> AppLockUiState.Onboarding
                     else -> AppLockUiState.Ready
@@ -121,7 +132,8 @@ class AppLockViewModel
          * First-run setup (wizard step 1): validates the pair, marks onboarding pending
          * (ADR-032 — BEFORE the vault exists, so a death in between simply shows step 1
          * again), creates the vault, then either hands over to the biometric prompt
-         * ([enableBiometric]) or prepares storage straight away.
+         * ([enableBiometric] — the gate stays on [AppLockUiState.Setup] meanwhile, ADR-034)
+         * or prepares storage straight away.
          */
         fun setUp(
             password: String,
@@ -138,6 +150,8 @@ class AppLockViewModel
                 _feedback.update { it.copy(busy = true, setupError = null) }
                 try {
                     settingsRepository.setOnboardingPending(true)
+                    // Raised BEFORE the vault flips to Unlocked so the gate never leaves Setup.
+                    if (enableBiometric) enrollingBiometric.value = true
                     keyVault.setUp(password.toCharArray())
                     if (enableBiometric) {
                         _feedback.update { it.copy(awaitingBiometricEnrolment = true) }
@@ -261,6 +275,7 @@ class AppLockViewModel
 
         private suspend fun prepareAndOpen() {
             preparing.value = true
+            enrollingBiometric.value = false
             try {
                 storageInitializer.prepare()
                 _feedback.update { it.copy(preparationFailed = false) }
