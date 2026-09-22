@@ -56,12 +56,15 @@ class SqlCipherDatabaseEncryptionMigrator : DatabaseEncryptionMigrator {
         SqliteFiles.companionFiles(encrypted).forEach(File::delete)
         val passphrase = SqlCipherKeys.rawKeyPassphrase(rawKey).decodeToString()
         try {
+            // CREATE_IF_NECESSARY matters even though the plaintext file exists: an
+            // ATTACHed database inherits the connection's open flags, and without it the
+            // ATTACH cannot create the new encrypted file (SQLITE_CANTOPEN, code 14).
             val plain =
                 SQLiteDatabase.openDatabase(
                     databaseFile.absolutePath,
                     ByteArray(0),
                     null,
-                    SQLiteDatabase.OPEN_READWRITE,
+                    SQLiteDatabase.OPEN_READWRITE or SQLiteDatabase.CREATE_IF_NECESSARY,
                     null,
                     null,
                 )

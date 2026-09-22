@@ -132,7 +132,11 @@ fun loadDocumentPage(
             }
         } else {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            reader.open(path)?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
+            // decodeStream returns null by design with inJustDecodeBounds — only a
+            // missing stream means "unreadable" here.
+            val probe = reader.open(path) ?: return null
+            probe.use { BitmapFactory.decodeStream(it, null, bounds) }
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
             val options =
                 BitmapFactory.Options().apply {
                     inSampleSize = DocumentFiles.sampleSizeFor(bounds.outWidth, bounds.outHeight)
