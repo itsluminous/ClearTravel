@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -110,11 +109,12 @@ fun StatusCheckScreen(
                 }
 
                 is StatusCheckUiState.Done -> {
+                    // Auto-return to the detail sheet — it already shows the fresh
+                    // data + outcome snackbar; a manual "Close" screen adds nothing
+                    // (user feedback 2026-09-22). Keyed on the state instance so a
+                    // retry cycle can't double-fire.
                     StatusBanner(R.string.flights_check_done)
-                    Button(
-                        onClick = { onClose(lastOutcome) },
-                        modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                    ) { Text(stringResource(R.string.flights_check_close)) }
+                    LaunchedEffect(current) { onClose(lastOutcome) }
                 }
 
                 is StatusCheckUiState.ParseFailed -> {
