@@ -90,7 +90,7 @@ internal fun MenuRootScreen(
     }
 }
 
-/** Settings: theme picker + the Google account section (spec feature 5). */
+/** Settings: theme picker, the Security section (ADR-031) and the Google account section (spec feature 5). */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SettingsScreen(
@@ -145,6 +145,7 @@ internal fun SettingsScreen(
                 selected = themeMode == ThemeMode.DARK,
                 onSelect = { viewModel.setThemeMode(ThemeMode.DARK) },
             )
+            SecuritySection(snackbarHostState = snackbarHostState)
             GoogleAccountSection(snackbarHostState = snackbarHostState)
         }
     }

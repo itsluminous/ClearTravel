@@ -51,8 +51,6 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.biometric)
-    implementation(libs.androidx.fragment.ktx)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

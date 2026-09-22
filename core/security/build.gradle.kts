@@ -43,6 +43,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
+    // BiometricPrompt wrapper (BIOMETRIC_STRONG + CryptoObject) shared by applock and menu.
+    implementation(libs.androidx.biometric)
+    implementation(libs.androidx.fragment.ktx)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)

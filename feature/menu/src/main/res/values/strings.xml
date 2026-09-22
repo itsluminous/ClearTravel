@@ -113,4 +113,32 @@
     <string name="menu_about_description">ClearTravel is an offline-first travel companion: train and flight journeys, trip itineraries on a map, and packing checklists — all stored on your device.</string>
     <string name="menu_about_source">Source code</string>
     <string name="menu_about_source_url" translatable="false">https://github.com/itsluminous/ClearTravel</string>
+
+    <!-- ADR-031: Settings → Security -->
+    <string name="menu_security_title">Security</string>
+    <string name="menu_security_description">Everything ClearTravel stores is encrypted with your password. Changing the password re-locks your data with the new one instantly; forgetting it means losing the data.</string>
+    <string name="menu_security_change_password">Change password</string>
+    <string name="menu_security_change_password_body">Backups made before the change will ask for the old password when restored.</string>
+    <string name="menu_security_current_password">Current password</string>
+    <string name="menu_security_new_password">New password</string>
+    <string name="menu_security_confirm_password">Confirm new password</string>
+    <string name="menu_security_change_confirm">Change</string>
+    <string name="menu_security_error_too_short">Use at least %1$d characters.</string>
+    <string name="menu_security_error_mismatch">The two passwords don’t match.</string>
+    <string name="menu_security_password_changed">Password changed</string>
+    <string name="menu_security_current_wrong">The current password is not correct.</string>
+    <string name="menu_security_biometric_title">Unlock with biometrics</string>
+    <string name="menu_security_biometric_subtitle">Fingerprint or face instead of the password. The password still works.</string>
+    <string name="menu_security_biometric_needs_password">Set a password first.</string>
+    <string name="menu_security_biometric_unavailable">No strong biometrics are set up on this device.</string>
+    <string name="menu_security_biometric_prompt_title">Confirm to enable biometric unlock</string>
+    <string name="menu_security_biometric_enabled">Biometric unlock enabled</string>
+    <string name="menu_security_biometric_disabled">Biometric unlock disabled</string>
+    <string name="menu_security_biometric_failed">Biometric unlock could not be enabled.</string>
+    <string name="menu_security_lock_timing_title">Lock when in the background for</string>
+    <string name="menu_security_lock_immediately">Immediately</string>
+    <string name="menu_security_lock_1m">1 minute</string>
+    <string name="menu_security_lock_5m">5 minutes</string>
+    <string name="menu_security_lock_15m">15 minutes</string>
+    <string name="menu_security_lock_never">Never — only when the app is closed</string>
 </resources>

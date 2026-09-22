@@ -38,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordField
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordFieldRole
+import com.itsluminous.cleartravel.core.security.biometric.BiometricUnlock
 
 /**
  * The app-lock gate (ADR-031): wraps the whole shell. Shows the blocking first-run

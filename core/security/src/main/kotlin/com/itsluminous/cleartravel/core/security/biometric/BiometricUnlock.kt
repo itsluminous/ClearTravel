@@ -1,4 +1,4 @@
-package com.itsluminous.cleartravel.feature.applock
+package com.itsluminous.cleartravel.core.security.biometric
 
 import android.content.Context
 import android.content.ContextWrapper
