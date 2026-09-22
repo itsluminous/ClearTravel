@@ -32,7 +32,7 @@
         <item quantity="one">%d item added</item>
         <item quantity="other">%d items added</item>
     </plurals>
-    <string name="checklist_items_appended_none">No new items — everything was already on the list</string>
+    <string name="checklist_items_appended_none">No new items - everything was already on the list</string>
 
     <string name="checklist_delete">Delete checklist</string>
     <string name="checklist_delete_confirm_title">Delete checklist?</string>

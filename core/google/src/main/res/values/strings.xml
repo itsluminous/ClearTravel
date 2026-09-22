@@ -8,5 +8,5 @@
     <string name="google_event_commute_summary">%1$s → %2$s</string>
     <string name="google_event_pnr_line">PNR: %1$s</string>
     <string name="google_event_seat_line">Seat: %1$s</string>
-    <string name="google_event_passenger_line">%1$s — %2$s (%3$s)</string>
+    <string name="google_event_passenger_line">%1$s - %2$s (%3$s)</string>
 </resources>

@@ -18,7 +18,7 @@
     <string name="trains_paste_dialog_title">Paste ticket text</string>
     <string name="trains_paste_dialog_label">IRCTC SMS or email text</string>
     <string name="trains_paste_dialog_confirm">Prefill form</string>
-    <string name="trains_import_failed">Couldn\'t read that file — the form opens blank</string>
+    <string name="trains_import_failed">Couldn\'t read that file - the form opens blank</string>
 
     <string name="trains_card_journey_date">Journey on %1$s</string>
     <string name="trains_card_route">%1$s → %2$s</string>
@@ -68,8 +68,8 @@
     <string name="trains_form_remove_passenger">Remove this passenger</string>
     <string name="trains_form_save">Save ticket</string>
     <string name="trains_form_cancel">Cancel</string>
-    <string name="trains_form_low_confidence">Auto-filled with low confidence — please verify</string>
-    <string name="trains_form_prefilled">Auto-filled from your ticket — review before saving</string>
+    <string name="trains_form_low_confidence">Auto-filled with low confidence - please verify</string>
+    <string name="trains_form_prefilled">Auto-filled from your ticket - review before saving</string>
     <string name="trains_form_saved">Ticket saved</string>
     <string name="trains_form_duplicate_pnr">Ticket with this PNR already exists</string>
     <string name="trains_form_duplicate_pnr_view">View</string>
@@ -96,7 +96,7 @@
     <string name="trains_detail_never_fetched">Status never checked</string>
     <string name="trains_detail_check_status">Check PNR status</string>
     <string name="trains_detail_view_route">View route</string>
-    <string name="trains_detail_unconfirmed_hint">Seats not confirmed yet — check again closer to your journey</string>
+    <string name="trains_detail_unconfirmed_hint">Seats not confirmed yet - check again closer to your journey</string>
     <string name="trains_detail_edit">Edit</string>
     <string name="trains_detail_archive">Archive</string>
     <string name="trains_detail_unarchive">Unarchive</string>
@@ -110,21 +110,21 @@
     <string name="trains_detail_unarchived">Ticket restored to active</string>
 
     <string name="trains_pnr_check_title">Check PNR status</string>
-    <string name="trains_pnr_check_instructions">Tap Submit on the page and solve the captcha — the app reads the result automatically.</string>
+    <string name="trains_pnr_check_instructions">Tap Submit on the page and solve the captcha - the app reads the result automatically.</string>
     <string name="trains_pnr_check_close">Close</string>
     <string name="trains_pnr_check_retry">Retry</string>
     <string name="trains_pnr_check_applied">PNR status updated</string>
-    <string name="trains_pnr_check_parse_failed">Couldn\'t read the results — your data is unchanged</string>
+    <string name="trains_pnr_check_parse_failed">Couldn\'t read the results - your data is unchanged</string>
     <string name="trains_pnr_check_rule_missing">The PNR enquiry rule isn\'t available on this build</string>
     <string name="trains_pnr_check_loading">Opening Indian Railways PNR enquiry…</string>
 
     <string name="trains_route_fetch_title">Fetch train route</string>
-    <string name="trains_route_fetch_instructions">Loading the schedule from %1$s — no input needed, the app reads the route automatically.</string>
+    <string name="trains_route_fetch_instructions">Loading the schedule from %1$s - no input needed, the app reads the route automatically.</string>
     <string name="trains_route_fetch_close">Close</string>
     <string name="trains_route_fetch_retry">Retry</string>
     <string name="trains_route_fetch_alternate">Try another source</string>
     <string name="trains_route_fetch_applied">%1$d stations loaded</string>
-    <string name="trains_route_fetch_parse_failed">Couldn\'t read the route — your data is unchanged</string>
+    <string name="trains_route_fetch_parse_failed">Couldn\'t read the route - your data is unchanged</string>
     <string name="trains_route_fetch_rule_missing">The train route rule isn\'t available on this build</string>
 
     <string name="trains_route_title">Train route</string>
@@ -150,14 +150,14 @@
     <string name="trains_seatmap_close">Back</string>
     <string name="trains_seatmap_refresh">Refresh route &amp; coaches from the web</string>
     <string name="trains_seatmap_engine">Engine</string>
-    <string name="trains_seatmap_coach_box">Coach %1$s at position %2$d — tap to view its seat map</string>
+    <string name="trains_seatmap_coach_box">Coach %1$s at position %2$d - tap to view its seat map</string>
     <string name="trains_seatmap_passenger_chip">%1$s - %2$d</string>
     <string name="trains_seatmap_passenger_chip_no_coach">Berth %1$d</string>
     <string name="trains_seatmap_passenger_chip_no_coach_seat">Seat %1$d</string>
     <string name="trains_seatmap_passenger_chip_unallotted">%1$s</string>
     <string name="trains_seatmap_passenger_chip_none">No berth yet</string>
     <string name="trains_seatmap_passenger_chip_none_seat">No seat yet</string>
-    <string name="trains_seatmap_warning">Coach position may not be accurate for certain trains — verify at the station.</string>
+    <string name="trains_seatmap_warning">Coach position may not be accurate for certain trains - verify at the station.</string>
     <string name="trains_seatmap_no_coaches_title">Coach positions not fetched</string>
     <string name="trains_seatmap_no_coaches_message">Fetch the route once and the coach order is saved offline.</string>
     <string name="trains_seatmap_fetch">Fetch route &amp; coaches</string>
@@ -166,9 +166,9 @@
     <string name="trains_seatmap_bay">Bay %1$d</string>
     <string name="trains_seatmap_row">Row %1$d</string>
     <string name="trains_seatmap_cell">Berth %1$d, %2$s</string>
-    <string name="trains_seatmap_cell_yours">Berth %1$d, %2$s — your berth</string>
+    <string name="trains_seatmap_cell_yours">Berth %1$d, %2$s - your berth</string>
     <string name="trains_seatmap_seat">Seat %1$d, %2$s</string>
-    <string name="trains_seatmap_seat_yours">Seat %1$d, %2$s — your seat</string>
+    <string name="trains_seatmap_seat_yours">Seat %1$d, %2$s - your seat</string>
     <string name="trains_seatmap_type_lower">LOWER</string>
     <string name="trains_seatmap_type_middle">MIDDLE</string>
     <string name="trains_seatmap_type_upper">UPPER</string>

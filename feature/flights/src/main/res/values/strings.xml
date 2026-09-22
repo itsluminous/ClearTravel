@@ -15,7 +15,7 @@
     <string name="flights_add_import">Import boarding pass</string>
     <string name="flights_add_import_hint">Scan the barcode of a boarding-pass image or PDF</string>
     <string name="flights_add_booking">Import booking confirmation</string>
-    <string name="flights_add_booking_hint">Prefill from an e-ticket PDF or image — available from booking day</string>
+    <string name="flights_add_booking_hint">Prefill from an e-ticket PDF or image - available from booking day</string>
     <string name="flights_card_route_separator">→</string>
     <string name="flights_card_dep_arr">Dep %1$s · Arr %2$s</string>
     <string name="flights_last_fetched">Checked %1$s</string>
@@ -42,7 +42,7 @@
     <string name="flights_label_seat">Seat</string>
     <string name="flights_label_cabin">Cabin</string>
     <string name="flights_label_pnr">PNR / booking ref</string>
-    <string name="flights_value_unknown">—</string>
+    <string name="flights_value_unknown">-</string>
     <string name="flights_action_check_status">Check status</string>
     <string name="flights_action_web_checkin">Open web check-in</string>
     <string name="flights_action_view_pass">View boarding pass</string>
@@ -52,7 +52,7 @@
     <string name="flights_doc_booking_confirmation">Booking confirmation</string>
     <string name="flights_doc_open_hint">Tap to view</string>
     <string name="flights_booking_attached_snackbar">Booking confirmation attached</string>
-    <string name="flights_booking_attach_failed_snackbar">Couldn\'t read the picked file — nothing attached</string>
+    <string name="flights_booking_attach_failed_snackbar">Couldn\'t read the picked file - nothing attached</string>
     <string name="flights_action_edit">Edit</string>
     <string name="flights_action_archive">Archive</string>
     <string name="flights_action_unarchive">Unarchive</string>
@@ -78,7 +78,7 @@
     <string name="flights_field_arr_airport">To (IATA)</string>
     <string name="flights_field_dep_time">Departure time (HH:MM)</string>
     <string name="flights_field_arr_time">Arrival time (HH:MM)</string>
-    <string name="flights_form_route_hint">Route and times are optional — "Save &amp; check status" can fill them from the airline site.</string>
+    <string name="flights_form_route_hint">Route and times are optional - "Save &amp; check status" can fill them from the airline site.</string>
     <string name="flights_error_airline">Enter the 2-character airline code, e.g. 6E</string>
     <string name="flights_error_flight_number">Enter the numeric flight number, e.g. 2345</string>
     <string name="flights_error_date">Enter the date as YYYY-MM-DD</string>
@@ -89,16 +89,16 @@
     <string name="flights_form_cancel">Cancel</string>
     <string name="flights_form_importing">Reading boarding pass…</string>
     <string name="flights_form_importing_booking">Reading booking confirmation…</string>
-    <string name="flights_prefill_source_barcode">Filled from the boarding-pass barcode — review and save</string>
-    <string name="flights_prefill_source_ocr">Filled from scanned text — review carefully before saving</string>
-    <string name="flights_prefill_source_none">Nothing recognized — fill the form in; the file stays attached</string>
-    <string name="flights_booking_source_barcode">Filled from an embedded barcode — review and save</string>
-    <string name="flights_booking_source_ocr">Filled from the scanned e-ticket — review carefully before saving</string>
-    <string name="flights_booking_source_none">Nothing recognized — fill the form in; the file stays attached</string>
-    <string name="flights_booking_return_hint">Return leg detected — save this flight, then add the return leg separately</string>
+    <string name="flights_prefill_source_barcode">Filled from the boarding-pass barcode - review and save</string>
+    <string name="flights_prefill_source_ocr">Filled from scanned text - review carefully before saving</string>
+    <string name="flights_prefill_source_none">Nothing recognized - fill the form in; the file stays attached</string>
+    <string name="flights_booking_source_barcode">Filled from an embedded barcode - review and save</string>
+    <string name="flights_booking_source_ocr">Filled from the scanned e-ticket - review carefully before saving</string>
+    <string name="flights_booking_source_none">Nothing recognized - fill the form in; the file stays attached</string>
+    <string name="flights_booking_return_hint">Return leg detected - save this flight, then add the return leg separately</string>
     <string name="flights_confidence_high">High confidence</string>
-    <string name="flights_confidence_medium">Medium confidence — review</string>
-    <string name="flights_confidence_low">Low confidence — review</string>
+    <string name="flights_confidence_medium">Medium confidence - review</string>
+    <string name="flights_confidence_low">Low confidence - review</string>
 
     <!-- Status check (scrape) screen -->
     <string name="flights_check_title">Check status</string>
@@ -107,18 +107,18 @@
     <string name="flights_check_scraping_web">Looking up the flight on Google…</string>
     <string name="flights_check_waiting_user">Complete the search on the page below if it doesn\'t submit automatically.</string>
     <string name="flights_check_done">Status updated</string>
-    <string name="flights_check_parse_failed">Couldn\'t read the results — your saved data is unchanged. Retry, or read the page below and update the flight manually.</string>
-    <string name="flights_check_parse_failed_web">Google didn\'t show a flight status card for this flight and date — your saved data is unchanged. Retry, or read the results below and update the flight manually.</string>
+    <string name="flights_check_parse_failed">Couldn\'t read the results - your saved data is unchanged. Retry, or read the page below and update the flight manually.</string>
+    <string name="flights_check_parse_failed_web">Google didn\'t show a flight status card for this flight and date - your saved data is unchanged. Retry, or read the results below and update the flight manually.</string>
     <string name="flights_check_retry">Retry</string>
     <string name="flights_check_try_web_search">Try web search</string>
-    <string name="flights_check_fallback_hint">Set a date on this flight to look up its status automatically — showing a web search instead. Update the flight manually from what you see.</string>
+    <string name="flights_check_fallback_hint">Set a date on this flight to look up its status automatically - showing a web search instead. Update the flight manually from what you see.</string>
     <string name="flights_check_close">Close</string>
     <string name="flights_check_snackbar_updated">Flight status updated</string>
-    <string name="flights_check_snackbar_no_changes">Status checked — no changes</string>
-    <string name="flights_check_snackbar_failed">Status check failed — data unchanged</string>
+    <string name="flights_check_snackbar_no_changes">Status checked - no changes</string>
+    <string name="flights_check_snackbar_failed">Status check failed - data unchanged</string>
     <string name="flights_outcome_updated">Last check (%1$s): status updated</string>
     <string name="flights_outcome_no_changes">Last check (%1$s): no changes found</string>
-    <string name="flights_outcome_failed">Last check (%1$s): couldn\'t read the airline page — data unchanged</string>
+    <string name="flights_outcome_failed">Last check (%1$s): couldn\'t read the airline page - data unchanged</string>
 
     <!-- Boarding pass / document viewer -->
     <string name="flights_pass_viewer_title">Boarding pass</string>
