@@ -1,6 +1,8 @@
 package com.itsluminous.cleartravel.feature.flights.form
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -11,6 +13,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -18,10 +22,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -32,6 +41,9 @@ import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassSource
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationSource
 import com.itsluminous.cleartravel.feature.flights.R
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -141,14 +153,57 @@ fun FlightFormScreen(
                     modifier = Modifier.weight(1f),
                 )
             }
-            FormField(
-                value = state.dateText,
-                onChange = { value -> viewModel.update { it.copy(dateText = value) } },
-                labelRes = R.string.flights_field_date,
-                error = FlightFormError.DATE_INVALID in state.errors,
-                errorRes = R.string.flights_error_date,
-                confidence = state.confidences[FlightField.DATE],
-            )
+            // Date comes from a picker, not typing (user request 2026-09-22);
+            // the field stays read-only and mirrors the picked ISO date.
+            var showDatePicker by rememberSaveable { mutableStateOf(false) }
+            Box {
+                FormField(
+                    value = state.dateText,
+                    onChange = {},
+                    labelRes = R.string.flights_field_date,
+                    error = FlightFormError.DATE_INVALID in state.errors,
+                    errorRes = R.string.flights_error_date,
+                    confidence = state.confidences[FlightField.DATE],
+                    readOnly = true,
+                )
+                // Transparent click target over the read-only field.
+                Box(
+                    modifier =
+                        Modifier
+                            .matchParentSize()
+                            .clickable { showDatePicker = true },
+                )
+            }
+            if (showDatePicker) {
+                val pickerState =
+                    rememberDatePickerState(
+                        initialSelectedDateMillis =
+                            runCatching { LocalDate.parse(state.dateText) }
+                                .getOrNull()
+                                ?.atStartOfDay(ZoneOffset.UTC)
+                                ?.toInstant()
+                                ?.toEpochMilli(),
+                    )
+                DatePickerDialog(
+                    onDismissRequest = { showDatePicker = false },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                pickerState.selectedDateMillis?.let { millis ->
+                                    val picked = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
+                                    viewModel.update { it.copy(dateText = picked.toString()) }
+                                }
+                                showDatePicker = false
+                            },
+                        ) { Text(stringResource(R.string.flights_date_picker_confirm)) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDatePicker = false }) {
+                            Text(stringResource(R.string.flights_date_picker_cancel))
+                        }
+                    },
+                ) { DatePicker(state = pickerState) }
+            }
             FormField(
                 value = state.pnr,
                 onChange = { value -> viewModel.update { it.copy(pnr = value) } },
@@ -278,9 +333,11 @@ private fun FormField(
     error: Boolean = false,
     errorRes: Int? = null,
     confidence: ExtractionConfidence? = null,
+    readOnly: Boolean = false,
 ) {
     OutlinedTextField(
         value = value,
+        readOnly = readOnly,
         onValueChange = onChange,
         label = { Text(stringResource(labelRes)) },
         isError = error,

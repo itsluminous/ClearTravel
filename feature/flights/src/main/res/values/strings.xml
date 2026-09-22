@@ -137,4 +137,6 @@
     <string name="flights_detail_part_of">Part of</string>
     <string name="flights_detail_part_of_trip">%1$s · Day %2$d</string>
     <string name="flights_detail_part_of_hint">Open the trip in the Trips tab</string>
+    <string name="flights_date_picker_confirm">OK</string>
+    <string name="flights_date_picker_cancel">Cancel</string>
 </resources>
