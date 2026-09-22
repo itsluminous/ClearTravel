@@ -37,7 +37,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.itsluminous.cleartravel.core.data.backup.BackupEntries
 import com.itsluminous.cleartravel.core.data.backup.ImportPreview
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
@@ -383,8 +382,7 @@ private fun ImportConfirmDialog(
     onConfirm: () -> Unit,
     onDismiss: () -> Unit,
 ) {
-    val journeys =
-        preview.count(BackupEntries.KEY_TRAIN_TICKETS) + preview.count(BackupEntries.KEY_FLIGHT_JOURNEYS)
+    val summary = ImportPreviewSummary.of(preview)
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.menu_backup_import_confirm_title)) },
@@ -400,10 +398,11 @@ private fun ImportConfirmDialog(
                 Text(
                     stringResource(
                         R.string.menu_backup_import_confirm_counts,
-                        preview.count(BackupEntries.KEY_TRIPS),
-                        journeys,
-                        preview.count(BackupEntries.KEY_CHECKLISTS),
-                        preview.count(BackupEntries.KEY_ATTACHMENTS),
+                        summary.trips,
+                        summary.journeys,
+                        summary.checklists,
+                        summary.documents,
+                        summary.attachments,
                     ),
                 )
             }
@@ -416,8 +415,6 @@ private fun ImportConfirmDialog(
         },
     )
 }
-
-private fun ImportPreview.count(key: String): Int = entityCounts[key] ?: 0
 
 private fun formatInstant(instant: Instant): String =
     DateTimeFormatter
