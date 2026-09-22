@@ -86,7 +86,7 @@
     <string name="itinerary_sheet_time">Planned time</string>
     <string name="itinerary_sheet_note">Note / fun facts</string>
     <string name="itinerary_sheet_link">Link</string>
-    <string name="itinerary_open_link">Open link</string>
+    <string name="itinerary_open_link">View in map</string>
     <string name="itinerary_sheet_coordinates">Coordinates</string>
     <string name="itinerary_sheet_mode">Mode</string>
     <string name="itinerary_sheet_route">Route</string>

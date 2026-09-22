@@ -92,10 +92,21 @@ internal fun ItineraryItemSheet(
             }
             if (item.link.isNotBlank()) {
                 SheetField(labelRes = R.string.itinerary_sheet_link, value = item.link)
+            }
+            // "View in map" works for any item that has a stored link OR
+            // coordinates (picked on the map / entered manually): the stored link
+            // wins, else a maps URL is built from the coordinates.
+            val lat = item.latitude
+            val lng = item.longitude
+            val mapTarget =
+                item.link.ifBlank {
+                    if (lat != null && lng != null) "https://maps.google.com/?q=$lat,$lng" else ""
+                }
+            if (mapTarget.isNotBlank()) {
                 TextButton(
                     onClick = {
                         runCatching {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, item.link.toUri()))
+                            context.startActivity(Intent(Intent.ACTION_VIEW, mapTarget.toUri()))
                         }
                     },
                 ) { Text(stringResource(R.string.itinerary_open_link)) }
