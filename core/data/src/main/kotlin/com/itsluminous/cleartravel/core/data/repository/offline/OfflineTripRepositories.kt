@@ -69,6 +69,9 @@ class OfflineItineraryRepository
         override fun observeItemsForTrip(tripId: String): Flow<List<ItineraryItem>> =
             itineraryDao.observeForTrip(tripId).map { rows -> rows.map { it.toModel() } }
 
+        override fun observeItemsLinkedToJourney(journeyId: String): Flow<List<ItineraryItem>> =
+            itineraryDao.observeLinkedToJourney(journeyId).map { rows -> rows.map { it.toModel() } }
+
         override suspend fun getItem(id: String): ItineraryItem? = itineraryDao.getById(id)?.toModel()
 
         override suspend fun save(item: ItineraryItem): ItineraryItem = saveAll(listOf(item)).first()

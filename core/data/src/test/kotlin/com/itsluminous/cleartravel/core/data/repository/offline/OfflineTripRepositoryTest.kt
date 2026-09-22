@@ -3,6 +3,8 @@ package com.itsluminous.cleartravel.core.data.repository.offline
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.database.ClearTravelDatabase
+import com.itsluminous.cleartravel.core.model.ItineraryItemType
+import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.core.testing.inMemoryDatabase
 import kotlinx.coroutines.flow.first
@@ -104,5 +106,45 @@ class OfflineTripRepositoryTest {
 
             assertThat(itinerary.getItem(item.id)).isNull()
             assertThat(itinerary.observeItemsForTrip("t").first()).isEmpty()
+        }
+
+    /** ADR-028 reverse lookup: across trips, only live legs of THAT journey, in day order. */
+    @Test
+    fun `observeItemsLinkedToJourney spans trips excludes tombstones and other journeys`() =
+        runTest {
+            val later =
+                itinerary.save(
+                    Fixtures.itineraryItem(
+                        tripId = "trip-b",
+                        dayIndex = 3,
+                        type = ItineraryItemType.COMMUTE,
+                        linkedJourneyId = "train-1",
+                        linkedJourneyType = JourneyType.TRAIN,
+                    ),
+                )
+            val earlier =
+                itinerary.save(
+                    Fixtures.itineraryItem(
+                        tripId = "trip-a",
+                        dayIndex = 1,
+                        type = ItineraryItemType.COMMUTE,
+                        linkedJourneyId = "train-1",
+                        linkedJourneyType = JourneyType.TRAIN,
+                    ),
+                )
+            val deleted =
+                itinerary.save(
+                    Fixtures.itineraryItem(tripId = "trip-a", linkedJourneyId = "train-1", linkedJourneyType = JourneyType.TRAIN),
+                )
+            itinerary.delete(deleted.id)
+            itinerary.save(
+                Fixtures.itineraryItem(tripId = "trip-a", linkedJourneyId = "flight-9", linkedJourneyType = JourneyType.FLIGHT),
+            )
+            itinerary.save(Fixtures.itineraryItem(tripId = "trip-a"))
+
+            val linked = itinerary.observeItemsLinkedToJourney("train-1").first()
+
+            assertThat(linked.map { it.id }).containsExactly(earlier.id, later.id).inOrder()
+            assertThat(itinerary.observeItemsLinkedToJourney("nobody").first()).isEmpty()
         }
 }

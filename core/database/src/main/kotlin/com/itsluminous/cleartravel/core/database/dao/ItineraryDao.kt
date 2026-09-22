@@ -13,6 +13,13 @@ interface ItineraryDao {
     @Query("SELECT * FROM itinerary_items WHERE trip_id = :tripId AND deleted_at IS NULL ORDER BY day_index, order_in_day")
     fun observeForTrip(tripId: String): Flow<List<ItineraryItemEntity>>
 
+    /** Reverse lookup (ADR-028): live items across all trips linked to one journey. */
+    @Query(
+        "SELECT * FROM itinerary_items WHERE linked_journey_id = :journeyId AND deleted_at IS NULL " +
+            "ORDER BY day_index, order_in_day",
+    )
+    fun observeLinkedToJourney(journeyId: String): Flow<List<ItineraryItemEntity>>
+
     @Query("SELECT * FROM itinerary_items WHERE id = :id AND deleted_at IS NULL")
     suspend fun getById(id: String): ItineraryItemEntity?
 

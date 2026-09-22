@@ -145,6 +145,9 @@ class FakeItineraryRepository : ItineraryRepository {
 
     override fun observeItemsForTrip(tripId: String): Flow<List<ItineraryItem>> = items.map { list -> list.filter { it.tripId == tripId } }
 
+    override fun observeItemsLinkedToJourney(journeyId: String): Flow<List<ItineraryItem>> =
+        items.map { list -> list.filter { it.linkedJourneyId == journeyId } }
+
     override suspend fun getItem(id: String): ItineraryItem? = items.value.firstOrNull { it.id == id }
 
     override suspend fun save(item: ItineraryItem): ItineraryItem {

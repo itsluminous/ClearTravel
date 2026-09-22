@@ -35,6 +35,14 @@ interface ItineraryRepository {
     /** Live items ordered by (dayIndex, orderInDay). */
     fun observeItemsForTrip(tripId: String): Flow<List<ItineraryItem>>
 
+    /**
+     * Reverse lookup (ADR-028): live commute legs — across ALL trips — whose
+     * `linkedJourneyId` is [journeyId], ordered by (dayIndex, orderInDay). Lets a
+     * journey's detail sheet show which trips it is part of; resolve trip names via
+     * [TripRepository.observeTrip].
+     */
+    fun observeItemsLinkedToJourney(journeyId: String): Flow<List<ItineraryItem>>
+
     suspend fun getItem(id: String): ItineraryItem?
 
     /** Upserts [item] with a bumped `updatedAt`; returns the stored copy. */
