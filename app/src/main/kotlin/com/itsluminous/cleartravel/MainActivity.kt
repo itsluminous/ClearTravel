@@ -96,10 +96,11 @@ class MainActivity : ComponentActivity() {
             val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
             NotificationPermissionEffect()
             // ADR-028: an itinerary leg asked for a new journey → land on Journeys in
-            // pick mode. Keyed on the request so it fires once per request.
+            // pick mode. Once per request (ADR-029): the coordinator latches the nonce
+            // so an activity re-creation with the request still pending does not re-land.
             val pickRequest by pickCoordinator.pendingRequest.collectAsStateWithLifecycle()
             LaunchedEffect(pickRequest) {
-                pickRequest?.let { pendingDeepLink.value = JourneysDeepLink.forJourneyAdd(it) }
+                pickCoordinator.takeLanding(pickRequest)?.let { pendingDeepLink.value = JourneysDeepLink.forJourneyAdd(it) }
             }
             ClearTravelTheme(darkTheme = themeMode.resolveDarkTheme()) {
                 when (val entry = pendingEntry.value) {

@@ -75,10 +75,12 @@ private fun JourneysScreen(
     modifier: Modifier = Modifier,
 ) {
     var segment by rememberSaveable { mutableStateOf(JourneysSegment.TRAINS) }
-    var trainDeepLinkId by rememberSaveable { mutableStateOf<String?>(null) }
-    var trainAction by rememberSaveable { mutableStateOf(TrainsLandingAction.OPEN_DETAIL) }
-    var flightDeepLinkId by rememberSaveable { mutableStateOf<String?>(null) }
-    var flightAction by rememberSaveable { mutableStateOf(FlightsLandingAction.OPEN_DETAIL) }
+    // ADR-029: the per-segment landings a deep link asks for. Deliberately NOT
+    // saveable (they used to be, and were never cleared — so every tab revisit or
+    // segment toggle replayed the last landing and auto-opened a detail sheet). A
+    // landing lives only while this screen is composed and is consumed by the segment
+    // the moment it acts on it.
+    val landings = remember { JourneysLandings() }
     // ADR-028 pick mode. Deliberately NOT saveable: the request lives only while this
     // screen is composed. Completing it navigates away (disposing it); a manual tab
     // tap does too, and the itinerary form cancels the stale request on its return —
@@ -88,17 +90,10 @@ private fun JourneysScreen(
     LaunchedEffect(deepLink) {
         if (deepLink != null) {
             when (deepLink.target) {
-                DeepLinkContract.TARGET_TRAIN -> {
-                    segment = JourneysSegment.TRAINS
-                    trainDeepLinkId = deepLink.entityId
-                    trainAction = deepLink.trainsAction
-                }
-                DeepLinkContract.TARGET_FLIGHT -> {
-                    segment = JourneysSegment.FLIGHTS
-                    flightDeepLinkId = deepLink.entityId
-                    flightAction = deepLink.flightsAction
-                }
+                DeepLinkContract.TARGET_TRAIN -> segment = JourneysSegment.TRAINS
+                DeepLinkContract.TARGET_FLIGHT -> segment = JourneysSegment.FLIGHTS
             }
+            landings.land(deepLink)
             addRequest = deepLink.addRequest
             onDeepLinkConsumed()
         }
@@ -134,10 +129,13 @@ private fun JourneysScreen(
             }
         }
         when (segment) {
-            JourneysSegment.TRAINS ->
+            JourneysSegment.TRAINS -> {
+                val landing = landings.trains
                 TrainsContent(
-                    initialTicketId = trainDeepLinkId,
-                    initialAction = trainAction,
+                    initialTicketId = landing?.entityId,
+                    initialAction = landing?.action ?: TrainsLandingAction.OPEN_DETAIL,
+                    landingNonce = landing?.nonce,
+                    onLandingConsumed = { nonce -> landings.consumeTrains(nonce) },
                     addRequest = addRequest?.takeIf { it.type == JourneyType.TRAIN }?.let { TrainsAddRequest(nonce = it.nonce) },
                     onAddRequestDone = { result ->
                         addRequest?.let { request ->
@@ -147,10 +145,14 @@ private fun JourneysScreen(
                     },
                     onOpenTrip = onOpenTrip,
                 )
-            JourneysSegment.FLIGHTS ->
+            }
+            JourneysSegment.FLIGHTS -> {
+                val landing = landings.flights
                 FlightsContent(
-                    initialFlightId = flightDeepLinkId,
-                    initialAction = flightAction,
+                    initialFlightId = landing?.entityId,
+                    initialAction = landing?.action ?: FlightsLandingAction.OPEN_DETAIL,
+                    landingNonce = landing?.nonce,
+                    onLandingConsumed = { nonce -> landings.consumeFlights(nonce) },
                     addRequest = addRequest?.takeIf { it.type == JourneyType.FLIGHT }?.let { FlightsAddRequest(nonce = it.nonce) },
                     onAddRequestDone = { result ->
                         addRequest?.let { request ->
@@ -160,6 +162,7 @@ private fun JourneysScreen(
                     },
                     onOpenTrip = onOpenTrip,
                 )
+            }
         }
     }
 }

@@ -28,6 +28,21 @@ class JourneyPickCoordinator
     ) : ViewModel() {
         val pendingRequest: StateFlow<JourneyAddRequest?> = bus.pendingRequest
 
+        /** Nonce of the request the shell has already landed on (ADR-029): a landing happens once per request. */
+        private var landedNonce: Long? = null
+
+        /**
+         * Returns [request] the FIRST time it is offered, null afterwards. The pending
+         * request is a StateFlow and the shell's landing effect re-runs on every
+         * activity re-creation (rotation, theme change), so without this latch a
+         * still-pending request would drop the user back into pick mode each time.
+         */
+        fun takeLanding(request: JourneyAddRequest?): JourneyAddRequest? {
+            if (request == null || request.nonce == landedNonce) return null
+            landedNonce = request.nonce
+            return request
+        }
+
         fun complete(result: JourneyAddResult) = bus.complete(result)
     }
 

@@ -33,12 +33,21 @@ import com.itsluminous.cleartravel.feature.flights.status.StatusCheckScreen
  * `DuplicateFlight` (the existing journey is what the user meant), backed out
  * before a save → `Cancelled`. [onOpenTrip] reports a "Part of" row tapped in the
  * detail sheet. All defaulted so existing call sites are untouched.
+ *
+ * ADR-029 once-only landing: the landing effect is keyed on [landingNonce] too (two
+ * consecutive links to the SAME journey both act) and reports [onLandingConsumed]
+ * with that nonce as soon as it acts, so the host clears the landing and nothing
+ * replays it when this segment is re-composed (tab revisit, segment toggle). The
+ * detail-sheet landing is copied into segment-local state that is dropped whenever
+ * the list is left, so returning from a form/check never re-opens the sheet either.
  */
 @Composable
 fun FlightsContent(
     modifier: Modifier = Modifier,
     initialFlightId: String? = null,
     initialAction: FlightsLandingAction = FlightsLandingAction.OPEN_DETAIL,
+    landingNonce: Long? = null,
+    onLandingConsumed: (nonce: Long) -> Unit = {},
     addRequest: FlightsAddRequest? = null,
     onAddRequestDone: (FlightsEntryResult) -> Unit = {},
     onOpenTrip: (tripId: String) -> Unit = {},
@@ -65,6 +74,9 @@ fun FlightsContent(
     // a "View" action for the existing journey. Cleared whenever the list is left so
     // it never re-fires on a later return.
     var duplicateNotice by remember { mutableStateOf<DuplicateFlightNotice?>(null) }
+    // Transient (ADR-029): the journey a landing asked to open the sheet for. Cleared
+    // with the notice whenever the list is left, for the same never-re-fire reason.
+    var landedDetailFlightId by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
 
     // State-based navigation does not take part in system back by itself: without
@@ -85,16 +97,22 @@ fun FlightsContent(
         FlightPollScheduler.ensureScheduled(context, nextDeparture = null)
     }
 
-    LaunchedEffect(initialFlightId, initialAction) {
+    LaunchedEffect(initialFlightId, initialAction, landingNonce) {
         if (initialFlightId == null) return@LaunchedEffect
+        landingNonce?.let(onLandingConsumed)
         route = FlightsRoute.Journeys
-        if (initialAction == FlightsLandingAction.DUPLICATE_FLIGHT) {
-            duplicateNotice = DuplicateFlightNotice(existingFlightId = initialFlightId)
+        when (initialAction) {
+            FlightsLandingAction.OPEN_DETAIL -> landedDetailFlightId = initialFlightId
+            FlightsLandingAction.DUPLICATE_FLIGHT ->
+                duplicateNotice = DuplicateFlightNotice(existingFlightId = initialFlightId)
         }
     }
 
     LaunchedEffect(route) {
-        if (route !is FlightsRoute.Journeys) duplicateNotice = null
+        if (route !is FlightsRoute.Journeys) {
+            duplicateNotice = null
+            landedDetailFlightId = null
+        }
     }
 
     LaunchedEffect(addRequest) {
@@ -122,7 +140,7 @@ fun FlightsContent(
                 modifier = modifier,
                 // A duplicate landing must NOT auto-open the sheet: a modal sheet would
                 // cover the notice that explains why nothing was added.
-                initialDetailFlightId = initialFlightId.takeIf { initialAction == FlightsLandingAction.OPEN_DETAIL },
+                initialDetailFlightId = landedDetailFlightId,
                 lastCheckOutcome = checkOutcome,
                 duplicateNotice = duplicateNotice,
                 openAddSheetNonce = activeAddRequest?.nonce,

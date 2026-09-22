@@ -79,12 +79,20 @@ private suspend fun showDuplicateNotice(
  * meant), backed out anywhere before a save → `Cancelled`. [onOpenTrip] reports a
  * "Part of" row tapped in the detail sheet. All defaulted so existing call sites are
  * untouched.
+ *
+ * ADR-029 once-only landing: the landing effect is keyed on [landingNonce] as well, so
+ * two consecutive links to the SAME ticket both act, and it reports
+ * [onLandingConsumed] with that nonce the moment it starts acting — the host clears
+ * the landing so nothing replays it when this segment is re-composed later (tab
+ * revisit, Trains ↔ Flights toggle).
  */
 @Composable
 fun TrainsContent(
     modifier: Modifier = Modifier,
     initialTicketId: String? = null,
     initialAction: TrainsLandingAction = TrainsLandingAction.OPEN_DETAIL,
+    landingNonce: Long? = null,
+    onLandingConsumed: (nonce: Long) -> Unit = {},
     addRequest: TrainsAddRequest? = null,
     onAddRequestDone: (TrainsEntryResult) -> Unit = {},
     onOpenTrip: (tripId: String) -> Unit = {},
@@ -139,16 +147,19 @@ fun TrainsContent(
     val formState by formViewModel.uiState.collectAsStateWithLifecycle()
     val detailState by detailViewModel.uiState.collectAsStateWithLifecycle()
 
-    LaunchedEffect(initialTicketId, initialAction) {
-        if (initialTicketId == null) return@LaunchedEffect
-        when (initialAction) {
+    /** Acts on a landing. Suspends (notice, card lookup), so it runs off the landing effect. */
+    suspend fun landOn(
+        ticketId: String,
+        action: TrainsLandingAction,
+    ) {
+        when (action) {
             TrainsLandingAction.OPEN_DETAIL -> {
                 screen = TrainsScreen.List
-                detailTicketId = initialTicketId
+                detailTicketId = ticketId
             }
             TrainsLandingAction.DUPLICATE_PNR -> {
                 screen = TrainsScreen.List
-                showDuplicateNotice(snackbarHostState, context) { detailTicketId = initialTicketId }
+                showDuplicateNotice(snackbarHostState, context) { detailTicketId = ticketId }
             }
             TrainsLandingAction.OPEN_PNR_CHECK -> {
                 // The just-saved ticket reaches the list through Room; wait for its
@@ -157,7 +168,7 @@ fun TrainsContent(
                 val card =
                     withTimeoutOrNull(PNR_CHECK_LOOKUP_TIMEOUT_MILLIS) {
                         listViewModel.uiState
-                            .map { state -> state.cards.firstOrNull { it.ticket.id == initialTicketId } }
+                            .map { state -> state.cards.firstOrNull { it.ticket.id == ticketId } }
                             .filterNotNull()
                             .first()
                     }
@@ -166,10 +177,20 @@ fun TrainsContent(
                     screen = TrainsScreen.PnrCheck(ticketId = card.ticket.id, pnr = card.ticket.pnr)
                 } else {
                     screen = TrainsScreen.List
-                    detailTicketId = initialTicketId
+                    detailTicketId = ticketId
                 }
             }
         }
+    }
+
+    LaunchedEffect(initialTicketId, initialAction, landingNonce) {
+        if (initialTicketId == null) return@LaunchedEffect
+        // Consume FIRST so the landing can never fire again, and run the action on the
+        // segment's own scope: consuming clears the host's landing, which re-keys this
+        // effect to null on the next frame and would otherwise cancel the in-flight
+        // notice / card lookup along with it.
+        landingNonce?.let(onLandingConsumed)
+        scope.launch { landOn(initialTicketId, initialAction) }
     }
 
     LaunchedEffect(addRequest) {
