@@ -3,6 +3,7 @@ package com.itsluminous.cleartravel.feature.flights.status
 import java.net.URLEncoder
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 /**
  * Fallbacks and per-rule quirks of the flight status scrape flow.
@@ -47,5 +48,10 @@ object FlightStatusFallbacks {
         mapOf(
             // airindia.com result URLs use ?fno=101&on=20260920 (recon capture).
             "airindia" to DateTimeFormatter.ofPattern("uuuuMMdd"),
+            // Google search query words: `SG+128+flight+status+22+September+2026`. A bare
+            // query pre-selects the NEXT operating day once today's departure time has
+            // passed (SG 128 on 2026-09-22 was cancelled — Google showed Wed 23 Sept);
+            // spelling the date out makes Google select the journey's tab (ADR-026 v2).
+            GoogleFlightsExtractor.RULE_ID to DateTimeFormatter.ofPattern("d'+'MMMM'+'uuuu", Locale.ENGLISH),
         )
 }

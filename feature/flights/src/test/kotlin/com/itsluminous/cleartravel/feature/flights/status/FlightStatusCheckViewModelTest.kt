@@ -136,7 +136,7 @@ class FlightStatusCheckViewModelTest {
     // ---- ADR-026: airline-agnostic Google flight-status panel fallback ----
 
     @Test
-    fun `unknown airline runs the google panel rule with the airline code and bare flight number`() =
+    fun `unknown airline runs the google panel rule with the airline code, bare flight number and the journey date`() =
         runTest {
             val indigo = Fixtures.flightJourney(airlineIata = "6e", flightNumber = "02001", date = CAPTURE_DAY)
             repository.seed(indigo)
@@ -147,7 +147,7 @@ class FlightStatusCheckViewModelTest {
             val state = viewModel.uiState.value as StatusCheckUiState.Scraping
             assertThat(state.viaWebSearch).isTrue()
             assertThat(state.session.rule.id).isEqualTo(GoogleFlightsExtractor.RULE_ID)
-            assertThat(state.session.startUrl).isEqualTo("https://www.google.com/search?q=6E+2001+flight+status&hl=en")
+            assertThat(state.session.startUrl).isEqualTo("https://www.google.com/search?q=6E+2001+flight+status+22+September+2026&hl=en")
         }
 
     @Test
@@ -262,7 +262,7 @@ class FlightStatusCheckViewModelTest {
             val google = viewModel.uiState.value as StatusCheckUiState.Scraping
             assertThat(google.attempt).isEqualTo(2)
             assertThat(google.viaWebSearch).isTrue()
-            assertThat(google.session.startUrl).contains("q=AI+101+flight+status")
+            assertThat(google.session.startUrl).contains("q=AI+101+flight+status+22+September+2026")
 
             // A later plain retry stays on Google for this check.
             google.session.onHtmlDumped(googleFixture("no-panel.html"))

@@ -30,10 +30,19 @@ import kotlin.math.abs
  * original time when a flight deviates from schedule. Google's obfuscated CSS classes
  * are never touched.
  *
- * Safety rule: the card must be for the journey's DATE (the selected date tab, or the
- * departure column's own date caption); anything else returns null rather than writing
+ * Safety rule: the card must be for the journey's DATE (the departure column's own date
+ * caption, else the selected date tab); anything else returns null rather than writing
  * another day's gate/times onto the saved flight. Times are airport-local without a
  * timezone; like [AirlineStatusMapper] they are interpreted in [zone] (best effort).
+ *
+ * Live-DOM lessons pinned by the `live-*` fixtures (2026-09-22 validation, ADR-026 v2):
+ * the panel renders every card TWICE (a second copy lives in a hidden `role=dialog`
+ * with its own tab strip — skipped); one date can hold SEVERAL cards (6E 9468
+ * AUH→BLR + BLR→IXE — chosen by the journey's date, then airports, then scheduled
+ * departure time); a CANCELLED card keeps the `Scheduled departure` caption but drops
+ * the time value, leaving only the `<del>` original (used as the schedule); header
+ * wording seen live: `Scheduled`, `On time`, `Departing on time`, `Departing late`,
+ * `Arrived`, `Arrived late`, `Diverted`, `Cancelled`.
  */
 object GoogleFlightsExtractor {
     /** Id of the rule file this parser pairs with. */
@@ -84,9 +93,11 @@ object GoogleFlightsExtractor {
     ): FlightStatusResult? {
         val flightDate = flight.date ?: return null
         val panel = parse(html) ?: return null
-        val card = pickCard(panel.cards, flight) ?: return null
+        val card = pickCard(panel.cards, flight, zone) ?: return null
 
-        // Date guard: the card must describe the saved journey's day.
+        // Date guard: the card must describe the saved journey's day. pickCard already
+        // preferred a card whose own caption carries that day; a card without a caption
+        // falls back to the selected tab.
         val depDate =
             resolveDate(card.departure?.cityDate, flightDate)
                 ?: resolveDate(panel.selectedDate, flightDate)
@@ -104,9 +115,11 @@ object GoogleFlightsExtractor {
         val arrTime = parseTime(arr?.time)
         val arrOriginal = parseTime(arr?.original)
 
-        val schedDepTime = if (depIsActual) depOriginal ?: depTime else depTime
+        // A cancelled card keeps the "Scheduled …" caption but shows no time value —
+        // only the struck original — so the original IS the schedule then.
+        val schedDepTime = if (depIsActual) depOriginal ?: depTime else depTime ?: depOriginal
         val estDepTime = if (depIsActual) depTime else null
-        val schedArrTime = if (arrIsActual) arrOriginal ?: arrTime else arrTime
+        val schedArrTime = if (arrIsActual) arrOriginal ?: arrTime else arrTime ?: arrOriginal
         val estArrTime = if (arrIsActual) arrTime else null
 
         val status = deriveStatus(card, depTime, depOriginal)
@@ -152,12 +165,16 @@ object GoogleFlightsExtractor {
         val scope = selectedPanel?.takeIf { it.selectFirst("[role=button][aria-expanded]") != null } ?: root
         val cards =
             scope.select("[role=button][aria-expanded]").mapNotNull { header ->
+                if (insideDialog(header)) return@mapNotNull null
                 if (scope === root && insideOtherTabPanel(header, selectedPanel)) return@mapNotNull null
                 val details = detailsFor(scope, header) ?: return@mapNotNull null
                 parseCard(header, details)
             }
         return Panel(flightLabel = flightLabel, selectedDate = selectedDate, cards = cards)
     }
+
+    /** The live page keeps a hidden duplicate of the whole card inside an "About this result"/share `role=dialog`. */
+    private fun insideDialog(element: Element): Boolean = element.parents().any { it.attr("role") == "dialog" }
 
     private fun insideOtherTabPanel(
         element: Element,
@@ -240,12 +257,16 @@ object GoogleFlightsExtractor {
     /** Label element → its column: value is the next sibling, Terminal/Gate are sibling rows. */
     private fun parseSide(label: Element): Side {
         val timeCell = label.parent() ?: label
+        // The value sits in the next sibling; a cancelled card has none (the sibling is
+        // the "Originally scheduled …" note), so only a time-shaped text counts.
         val time =
             label
                 .nextElementSibling()
                 ?.text()
                 .orEmpty()
                 .clean()
+                .takeIf { parseTime(it) != null }
+                .orEmpty()
         val original =
             timeCell
                 .selectFirst("del")
@@ -284,24 +305,51 @@ object GoogleFlightsExtractor {
         )
     }
 
-    /** Prefer the card leaving the journey's departure airport, then its arrival airport. */
+    /**
+     * Card disambiguation (live 6E 9468: two legs on ONE date; live SG 128 bare query:
+     * the card of another day). Order: cards whose departure caption names the journey's
+     * date (when any card carries a date caption at all) → the journey's departure
+     * airport → its arrival airport → its scheduled departure time (airport-local, read
+     * in [zone]) → the first remaining card.
+     */
     internal fun pickCard(
         cards: List<Card>,
         flight: FlightJourney,
+        zone: ZoneId = ZoneId.systemDefault(),
     ): Card? {
         if (cards.isEmpty()) return null
+        val flightDate = flight.date
+        val dated =
+            if (flightDate == null) {
+                cards
+            } else {
+                val withDates = cards.filter { resolveDate(it.departure?.cityDate, flightDate) != null }
+                if (withDates.isEmpty()) cards else withDates.filter { resolveDate(it.departure?.cityDate, flightDate) == flightDate }
+            }
+        val candidates = dated.ifEmpty { return null }
         val dep = flight.depAirport.trim().uppercase(Locale.ROOT)
         val arr = flight.arrAirport.trim().uppercase(Locale.ROOT)
-        return cards.firstOrNull { dep.isNotEmpty() && it.originCode == dep }
-            ?: cards.firstOrNull { arr.isNotEmpty() && it.destCode == arr }
-            ?: cards.first()
+        val schedDep = flight.schedDep?.atZone(zone)?.toLocalTime()
+        return candidates.firstOrNull { dep.isNotEmpty() && it.originCode == dep }
+            ?: candidates.firstOrNull { arr.isNotEmpty() && it.destCode == arr }
+            ?: candidates.firstOrNull { schedDep != null && it.scheduledDeparture() == schedDep }
+            ?: candidates.first()
+    }
+
+    /** The card's scheduled departure: the struck original when it deviated, else the shown time. */
+    private fun Card.scheduledDeparture(): LocalTime? {
+        val side = departure ?: return null
+        return parseTime(side.original) ?: parseTime(side.time)
     }
 
     /**
      * Header/caption vocabulary → [FlightStatus]. "On time" / "Departing on time" /
      * "Scheduled" are all SCHEDULED unless the captions say the flight has already
      * moved; a later-than-original departure time means DELAYED (a struck-through
-     * EARLIER time — Google shows early running the same way — does not).
+     * EARLIER time — Google shows early running the same way — does not). Live
+     * wording (2026-09-22): "Departing late" → DELAYED, "Arrived late" → LANDED (it
+     * did land; the late-ness lives in the times), "Diverted" carries no status of
+     * its own and falls through to the captions (Landed → LANDED, Departed → DEPARTED).
      */
     internal fun deriveStatus(
         card: Card,
@@ -321,8 +369,8 @@ object GoogleFlightsExtractor {
                 .lowercase(Locale.ROOT)
         return when {
             "cancel" in header -> FlightStatus.CANCELLED
-            "delay" in header -> FlightStatus.DELAYED
             "landed" in arrLabel || "arrived" in arrLabel || "landed" in header || "arrived" in header -> FlightStatus.LANDED
+            "delay" in header || "late" in header -> FlightStatus.DELAYED
             "departed" in depLabel || "in air" in header || "departed" in header || "en route" in header -> FlightStatus.DEPARTED
             isLater(depTime, depOriginal) -> FlightStatus.DELAYED
             "board" in header || "gate" in header -> FlightStatus.BOARDING

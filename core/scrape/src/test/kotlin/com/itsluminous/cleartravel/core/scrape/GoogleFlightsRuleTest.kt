@@ -47,11 +47,13 @@ class GoogleFlightsRuleTest {
     }
 
     @Test
-    fun `start url expands the airline code and flight number into the query`() {
-        val session = RuleDrivenScrapeSession(rule, ScrapeParams(airlineIata = "6E", flightNumber = "2001"))
+    fun `start url expands the airline code, flight number and spelled-out date into the query`() {
+        // The date words are what make Google select the journey's day tab (v2, live validation:
+        // a bare "SG 128 flight status" pre-selected the next operating day).
+        val session = RuleDrivenScrapeSession(rule, ScrapeParams(airlineIata = "6E", flightNumber = "2001", date = "22+September+2026"))
 
         assertThat(session.startUrl)
-            .isEqualTo("https://www.google.com/search?q=6E+2001+flight+status&hl=en")
+            .isEqualTo("https://www.google.com/search?q=6E+2001+flight+status+22+September+2026&hl=en")
         assertThat(session.dismissJavaScript()).contains("#L2AGLb")
         assertThat(session.submitJavaScript()).isNull()
         assertThat(session.readySignalJavaScript()).contains("data-bkt")
@@ -86,6 +88,22 @@ class GoogleFlightsRuleTest {
         assertThat(fields["headerStatus"]).isEqualTo("Arrived")
         assertThat(fields["source"]).isEqualTo("Cirium")
         assertThat(fields["mainStatuses"]).isEmpty() // blob absent on the live page — optional by design
+    }
+
+    @Test
+    fun `live cancelled dump (SG 128, duplicate card in a hidden dialog) satisfies the rule with a Cancelled header`() {
+        val html = requireNotNull(RuleFixtureHarness.fixtureText("google-flights", "live-cancelled-sg128.html"))
+
+        val result = RuleExtractor.extract(rule, html)
+
+        assertThat(result).isInstanceOf(ExtractionResult.Success::class.java)
+        val fields = (result as ExtractionResult.Success).data.fields
+        assertThat(fields["flightLabel"]).isEqualTo("SpiceJet SG 128")
+        assertThat(fields["selectedDate"]).isEqualTo("Tue, 22 Sept")
+        assertThat(fields["headerStatus"]).isEqualTo("Cancelled")
+        assertThat(fields["source"]).isEqualTo("OAG")
+        // Google's own per-day enum list — diagnostics only; the rendered card decides.
+        assertThat(fields["mainStatuses"]).isEqualTo("ARRIVED_DELAYED, CANCELED, SCHEDULED_STATUS, SCHEDULED_STATUS")
     }
 
     @Test

@@ -38,6 +38,15 @@ class FlightStatusFallbacksTest {
     }
 
     @Test
+    fun `google flight-status dates are spelled out as query words`() {
+        // "SG 128 flight status 22 September 2026" makes Google select the journey's tab (ADR-026 v2).
+        assertThat(FlightStatusFallbacks.formatDateForRule(GoogleFlightsExtractor.RULE_ID, LocalDate.parse("2026-09-22")))
+            .isEqualTo("22+September+2026")
+        assertThat(FlightStatusFallbacks.formatDateForRule(GoogleFlightsExtractor.RULE_ID, LocalDate.parse("2027-01-05")))
+            .isEqualTo("5+January+2027")
+    }
+
+    @Test
     fun `unknown rules default to ISO dates`() {
         val formatted = FlightStatusFallbacks.formatDateForRule("someairline", LocalDate.parse("2026-09-20"))
 
