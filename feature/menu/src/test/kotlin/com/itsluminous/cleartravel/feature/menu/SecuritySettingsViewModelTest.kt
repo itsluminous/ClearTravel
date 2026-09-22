@@ -116,7 +116,7 @@ class SecuritySettingsViewModelTest {
     fun lockTiming_isPersistedThroughSettings() =
         runTest {
             val viewModel = viewModel()
-            assertThat(viewModel.uiState.value.lockTiming).isEqualTo(LockTiming.NEVER)
+            assertThat(viewModel.uiState.value.lockTiming).isEqualTo(LockTiming.ONE_MINUTE) // ADR-034 default
             viewModel.setLockTiming(LockTiming.FIVE_MINUTES)
             assertThat(viewModel.uiState.value.lockTiming).isEqualTo(LockTiming.FIVE_MINUTES)
         }

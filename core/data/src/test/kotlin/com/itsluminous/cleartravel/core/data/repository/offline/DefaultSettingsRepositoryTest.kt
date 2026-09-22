@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.model.ThemeMode
+import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -108,5 +109,18 @@ class DefaultSettingsRepositoryTest {
 
             repository.setOnboardingPending(false)
             assertThat(repository.onboardingPending.first()).isFalse()
+        }
+
+    @Test
+    fun `lock timing defaults to one minute, and an explicit choice is kept over the default`() =
+        runTest(testDispatcher) {
+            // ADR-034: the fallback is 1 minute; it is never written, so a stored value wins.
+            assertThat(repository.lockTiming.first()).isEqualTo(LockTiming.ONE_MINUTE)
+
+            repository.setLockTiming(LockTiming.NEVER)
+            assertThat(repository.lockTiming.first()).isEqualTo(LockTiming.NEVER)
+
+            repository.setLockTiming(LockTiming.IMMEDIATELY)
+            assertThat(repository.lockTiming.first()).isEqualTo(LockTiming.IMMEDIATELY)
         }
 }

@@ -17,12 +17,18 @@ enum class LockTiming(
     FIVE_MINUTES("5m", Duration.ofMinutes(5)),
     FIFTEEN_MINUTES("15m", Duration.ofMinutes(15)),
 
-    /** Only a cold start locks (the default — a process death forgets the DEK anyway). */
+    /** Only a cold start locks (a process death forgets the DEK anyway). */
     NEVER("never", null),
     ;
 
     companion object {
-        val DEFAULT = NEVER
+        /**
+         * ADR-034: one minute. Long enough to switch to a wallet/SMS app and back at a
+         * counter without re-authenticating, short enough that a phone left on a table
+         * re-locks. Only the DataStore FALLBACK changes — an explicitly chosen value is
+         * stored under its own key and keeps winning.
+         */
+        val DEFAULT = ONE_MINUTE
 
         fun fromStorage(value: String?): LockTiming = entries.firstOrNull { it.storageValue == value } ?: DEFAULT
     }

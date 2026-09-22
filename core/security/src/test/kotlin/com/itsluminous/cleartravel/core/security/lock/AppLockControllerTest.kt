@@ -70,6 +70,6 @@ class AppLockControllerTest {
     fun lockTiming_storageRoundTrip_unknownFallsBackToDefault() {
         for (timing in LockTiming.entries) assertThat(LockTiming.fromStorage(timing.storageValue)).isEqualTo(timing)
         assertThat(LockTiming.fromStorage("garbage")).isEqualTo(LockTiming.DEFAULT)
-        assertThat(LockTiming.fromStorage(null)).isEqualTo(LockTiming.NEVER)
+        assertThat(LockTiming.fromStorage(null)).isEqualTo(LockTiming.ONE_MINUTE)
     }
 }
