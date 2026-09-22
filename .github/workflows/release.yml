@@ -34,10 +34,10 @@ jobs:
       # to a debug-keystore-signed release APK instead of failing.
       HAS_SIGNING_SECRETS: >-
         ${{
-          secrets.KEYSTORE_BASE64 != '' &&
-          secrets.KEYSTORE_PASSWORD != '' &&
-          secrets.KEY_ALIAS != '' &&
-          secrets.KEY_PASSWORD != ''
+          secrets.SIGNING_KEYSTORE_BASE64 != '' &&
+          secrets.SIGNING_KEYSTORE_PASSWORD != '' &&
+          secrets.SIGNING_KEY_ALIAS != '' &&
+          secrets.SIGNING_KEY_PASSWORD != ''
         }}
     steps:
       - uses: actions/checkout@v4
@@ -65,7 +65,7 @@ jobs:
 
       - name: Decode release keystore
         if: env.HAS_SIGNING_SECRETS == 'true'
-        run: printf '%s' "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/keystore.jks"
+        run: printf '%s' "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/keystore.jks"
 
       # Without signing secrets an unsigned release APK would be produced, which
       # Android refuses to install. Fall back to a standard debug keystore so the
@@ -81,9 +81,9 @@ jobs:
       # versionName derives from the tag (v0.1.0 -> 0.1.0); versionCode from run number.
       - name: Assemble release APK
         env:
-          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: |
           if [ "$HAS_SIGNING_SECRETS" = "true" ]; then
             export SIGNING_KEYSTORE_FILE="$RUNNER_TEMP/keystore.jks"
