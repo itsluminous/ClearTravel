@@ -2,8 +2,18 @@
 <resources>
     <string name="designsystem_reorder_handle">Reorder</string>
 
-    <!-- Shared full-brightness document viewer (ADR-027). -->
+    <!-- Shared full-brightness document viewer (ADR-027, upgraded in ADR-030). -->
     <string name="designsystem_viewer_close">Close</string>
     <string name="designsystem_viewer_image_description">Stored document</string>
     <string name="designsystem_viewer_missing">This file is no longer available on the device.</string>
+    <string name="designsystem_viewer_rotate">Rotate 90°</string>
+    <string name="designsystem_viewer_share">Share file</string>
+    <string name="designsystem_viewer_share_chooser">Share document</string>
+    <string name="designsystem_viewer_share_failed">Couldn\'t share this file.</string>
+    <string name="designsystem_viewer_save">Save a copy</string>
+    <string name="designsystem_viewer_save_done">Copy saved.</string>
+    <string name="designsystem_viewer_save_failed">Couldn\'t save a copy.</string>
+    <string name="designsystem_viewer_previous_page">Previous page</string>
+    <string name="designsystem_viewer_next_page">Next page</string>
+    <string name="designsystem_viewer_page_indicator">Page %1$d of %2$d</string>
 </resources>

@@ -9,7 +9,8 @@ import com.itsluminous.cleartravel.feature.flights.R
 /**
  * Offline boarding-pass display for the gate (spec feature 2): the shared
  * full-brightness [DocumentViewerScreen] (hoisted into `core:designsystem` in
- * ADR-027) under a flights-owned title.
+ * ADR-027; zoom/pan, rotate, share and save-a-copy added in ADR-030) under a
+ * flights-owned title. Also used for booking confirmations via [titleRes].
  */
 @Composable
 fun BoardingPassViewerScreen(

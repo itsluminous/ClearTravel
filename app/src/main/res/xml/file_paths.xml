@@ -1,7 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- FileProvider roots: only the share-image scratch directory is exposed. -->
+<!--
+  FileProvider roots. Only directories the app itself hands out are exposed:
+  - cache/share/            rendered share images (ADR-020)
+  - files/documents/        travel documents (ADR-027)
+  - files/boarding_passes/  imported boarding passes (ADR-004)
+  - files/attachments/      booking confirmations + backup-restored attachments (ADR-017)
+  The last three back the shared viewer's Share action (ADR-030).
+-->
 <paths>
     <cache-path
         name="share"
         path="share/" />
+    <files-path
+        name="documents"
+        path="documents/" />
+    <files-path
+        name="boarding_passes"
+        path="boarding_passes/" />
+    <files-path
+        name="attachments"
+        path="attachments/" />
 </paths>
