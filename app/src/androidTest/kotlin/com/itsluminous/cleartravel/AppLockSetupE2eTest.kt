@@ -1,6 +1,8 @@
 package com.itsluminous.cleartravel
 
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
@@ -96,12 +98,23 @@ class AppLockSetupE2eTest {
         confirmField.performTextInput("e2e-password-one")
         composeRule.onNodeWithText(create).performScrollTo().performClick()
 
-        // ---- Step 2: Google (unconfigured build → connect disabled, offline continues) ----
+        // ---- Step 2: Google — the Connect button follows the BUILD's client id (an
+        // unconfigured build disables it with an explanation; a build with
+        // GOOGLE_WEB_CLIENT_ID in local.properties enables it), "Use offline" continues
+        // either way. Asserting only the unconfigured branch made this test depend on
+        // the developer's local.properties.
         composeRule.waitForText(composeRule.string(AppLockR.string.applock_onboarding_google_title))
         check(keyVault.state.value is VaultState.Unlocked)
         check(runBlocking { settingsRepository.onboardingPending.first() })
-        composeRule.onNodeWithText(composeRule.string(AppLockR.string.applock_onboarding_google_connect)).assertIsNotEnabled()
-        composeRule.onNodeWithText(composeRule.string(AppLockR.string.applock_onboarding_google_not_configured)).assertIsDisplayed()
+        val connect = composeRule.onNodeWithText(composeRule.string(AppLockR.string.applock_onboarding_google_connect))
+        val notConfigured = composeRule.string(AppLockR.string.applock_onboarding_google_not_configured)
+        if (BuildConfig.GOOGLE_WEB_CLIENT_ID.isBlank()) {
+            connect.assertIsNotEnabled()
+            composeRule.onNodeWithText(notConfigured).assertIsDisplayed()
+        } else {
+            connect.assertIsEnabled()
+            composeRule.onAllNodesWithText(notConfigured).assertCountEquals(0)
+        }
         composeRule.onNodeWithText(composeRule.string(AppLockR.string.applock_onboarding_google_offline)).performClick()
 
         // ---- Step 3: restore or start fresh (no Drive card when offline) ----
