@@ -17,10 +17,10 @@ Package root: `com.itsluminous.cleartravel`.
 
 | Module | Contents | Status |
 |---|---|---|
-| `app` | Hilt application, MainActivity (single-activity Compose), bottom bar (Trips / Journeys / Checklist / Menu), NavHost, Journeys Trains\|Flights segmented composition, deep links, launcher icon, manifest (Maps key placeholder), androidTest e2e suite (4 classes, Hilt test modules) | done |
-| `core:designsystem` | `ClearTravelTheme` (dynamic color + #0B57D0 seed fallback), typography ≥16sp body, `EmptyState`, `ChipRow`, `ExplainableIcon`, `ClearTravelCard`, `ClearTravelFab` | done |
+| `app` | Hilt application, MainActivity (single-activity Compose), bottom bar (Trips / Journeys / Checklist / Documents / Menu), NavHost, Journeys Trains\|Flights segmented composition, deep links, launcher icon, manifest (Maps key placeholder), androidTest e2e suite (4 classes, Hilt test modules) | done |
+| `core:designsystem` | `ClearTravelTheme` (dynamic color + #0B57D0 seed fallback), typography ≥16sp body, `EmptyState`, `ChipRow`, `ExplainableIcon`, `ClearTravelCard`, `ClearTravelFab`, `DocumentViewerScreen` (shared full-brightness image/PDF viewer) | done |
 | `core:model` | `SyncableEntity` (UUID + updatedAt + tombstone, ADR-002), `EntityIds`, `ThemeMode`, domain models/enums — **contract: changes need an ADR** | done |
-| `core:database` | Room entities/DAOs/converters, `ClearTravelDatabase` — **contract: changes need an ADR** | done |
+| `core:database` | Room entities/DAOs/converters, `ClearTravelDatabase` (schema v3: v2 `train_coaches`, v3 `travel_documents`; committed `schemas/` + `MigrationTest`) — **contract: changes need an ADR** | done |
 | `core:data` | Repository interfaces + Room-backed impls, `TrainStatusProvider`/`FlightStatusProvider` contracts (Hilt-bound), settings DataStore, backup export/merge (ADR-002, `docs/backup-format.md`) | done |
 | `core:notifications` | Channels (trains/flights/reminders), builders, deep links, POST_NOTIFICATIONS permission gate | done |
 | `core:google` | Google linking (Credential Manager), Calendar sync (dedicated "ClearTravel" calendar), Drive uploads/backups + restore ladder, sync workers | done (needs-user-setup: `GOOGLE_WEB_CLIENT_ID`, see `docs/google-setup.md`) |
@@ -31,6 +31,7 @@ Package root: `com.itsluminous.cleartravel`.
 | `feature:flights` | Flight CRUD, boarding-pass import, status check WebView + failure banner/retry + outcome line, check-in windows data, WorkManager polling + notifications | done (on-device validated; Air India rule verified live) |
 | `feature:itinerary` | Trips tab: trips, day-grouped items, timeline + Google Maps view | done (map needs-user-setup: `MAPS_API_KEY` + Play-services device) |
 | `feature:checklist` | Checklist tab: per-trip checklists, preset templates + manager | done |
+| `feature:documents` | Documents tab: travel documents (passport, visa, …) as local files with typed labels + expiry, add via system picker, full-brightness viewer, edit/delete (ADR-027; local-only, Drive sync is a follow-up) | done (build-only; device validation pending) |
 | `feature:menu` | Menu tab: Settings (theme, presets, Google account), Backup/Restore (local + Drive), About | done |
 
 **Ownership boundaries:** feature modules depend ONLY on `core:*`, NEVER on each other;
@@ -59,7 +60,7 @@ exist and the full gate passes.
 1. **No hardcoded user-visible strings** — not in Kotlin, not in Compose, not in
    notifications. Every string goes in a `res/values/strings.xml` (module-local for
    feature/core modules, `app` for shell strings), prefixed with the module namespace
-   (`trains_`, `flights_`, `itinerary_`, `checklist_`, `menu_`). Lint `HardcodedText`/
+   (`trains_`, `flights_`, `itinerary_`, `checklist_`, `documents_`, `menu_`). Lint `HardcodedText`/
    `SetTextI18n` are error-severity and CI-blocking. Single language (English) at
    launch, but the no-hardcoding discipline is non-negotiable from day one.
 2. **Offline-first**: reads from Room only; every screen renders with no network.

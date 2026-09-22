@@ -22,6 +22,10 @@ optional Google account link for Calendar/Drive sync.
   plus a Google Maps view of the trip (needs a Maps key and Play services).
 - **Packing checklists** — per-trip checklists built from editable preset templates
   (append multiple presets, track packed counts).
+- **Travel documents** — keep scans of your passport, visas, ID, insurance and
+  tickets as local files with typed labels and optional expiry dates (expiring-soon
+  and expired flags), opened in a full-brightness viewer. Stored on-device only and
+  included in backups.
 - **Backup & restore** — versioned local export/import with tombstone-aware merge
   (see `docs/backup-format.md`), plus optional Google Drive backups with a restore
   ladder on fresh installs.
@@ -41,7 +45,7 @@ Multi-module Gradle project, package root `com.itsluminous.cleartravel`:
 | Design | `core:designsystem` (theme + shared components) |
 | Contracts | `core:model` (syncable domain models), `core:database` (Room), `core:data` (repositories, status-provider interfaces, settings, backup) |
 | Engines | `core:scrape` (rule-driven WebView scraper), `core:ocr` (ML Kit text + BCBP), `core:notifications`, `core:google` (Calendar/Drive sync) |
-| Features | `feature:trains`, `feature:flights`, `feature:itinerary`, `feature:checklist`, `feature:menu` |
+| Features | `feature:trains`, `feature:flights`, `feature:itinerary`, `feature:checklist`, `feature:documents`, `feature:menu` |
 | Test infra | `core:testing` |
 
 Key principles (full details in `AGENTS.md` and `docs/decisions.md`):

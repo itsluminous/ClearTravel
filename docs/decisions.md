@@ -1194,3 +1194,96 @@ told and can jump to the existing card. Test fakes of `FlightRepository`
 (feature:flights, feature:itinerary, core:google) implement `findByFlight` through
 `FlightIdentity`. E2E: `FlightsE2eTest.addSameFlightTwice_isRefusedWithNotice_andKeepsOneCard`
 (second pass types `0777` against a stored `777`).
+
+## ADR-027 — Documents tab: `travel_documents` (schema v3), local-only files, shared viewer (2026-09-22)
+
+*(ADR-026 is reserved for a sibling change landing in parallel; numbers are not
+reordered.)*
+
+**Context.** Travellers carry passport/visa/ID/insurance scans that belong to no
+journey or trip. The app had files only as `Attachment` rows owned by a train,
+flight or itinerary item (ADR-004/ADR-016), and a full-brightness viewer buried in
+`feature:flights` (ADR-017).
+
+**Decision.**
+
+1. **First-class entity, not an `Attachment`.** New `core:model`
+   `TravelDocument(id, name, type, filePath, mimeType, addedAt, expiryDate?, note,
+   driveFileId?, updatedAt, deletedAt)` + `TravelDocumentType`
+   (`PASSPORT`, `VISA`, `ID_CARD`, `DRIVING_LICENSE`, `INSURANCE`, `VACCINATION`,
+   `TICKET`, `OTHER`; stored by `storageValue`, unknown → `OTHER`). *Alternative
+   considered — reuse `Attachment` with a new `AttachmentOwnerType.DOCUMENT` and a
+   sentinel owner id:* **rejected**. Documents are not owned (no cascade delete, no
+   owner sheet), need their own label/type/expiry columns, and shoe-horning them into
+   the polymorphic owner table would leak a fake owner id into every attachment query
+   and the Drive engine.
+2. **Schema v3 — `travel_documents`** (second migration, same discipline as
+   ADR-022). `DatabaseConstants.SCHEMA_VERSION = 3`, hand-written additive
+   `DatabaseMigrations.MIGRATION_2_3` (`CREATE TABLE IF NOT EXISTS travel_documents`,
+   no index — reads are `ORDER BY added_at DESC` over a small table), exported
+   `schemas/3.json` committed, `MigrationTest` gains a v2→v3 case (real v2 file with a
+   coach row) and its v1→current case now also exercises the new table.
+   `TravelDocumentDao`: `observeAll` (live, newest first), `observeById`, `getById`,
+   `getPendingDriveUploads`, `upsert`, `softDelete` (tombstone + `updated_at` in one
+   write). `BackupDao` gains `dumpTravelDocuments` / `upsertTravelDocuments`.
+   `Converters` map the enum. `Fixtures.travelDocument` added.
+3. **`core:data`** — `TravelDocumentRepository` (`observeAll`, `observeDocument`,
+   `getDocument`, `getPendingDriveUploads`, `save` with bumped `updatedAt`, soft
+   `delete`) bound to Room-backed `OfflineTravelDocumentRepository`; the DAO is
+   provided by `DatabaseModule` (mirrored in the app's hermetic e2e modules).
+   `TravelDocumentStorage` fixes the file layout `filesDir/documents/<id>.<ext>` so
+   the feature (writes) and the backup engine (restores) agree without either
+   importing the other.
+4. **Drive: LOCAL-ONLY now, column reserved.** `driveFileId` exists and is always
+   null; `getPendingDriveUploads` is implemented but nothing drains it. *Alternatives
+   considered:* (a) also writing an `Attachment` row per document so
+   `DriveUploadEngine` picks it up for free — rejected, it duplicates every row and
+   re-introduces the fake-owner problem; (b) extending `DriveUploadEngine` to drain a
+   second queue — deferred: `core:google` is out of scope for this change and the
+   restore ladder (ADR-016) would need a document-aware branch. The follow-up is a
+   `core:google` change that drains `TravelDocumentRepository.getPendingDriveUploads`
+   into a `ClearTravel/documents/` Drive folder and resolves `driveFileId` on restore;
+   no schema change will be needed.
+5. **Backup (ADR-015, additive, NO `schemaVersion` bump).** `TravelDocumentDto` +
+   mappers, `entities/travel_documents.json`, manifest key `travel_documents`. File
+   bytes follow the attachment rule: bundled at `attachments/<documentId>` when
+   `driveFileId == null` and the file exists (UUID ids keep the two id spaces
+   disjoint). Import merges LWW like every entity; a winning bundled row is extracted
+   to `filesDir/documents/<id>.<ext>` — the ORIGINAL extension is kept because the
+   viewer decides PDF-vs-image by it — and `filePath` re-pointed. Pre-ADR-027 backups
+   import with zero documents (tested); missing files export as row-only (tested).
+6. **Shared viewer hoisted.** `BoardingPassViewerScreen`'s body moved to
+   `core:designsystem` as `DocumentViewerScreen(path, title, onClose)` (image or first
+   PDF page, full brightness restored on dispose, white backing). The flights screen
+   keeps its signature and delegates; its three viewer strings became
+   `designsystem_viewer_*`. Chosen over replicating: the viewer has zero data
+   dependencies and two consumers now, exactly the `core:designsystem` bar.
+7. **`feature:documents`** (new module, `settings.gradle.kts` + module map).
+   `DocumentListScreen`: cards (type icon via `ExplainableIcon` whose explanation is
+   the type label, name, type line, expiry line — `Expires …` / `Expires soon · …`
+   (tertiary) / `Expired · …` (error)), `EmptyState`, `ClearTravelFab` →
+   `OpenDocument` picker (`image/*`, `application/pdf`) → `DocumentDetailsDialog`
+   (type preset `FilterChip`s in a `ChipRow`; name pre-filled from the preset until
+   the user types; optional expiry via the Material `DatePickerDialog` with a clear
+   icon; optional note) → `DocumentsViewModel.addDocument` copies FIRST through the
+   `DocumentFileStore` seam (`LocalDocumentFileStore`: `ContentResolver` copy into
+   `TravelDocumentStorage`, half-written targets deleted on failure) and saves the row
+   only after a successful copy (`AddFailed` snackbar otherwise). Tap → nested-NavHost
+   route `documents_viewer/{id}` → `DocumentViewerRoute` (Room-observed;
+   `Loading`/`Missing`/`Ready`) → shared viewer titled with the document name.
+   Long-press or the overflow `ExplainableIcon` → Open / Edit details / Delete
+   (confirm dialog; delete soft-deletes then removes the file). Expiry classification
+   is the pure `DocumentExpiry` (`SOON_DAYS = 180` — the ≥6-months-validity rule most
+   visa regimes apply to passports). Strings `documents_*`; presets are the enum
+   itself (`DocumentTypePresets`), so adding a type is model + strings, never UI.
+8. **Shell.** Fifth bottom tab "Documents" (`Icons.Filled.Folder`) between Checklist
+   and Menu, wired like Checklist (`documentsGraph()`, own nested NavHost, no shell
+   plumbing).
+
+**Consequences.** Documents work fully offline and survive backup/restore with their
+bytes. `core:model`/`core:database`/`core:data` grew additively only. Tests: 5 repo,
+2 migration, 5 backup (+3 existing tests widened to the new entity), 1 mapper, 8
+ViewModel, 7 expiry/preset/extension, 3 file-store = 31 new/extended unit tests; e2e
+`DocumentsE2eTest.seededDocument_appearsInList_andOpensViewer` (compiles in this
+change; device run in the validation stage). Drive sync of documents is the one
+documented gap.
