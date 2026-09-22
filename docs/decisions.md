@@ -632,7 +632,7 @@ milestone land without touching the engine.
   makes deletions and trip cascades detectable **without tombstone queries** (no
   `core:data` interface changes — repositories are consumed as-is), and rows
   restored from a backup with a `googleEventId` are ADOPTED (update, never a
-  duplicate insert). The dedicated "ClearTravel" calendar is created once (id
+  duplicate insert). The dedicated "Clear Travel" calendar is created once (id
   cached), verified per pass, recreated if deleted server-side; disconnect
   optionally deletes it via a cleanup worker. Trigger = one-shot work on
   enable/link + a 6-hourly periodic catch-up (`WorkManagerGoogleSyncScheduler`);
@@ -640,7 +640,7 @@ milestone land without touching the engine.
   saves — deliberately not wired into repositories this wave to keep `core:data`
   frozen.
 - **Drive uploads**: `DriveUploadEngine` drains
-  `AttachmentRepository.getPendingDriveUploads()` into the "ClearTravel" folder,
+  `AttachmentRepository.getPendingDriveUploads()` into the "Clear Travel" folder,
   persisting `driveFileId` via the repository. Boarding passes (a path on the
   flight row, no attachment row) are REGISTERED as FLIGHT `Attachment` rows keyed
   by local path exactly once, so one queue and one `driveFileId` column cover
@@ -892,7 +892,7 @@ steering (2026-09-21):
   chooser. Render/IO failure degrades to a TEXT-ONLY share of the same caption —
   never a dead button.
 - **PNR deep-link format** (`TicketShareLinks`, pure build + parse in ONE place):
-  `https://itsluminous.github.io/ClearTravel/pnr/<pnr>` is what we share, plus the
+  `https://cleartravel.itsluminous.com/pnr/<pnr>` is what we share, plus the
   custom-scheme twin `cleartravel://pnr/<pnr>`; both are `ACTION_VIEW`/`BROWSABLE`
   intent filters on `MainActivity`. **Not `autoVerify`**: there is no owned domain
   serving `assetlinks.json` yet, so the system chooser (browser vs. app) is the
@@ -1302,7 +1302,7 @@ flight or itinerary item (ADR-004/ADR-016), and a full-brightness viewer buried 
    second queue — deferred: `core:google` is out of scope for this change and the
    restore ladder (ADR-016) would need a document-aware branch. The follow-up is a
    `core:google` change that drains `TravelDocumentRepository.getPendingDriveUploads`
-   into a `ClearTravel/documents/` Drive folder and resolves `driveFileId` on restore;
+   into a `Clear Travel/documents/` Drive folder and resolves `driveFileId` on restore;
    no schema change will be needed.
 5. **Backup (ADR-015, additive, NO `schemaVersion` bump).** `TravelDocumentDto` +
    mappers, `entities/travel_documents.json`, manifest key `travel_documents`. File
@@ -1782,7 +1782,7 @@ observing journey changes into linked legs, geocoding a name-only Maps link.
 
 ## ADR-031 — At-rest encryption + app lock: vault, SQLCipher, CTEF/CTEB, backup v2, biometrics (2026-09-22)
 
-**Context.** Everything ClearTravel stores is sensitive (passports, tickets, travel
+**Context.** Everything Clear Travel stores is sensitive (passports, tickets, travel
 plans) and it all sat in plaintext: a Room database, files under `filesDir`, plain
 ZIP backups in app storage and on Drive. Requirements from the user: a user-set
 password encrypts ALL data and documents INCLUDING backups and Drive uploads (Drive
@@ -1929,7 +1929,7 @@ deliberately no recovery key, escrow or reset.
 7. **Background jobs before any unlock.** The DEK exists only in memory after an
    unlock; `FlightStatusWorker`, `CalendarSyncWorker` (reconcile; the calendar-delete
    action needs no database) and `DriveUploadWorker` check `KeyVault.isUnlocked`
-   first and, while locked, post ONE fixed-id "Unlock ClearTravel to sync"
+   first and, while locked, post ONE fixed-id "Unlock Clear Travel to sync"
    notification (`AppLockNotifier`, reminders channel, later posts replace it) and
    return success without re-chaining; the app-open re-kick (`AppStartupTasks`) and
    the periodic passes resume them, and the shell clears the nudge on unlock.
@@ -2025,7 +2025,7 @@ backup's password with copy explaining it MAY DIFFER from the one just created;
    advances — step 3 then shows `DriveCheck.NoAccess` instead of a listing.
 5. **Step 3 — restore or start fresh**: *Choose backup file* (SAF `OpenDocument`,
    any MIME — providers label backups inconsistently), the Drive card only when
-   linked (`DriveCheck`: `Checking` → `None` "No ClearTravel backups were found in
+   linked (`DriveCheck`: `Checking` → `None` "No Clear Travel backups were found in
    this Google Drive." with *Check again*, or `Found` — up to five newest rows, tap
    to download and restore), and *Start fresh* (writes the flag, lands in the app).
    Restore calls `BackupManager.importApply(uri, sourcePassword = null)` straight

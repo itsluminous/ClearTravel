@@ -1,6 +1,6 @@
-# Google Cloud setup for ClearTravel
+# Google Cloud setup for Clear Travel
 
-ClearTravel needs a Google Cloud project only for **client-side** keys: the Maps SDK
+Clear Travel needs a Google Cloud project only for **client-side** keys: the Maps SDK
 key (trip map view) and an OAuth client for the optional Google account features
 (Calendar sync, Drive uploads, backup to Drive). There is no server component.
 Everything degrades gracefully when these values are absent — the app builds and
@@ -35,7 +35,7 @@ In **APIs & Services → Library**, enable:
 ## 4. Configure the OAuth consent screen
 
 1. **APIs & Services → OAuth consent screen** (a.k.a. Google Auth Platform).
-2. User type **External**, app name "ClearTravel", your support email.
+2. User type **External**, app name "Clear Travel", your support email.
 3. Under **Data Access / Scopes**, add the two scopes the app requests
    incrementally:
    - `https://www.googleapis.com/auth/calendar.app.created`
@@ -96,13 +96,13 @@ prints `0` when the id was picked up.
 3. Tap Connect → account picker appears → pick a test-user account → snackbar
    "Connected as …" and the email is shown.
 4. Toggle **Calendar sync** on → the consent sheet asks for the calendar scope →
-   approve → within a minute (on network) a **"ClearTravel"** calendar appears in
+   approve → within a minute (on network) a **"Clear Travel"** calendar appears in
    Google Calendar with one event per itinerary item / train / flight. The primary
    calendar is never touched.
 5. Edit an itinerary item → the event updates on the next sync pass; delete a trip
    → its events disappear.
 6. Toggle **Drive uploads** on → approve the Drive scope → attachments and
-   boarding passes appear in a **"ClearTravel"** Drive folder.
+   boarding passes appear in a **"Clear Travel"** Drive folder.
 7. Toggle **Backup to Drive** on, then Menu → Backup & Restore → Export backup →
    the backup (a `.zip`-named file that is in fact a password-sealed envelope,
    ADR-031) appears in the Drive folder; export six times → only the 5 newest remain. Drive only ever receives
@@ -118,4 +118,4 @@ prints `0` when the id was picked up.
      Import restores your data (merge, never a wipe), asking for the source password
      when the backup came from another install.
 9. Disconnect from Settings → optional "Also delete calendar" removes the
-   ClearTravel calendar; local data is untouched.
+   Clear Travel calendar; local data is untouched.

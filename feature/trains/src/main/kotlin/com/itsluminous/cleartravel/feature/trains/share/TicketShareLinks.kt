@@ -9,15 +9,15 @@ import java.net.URI
  *
  * Two URI shapes are accepted, both declared as `ACTION_VIEW` intent filters on the
  * app's `MainActivity`:
- * - `https://itsluminous.github.io/ClearTravel/pnr/<pnr>` — the link we share (a
+ * - `https://cleartravel.itsluminous.com/pnr/<pnr>` — the link we share (a
  *   real web URL, so recipients without the app still get a page to land on).
  * - `cleartravel://pnr/<pnr>` — custom scheme, belt-and-braces for launchers that
  *   mangle https deep links.
  */
 object TicketShareLinks {
     const val HTTPS_SCHEME = "https"
-    const val HTTPS_HOST = "itsluminous.github.io"
-    const val HTTPS_PATH_PREFIX = "/ClearTravel/pnr/"
+    const val HTTPS_HOST = "cleartravel.itsluminous.com"
+    const val HTTPS_PATH_PREFIX = "/pnr/"
     const val CUSTOM_SCHEME = "cleartravel"
     const val CUSTOM_HOST = "pnr"
 

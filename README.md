@@ -1,4 +1,4 @@
-# ClearTravel
+# Clear Travel
 
 An offline-first, Material You Android travel companion. Track train PNRs and flight
 status, plan trip itineraries on a map, and pack with reusable checklists — all
@@ -48,7 +48,7 @@ optional Google account link for Calendar/Drive sync.
   weekly / monthly, off by default) writes the encrypted in-app copy on its own and,
   when Drive backups are on, uploads it to Drive right after.
 - **Google sync (optional)** — link a Google account (Credential Manager) to sync
-  journeys/trips into a dedicated "ClearTravel" calendar and keep Drive backups.
+  journeys/trips into a dedicated "Clear Travel" calendar and keep Drive backups.
   Fully optional; everything works without it.
 - **Material You** — dynamic color with a sensible seed fallback, dark/light/system
   theme, large accessible type, long-press explanations on every icon-only control.
@@ -60,7 +60,7 @@ optional Google account link for Calendar/Drive sync.
 - **Encrypted at rest, locked by you** — on first run you create a password; it
   protects a random master key that encrypts the database (SQLCipher), every stored
   document/boarding pass/attachment, and every backup — including the copies kept
-  in Google Drive, which only ClearTravel can read. Unlock with the password or,
+  in Google Drive, which only Clear Travel can read. Unlock with the password or,
   optionally, biometrics; password fields work with password managers. **There is
   no recovery: forget the password and the data is gone by design.**
 
@@ -103,7 +103,7 @@ Key principles (full details in `AGENTS.md` and `docs/decisions.md`):
   (that is the point of sharing); exported backups are encrypted with your password.
 - Background jobs (flight polling, calendar sync, Drive uploads) need the key, which
   exists only after you unlock the app in the current process; until then they post
-  a single "Unlock ClearTravel to sync" reminder and skip.
+  a single "Unlock Clear Travel to sync" reminder and skip.
 - Upgrading from a pre-encryption build converts the database and files in place on
   the first unlock; Drive files uploaded before the upgrade remain unencrypted until
   pruned or deleted.

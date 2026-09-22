@@ -1,4 +1,4 @@
-# ClearTravel backup format (schema version 2)
+# Clear Travel backup format (schema version 2)
 
 The frozen external contract behind `BackupManager` (ADR-015, encrypted since
 ADR-031). Everything here is versioned by `manifest.json`'s `schemaVersion`; readers

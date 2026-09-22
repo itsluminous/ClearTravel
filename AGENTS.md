@@ -1,10 +1,10 @@
-# AGENTS.md — ClearTravel
+# AGENTS.md — Clear Travel
 
 Instructions for AI agents (and humans) working in this repo. Read fully before editing.
 
 ## Project overview
 
-ClearTravel is an offline-first, Material You (dynamic color) Android travel companion:
+Clear Travel is an offline-first, Material You (dynamic color) Android travel companion:
 train journeys (PNR status via rule-driven WebView scraping), flight journeys
 (boarding-pass import, status polling, gate/delay notifications), trip itineraries on a
 map, and packing checklists. **Serverless**: no custom backend — Room is the single
@@ -24,7 +24,7 @@ Package root: `com.itsluminous.cleartravel`.
 | `core:data` | Repository interfaces + Room-backed impls, `TrainStatusProvider`/`FlightStatusProvider` contracts (Hilt-bound), settings DataStore (+ `lockTiming`, `backupSchedule`), backup export/merge — format v2 password envelope (ADR-015/031, `docs/backup-format.md`), `JourneyAddRequestBus` cross-tab seam (ADR-028), `security/`: `VaultKeyedOpenHelperFactory` (lazy SQLCipher), plaintext→encrypted DB + file migrations, `AppFileLayout`, `SecureStorageInitializer` | done |
 | `core:security` | ADR-031: `KeyVault` (random DEK wrapped by PBKDF2 password KEK + optional biometric Keystore key; `vault.json`), `LocalFileCipher` (CTEF chunked AES-GCM), `PortableCipher` (CTEB password envelope for backups/Drive), `BiometricKeyWrapper`/`BiometricUnlock`, `AppLockController` + `LockTiming`. Pure JVM except the Keystore/BiometricPrompt wrappers; never depends on data/database | done |
 | `core:notifications` | Channels (trains/flights/reminders), builders, deep links, POST_NOTIFICATIONS permission gate | done |
-| `core:google` | Google linking (Credential Manager), Calendar sync (dedicated "ClearTravel" calendar), Drive uploads/backups + restore ladder, sync workers, ADR-037 scheduled automatic backup (`ScheduledBackupWorker`/`ScheduledBackupScheduler`, local always + Drive when enabled) | done (needs-user-setup: `GOOGLE_WEB_CLIENT_ID`, see `docs/google-setup.md`) |
+| `core:google` | Google linking (Credential Manager), Calendar sync (dedicated "Clear Travel" calendar), Drive uploads/backups + restore ladder, sync workers, ADR-037 scheduled automatic backup (`ScheduledBackupWorker`/`ScheduledBackupScheduler`, local always + Drive when enabled) | done (needs-user-setup: `GOOGLE_WEB_CLIENT_ID`, see `docs/google-setup.md`) |
 | `core:scrape` | Rule-driven WebView scraper engine (DOM storage on, `dismissSelectors`, ready-signal timeout → raw-page fallback); per-site JSON rule files in assets + HTML fixtures (ADR-003) | done |
 | `core:ocr` | PDF→bitmap→preprocess→ML Kit text recognition + BCBP barcode decode; pure extraction functions + OCR-text fixtures | done |
 | `core:testing` | `MainDispatcherRule`, generic `inMemoryDatabase<T>()`, `Fixtures` builders — exposed as MAIN source | done |

@@ -53,8 +53,8 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data
-                    android:host="itsluminous.github.io"
-                    android:pathPrefix="/ClearTravel/pnr/"
+                    android:host="cleartravel.itsluminous.com"
+                    android:pathPrefix="/pnr/"
                     android:scheme="https" />
             </intent-filter>
             <!-- Custom-scheme twin: cleartravel://pnr/<pnr>. -->

@@ -1,6 +1,6 @@
 # core:designsystem
 
-The single home for shared UI: the ClearTravel Material 3 theme (Material You dynamic
+The single home for shared UI: the Clear Travel Material 3 theme (Material You dynamic
 color on Android 12+, curated `#0B57D0` seed fallback below, typography with body text
 ≥16sp) and the sanctioned reusable composables. Feature modules must reuse these
 components instead of rolling their own; anything used by two or more features
