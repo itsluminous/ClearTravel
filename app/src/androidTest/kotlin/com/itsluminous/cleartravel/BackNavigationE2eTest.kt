@@ -1,5 +1,7 @@
 package com.itsluminous.cleartravel
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -10,6 +12,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.itsluminous.cleartravel.core.data.repository.TrainRepository
 import com.itsluminous.cleartravel.core.model.TrainTicket
 import dagger.hilt.android.testing.HiltAndroidRule
@@ -109,6 +112,27 @@ class BackNavigationE2eTest {
         assertOnTrainsList()
     }
 
+    /**
+     * The PNR share link renders the add form OVER the shell (outside its NavHost):
+     * back must cancel it onto Journeys/Trains, not finish the activity.
+     */
+    @Test
+    fun pnrShareLinkForm_back_cancelsToTrainsList() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse("cleartravel://pnr/$SHARED_PNR"))
+                .setPackage(context.packageName)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+        composeRule.waitForText(composeRule.string(TrainsR.string.trains_form_title_add))
+        composeRule.waitForText(SHARED_PNR)
+
+        Espresso.pressBack()
+
+        assertOnTrainsList()
+        composeRule.onAllNodesWithText(SHARED_PNR, substring = true).assertCountEquals(0)
+    }
+
     private fun openTrainsList() {
         composeRule.onNodeWithText(composeRule.string(R.string.nav_journeys)).performClick()
         composeRule.waitForText(TRAIN_NUMBER)
@@ -129,6 +153,7 @@ class BackNavigationE2eTest {
     private companion object {
         const val PNR = "8524317690"
         const val TRAIN_NUMBER = "12951"
+        const val SHARED_PNR = "1234509876"
 
         @JvmStatic
         @BeforeClass

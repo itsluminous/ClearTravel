@@ -1,6 +1,7 @@
 package com.itsluminous.cleartravel.feature.trains
 
 import android.net.Uri
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.SnackbarHost
@@ -116,6 +117,11 @@ fun TrainsExternalEntry(
             }
         }
     }
+
+    // Rendered over the shell, outside its NavHost: without this, system back
+    // finishes the activity (launcher) while the form's own Back/Cancel land on
+    // Journeys/Trains. Mirror Cancel — nothing is written.
+    BackHandler { onDone(TrainsEntryResult.Cancelled) }
 
     Box(modifier = modifier.fillMaxSize()) {
         TrainTicketFormScreen(

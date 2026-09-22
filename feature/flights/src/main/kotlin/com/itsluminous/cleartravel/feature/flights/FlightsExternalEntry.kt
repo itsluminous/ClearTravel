@@ -1,5 +1,6 @@
 package com.itsluminous.cleartravel.feature.flights
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -82,6 +83,10 @@ fun FlightsExternalEntry(
             modifier = modifier,
         )
     } else {
+        // Rendered over the shell, outside its NavHost: system back would finish the
+        // activity while the form's own Close lands on Journeys/Flights. Mirror Close
+        // (the status check above owns its own back, carrying the last outcome).
+        BackHandler { onDone(FlightsEntryResult.Cancelled) }
         FlightFormScreen(
             editId = null,
             importUri = (request as? FlightsEntryRequest.BoardingPass)?.uri,

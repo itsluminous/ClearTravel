@@ -632,3 +632,25 @@ tests 723/723 (+9 `TrainsNavigationTest`, +4 `FlightsRouteTest`), ktlint + lint 
 `connectedDebugAndroidTest` **11/11 PASS** (+4 `BackNavigationE2eTest`:
 `Espresso.pressBack()` from detail sheet, seat map via card, seat map via detail,
 add form), `core:ocr` capture harness SKIPPED (`@Ignore`).
+
+## System back re-verification + share-link form gap (2026-09-22, emulator Android_16_AOSP_Medium, API 36)
+
+Re-walked every back transition with `uiautomator` dumps on a ticket seeded through
+the `cleartravel://pnr/1234509876` share link (train 12951 filled in, route fetched
+once, then airplane mode so the WebView fetch screens stay up): form → list; detail →
+list; seat map (card) → list; seat map (detail) → detail → list; route fetch (card) →
+list; route fetch from seat map → seat map → list; route fetch from route page → route
+page → list; offline route page (detail) → detail → list; PNR check (card and detail)
+→ list; edit form → list; Flights add form → Flights list; Flights status check (offline
+error page) → Flights list; Checklist base → Trips (shell pop); Menu → Settings → Menu;
+Trips new-trip form → Trips list; Trips base → launcher. Found and fixed one gap the
+first pass missed: the add form rendered by the **external entry** (PNR share link,
+share-sheet intake — `TrainsExternalEntry` / `FlightsExternalEntry`) sits over the
+shell outside its NavHost, so system back finished the activity to the launcher while
+its own Back/Cancel landed on Journeys. Both now own a `BackHandler` mirroring Cancel;
+verified on device (share-link form + back → Journeys/Trains, nothing saved) and by the
+new `pnrShareLinkForm_back_cancelsToTrainsList` e2e, which fails without the fix.
+Archived filter → detail: "Unarchive" is still a single 53 px `TextView` beside
+"Edit"/"Delete" in both the train and flight sheets (`61-unarchive-single-line-recheck.png`,
+blind capture). Full gate green: unit tests 723/723, ktlint + lint clean;
+`connectedDebugAndroidTest` **12/12 PASS**, `core:ocr` capture harness SKIPPED (`@Ignore`).
