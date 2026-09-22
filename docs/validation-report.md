@@ -687,3 +687,29 @@ load; UA is the stock Android WebView).
 
 Blind screenshots used: 3 of ≤3. Emulator left running with the app installed and
 the 6E 2001 journey (status Landed) present.
+
+## 2026-09-22 — Cross-tab integration sanity (ADR-028, emulator-5554, Android 16 AOSP)
+
+Quick sanity by the implementing stage — the full validation pass is owned by the
+next stage. Hermetic e2e `CrossTabE2eTest` ran green on the emulator (1/1).
+Manual round trip (adb taps, fresh install, `pm clear`):
+
+- Trips → new trip "Goa" → FAB → Commute → "Link a journey":
+  `65-crosstab-picker-add-rows.png` — the picker sheet shows "Add a new train
+  ticket" / "Add a new flight" rows above "No existing journeys to pick from yet".
+- "Add a new train ticket" → the shell lands on Journeys/Trains with the add-options
+  sheet already open (Manual entry / Paste SMS / Import) → Manual entry → PNR
+  8812345678, train 12627, SBC → NDLS → Save ticket.
+- `66-crosstab-form-restored-linked.png` — back on the Trips tab with the SAME item
+  form restored (Commute, Day 1), "Linked journey: Train 12627", From/To prefilled
+  SBC / NDLS, mode switched to Train. Confirms the nested NavHost + form ViewModel
+  survive the tab switch (no draft persistence needed).
+- Save leg → Journeys → ticket card → `67-crosstab-part-of-row.png` — detail sheet
+  shows "Part of — Goa · Day 1 / Open the trip in the Trips tab".
+
+Still to verify on device (next stage): flights variant of the add hand-off (manual
++ boarding-pass import + "Save & check status" reporting after the check closes),
+cancel paths (sheet dismissed, form Cancel, system back, manual tab tap → form
+stays unlinked, no stale add sheet on re-entering Journeys), refused-duplicate PNR
+in pick mode linking the EXISTING ticket, "Open in Journeys" from the leg sheet,
+"Part of" tap landing on the trip detail, dark theme rendering of the new rows.
