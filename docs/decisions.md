@@ -1469,3 +1469,91 @@ fakes in feature:trains and feature:flights) implement the reverse lookup.
 `CrossTabE2eTest` (seeded linked trip+ticket → "Part of" row → trip detail → leg
 sheet → "Open in Journeys" → ticket sheet); the full add-from-form hand-off is
 device-verified rather than automated (system file picker, live form).
+
+## ADR-030 — Shared document viewer: zoom/pan, rotate, share, save-a-copy, PDF paging (2026-09-22)
+
+*(ADR-029 is reserved for a sibling change landing in parallel; numbers are not
+reordered.)*
+
+**Context.** The one shared viewer (`core:designsystem` `DocumentViewerScreen`,
+ADR-017 → ADR-027) showed a stored image or only the FIRST PDF page at intrinsic size
+inside a vertical scroll, decoded on the main thread, with Close as its only control.
+Passport stamps, visa numbers and barcodes need zoom; landscape scans need rotating;
+travellers need to hand a file to another app or to the system file picker. Every
+call site (Documents tab, boarding passes, booking confirmations) must get the same
+behaviour, so the upgrade lands in the shared component — nothing is replicated.
+
+**Decision.**
+
+1. **`DocumentViewerState` (pure, tested).** A snapshot-state holder in
+   `core:designsystem` owns `scale` (clamped `MIN_SCALE = 1f`..`MAX_SCALE = 6f`),
+   `offset` (screen px, always clamped so the content never leaves the viewport),
+   `rotationDegrees` (0/90/180/270) and `pageIndex`/`pageCount`. Geometry is the
+   `graphicsLayer` model — `screen = centre + scale·R(rotation)·(content − centre) +
+   offset` — so the composable is a thin shell: `fittedContentSize(content, viewport)`
+   returns the un-rotated layout size whose ROTATED bounding box fits;
+   `applyGesture(centroid, pan, zoomChange, fitted, viewport)` zooms about the
+   centroid keeping the point under the finger fixed (rotation-independent because the
+   scale is uniform); `toggleDoubleTapZoom` goes 1× ↔ `DOUBLE_TAP_SCALE = 2.5f` around
+   the tap; `rotateClockwise` cycles +90° and resets zoom; `nextPage`/`previousPage`/
+   `goToPage` are bounded and reset zoom per page; `updatePageCount` keeps the index
+   valid. A `Saver` keeps page + rotation across config changes (zoom is deliberately
+   transient). `−0.0` from `coerceIn(−0f, 0f)` is normalised because `Offset` compares
+   packed bits.
+2. **Gestures.** `detectTransformGestures` (pinch + one-finger pan) and
+   `detectTapGestures(onDoubleTap)` on the page container; the bitmap is laid out at
+   the fitted size and transformed via `graphicsLayer` (`scaleX/Y`, `rotationZ`,
+   `translationX/Y`). The old `verticalScroll` is gone — fit-to-viewport plus zoom
+   replaces it and does not fight the pan gesture.
+3. **Rotation is view-level only.** No bitmap copy, no file mutation: the toolbar
+   `RotateRight` `ExplainableIcon` turns the rendered layer; fitting uses the rotated
+   bounds so a landscape scan rotated 90° fills a portrait screen.
+4. **Rendering budget (`DocumentFiles`, pure helpers tested).** PDF pages render at
+   `PDF_RENDER_WIDTH_PX = 2160` (≈2× a 1080p display, so 2–3× zoom stays crisp) capped
+   at `MAX_PDF_HEIGHT_PX = 4096` (`pdfRenderSize`); images decode with a power-of-two
+   `inSampleSize` keeping the longer side ≤ `MAX_IMAGE_DIMENSION_PX = 2560`
+   (`sampleSizeFor`) so a 48 MP camera scan stays ≈25 MB. *Alternative considered —
+   re-render the PDF page at the live zoom level:* rejected for now; it needs a
+   render cache and cancellation for a marginal gain over 2× at the 6× cap.
+   Decoding moved off the main thread (`LaunchedEffect` + `Dispatchers.IO`);
+   `loadDocumentPage(path, pageIndex): DocumentPage(bitmap, pageCount)` is the loader,
+   `loadDocumentBitmap` remains as the ADR-027 first-page wrapper.
+5. **Multi-page PDFs page through.** A bottom `PageBar` (previous / "Page n of m" /
+   next `ExplainableIcon`s) appears only when `pageCount > 1`; each page is loaded on
+   demand by re-opening the `PdfRenderer` (cheap for offline files, no page cache to
+   leak). Zoom resets on page change.
+6. **Share = `ACTION_SEND` through the app's existing `FileProvider`.**
+   `shareDocumentFile(context, path, chooserTitle)` builds the content URI with
+   authority `<packageName>.fileprovider` (the same convention `TrainTicketSharer`
+   uses) and the MIME type from the extension (`DocumentFiles.mimeTypeFor`). The
+   provider previously exposed only `cacheDir/share/`; `app/res/xml/file_paths.xml`
+   now also exposes `files/documents/` (ADR-027), `files/boarding_passes/` (ADR-004)
+   and `files/attachments/` (ADR-017 booking confirmations and backup-restored
+   attachments) — exactly the directories the viewer is ever pointed at, nothing
+   broader. A failure (missing file, path outside the roots, no receiver) is a
+   snackbar, never a crash.
+7. **Save a copy = SAF `CreateDocument`.** `rememberLauncherForActivityResult(
+   ActivityResultContracts.CreateDocument(mime))` seeded with
+   `DocumentFiles.suggestedFileName(title, path)` (title sanitised of `\/:*?"<>|`
+   and control characters, ≤80 chars, original extension appended); the bytes are
+   streamed with `copyDocumentTo` on IO and the outcome is a snackbar. No storage
+   permission is needed and the app never writes outside its sandbox on its own.
+   `core:designsystem` gains no new dependency — `androidx.core` (FileProvider) and
+   `activity-compose` were already on its classpath, and it still depends on no
+   data/database/feature module.
+8. **Signature stays additive.** `DocumentViewerScreen(path, title, onClose, modifier,
+   viewerState = rememberDocumentViewerState(path))`; both call sites
+   (`DocumentViewerRoute`, `BoardingPassViewerScreen`) are unchanged in behaviour and
+   inherit every feature. Full-brightness-while-visible is preserved (`FullBrightness`
+   effect, restored on dispose). All new strings are `designsystem_viewer_*`; every
+   icon-only control is an `ExplainableIcon`.
+
+**Consequences.** One viewer, four surfaces (documents, boarding passes, booking
+confirmations, any attachment). Tests: 14 `DocumentViewerStateTest` (clamp, pan
+bounds incl. sideways, centroid-fixed zoom, double-tap toggle + edge clamp, rotation
+cycle/normalisation, page bounds/reset, page-count re-validation, saver) + 6
+`DocumentFilesTest` (MIME, suggested names, sample size, PDF render size) = 20 new
+unit tests; `DocumentsE2eTest` now waits for the async image, asserts the rotate /
+share / save controls exist and that no page bar shows for an image, and rotates once
+(compiles in this change; the device run belongs to the validation stage). Follow-ups:
+live-zoom PDF re-render with a cache, and swipe-between-pages when not zoomed.

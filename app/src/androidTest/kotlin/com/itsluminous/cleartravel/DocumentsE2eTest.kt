@@ -31,7 +31,8 @@ import com.itsluminous.cleartravel.feature.documents.R as DocumentsR
  * Documents tab happy path (ADR-027, hermetic — in-memory Room): a passport seeded
  * through the real repository with a real PNG under `filesDir/documents/` shows up
  * as a card (name, type label, expiry line); tapping it opens the full-brightness
- * viewer (title = document name, Close control); Close returns to the list.
+ * viewer (title = document name, Close control, ADR-030 rotate/share/save actions,
+ * no page bar for a single image); rotate keeps the image; Close returns to the list.
  */
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
@@ -82,9 +83,23 @@ class DocumentsE2eTest {
         }
         composeRule.onNodeWithText(DOCUMENT_NAME).assertExists()
         composeRule.onAllNodesWithText(composeRule.string(DesignR.string.designsystem_viewer_missing)).assertCountEquals(0)
+        // The page decodes off the main thread (ADR-030) — wait for the image node.
+        val image = composeRule.string(DesignR.string.designsystem_viewer_image_description)
+        composeRule.waitUntil(timeoutMillis = E2e.WAIT_TIMEOUT_MILLIS) {
+            composeRule.onAllNodesWithContentDescription(image).fetchSemanticsNodes().isNotEmpty()
+        }
+
+        // ADR-030 toolbar: rotate / share / save-a-copy are present; a single image has no page bar.
+        composeRule.onNodeWithContentDescription(composeRule.string(DesignR.string.designsystem_viewer_rotate)).assertExists()
+        composeRule.onNodeWithContentDescription(composeRule.string(DesignR.string.designsystem_viewer_share)).assertExists()
+        composeRule.onNodeWithContentDescription(composeRule.string(DesignR.string.designsystem_viewer_save)).assertExists()
         composeRule
-            .onNodeWithContentDescription(composeRule.string(DesignR.string.designsystem_viewer_image_description))
-            .assertExists()
+            .onAllNodesWithContentDescription(composeRule.string(DesignR.string.designsystem_viewer_next_page))
+            .assertCountEquals(0)
+
+        // Rotating is view-only: the image stays and nothing else changes.
+        composeRule.onNodeWithContentDescription(composeRule.string(DesignR.string.designsystem_viewer_rotate)).performClick()
+        composeRule.onNodeWithContentDescription(image).assertExists()
 
         // Close → back on the list with the FAB visible.
         composeRule
