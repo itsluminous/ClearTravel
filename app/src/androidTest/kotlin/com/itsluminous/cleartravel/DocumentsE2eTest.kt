@@ -6,13 +6,16 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.itsluminous.cleartravel.core.data.repository.TravelDocumentRepository
 import com.itsluminous.cleartravel.core.data.repository.TravelDocumentStorage
 import com.itsluminous.cleartravel.core.model.TravelDocument
 import com.itsluminous.cleartravel.core.model.TravelDocumentType
+import com.itsluminous.cleartravel.feature.documents.DOCUMENTS_SEARCH_TEST_TAG
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
 import kotlinx.coroutines.runBlocking
@@ -109,6 +112,38 @@ class DocumentsE2eTest {
         composeRule
             .onNodeWithContentDescription(composeRule.string(DocumentsR.string.documents_add_fab))
             .assertExists()
+    }
+
+    /**
+     * The bottom-docked search box filters live: a miss shows the "No matches" empty
+     * state, Clear restores the card, a differently-cased name fragment keeps it. (The
+     * type-label match is covered by the pure DocumentSearch unit tests.)
+     */
+    @Test
+    fun searchBox_isDockedAtBottom_filtersLive_andClearRestores() {
+        composeRule.onNodeWithText(composeRule.string(R.string.nav_documents)).performClick()
+        composeRule.waitForText(DOCUMENT_NAME)
+
+        composeRule.assertDockedAboveNavBar(DOCUMENTS_SEARCH_TEST_TAG)
+
+        // Miss → the search-specific empty state, card gone.
+        composeRule.onNodeWithTag(DOCUMENTS_SEARCH_TEST_TAG).performTextInput("boarding")
+        composeRule.waitForText(composeRule.string(DocumentsR.string.documents_search_empty_title))
+        composeRule.onAllNodesWithText(DOCUMENT_NAME).assertCountEquals(0)
+
+        // Clear → the card is back and the empty state is gone.
+        composeRule.onNodeWithContentDescription(composeRule.string(DocumentsR.string.documents_search_clear)).performClick()
+        composeRule.waitForText(DOCUMENT_NAME)
+        composeRule
+            .onAllNodesWithText(composeRule.string(DocumentsR.string.documents_search_empty_title))
+            .assertCountEquals(0)
+
+        // A lower-case name fragment keeps the card (case-insensitive substring).
+        composeRule.onNodeWithTag(DOCUMENTS_SEARCH_TEST_TAG).performTextInput("LOVELACE")
+        composeRule.waitForText(DOCUMENT_NAME)
+        composeRule
+            .onAllNodesWithText(composeRule.string(DocumentsR.string.documents_search_empty_title))
+            .assertCountEquals(0)
     }
 
     private companion object {

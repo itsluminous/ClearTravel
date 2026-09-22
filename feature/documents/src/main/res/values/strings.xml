@@ -6,6 +6,13 @@
     <string name="documents_empty_title">No documents yet</string>
     <string name="documents_empty_message">Keep scans of your passport, visas, insurance and tickets here — available offline, shown at full brightness when you need them.</string>
 
+    <!-- Search box docked at the bottom of the list (filters by name + type). -->
+    <string name="documents_search_hint">Search documents</string>
+    <string name="documents_search_icon">Search</string>
+    <string name="documents_search_clear">Clear search</string>
+    <string name="documents_search_empty_title">No matches</string>
+    <string name="documents_search_empty_message">No document name or type contains “%1$s”.</string>
+
     <!-- Type presets (also the default name of a new document). -->
     <string name="documents_type_passport">Passport</string>
     <string name="documents_type_visa">Visa</string>

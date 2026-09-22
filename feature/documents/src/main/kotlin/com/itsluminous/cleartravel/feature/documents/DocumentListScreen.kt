@@ -10,18 +10,26 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SearchOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -37,7 +45,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,6 +61,9 @@ import java.time.LocalDate
 
 /** Pickable document MIME types — images and PDFs (what the viewer renders). */
 private val PICKER_MIME_TYPES = arrayOf("image/*", "application/pdf")
+
+/** Test tag on the bottom-docked search box (e2e types into it). */
+const val DOCUMENTS_SEARCH_TEST_TAG = "documents_search"
 
 /**
  * The Documents tab (ADR-027): cards (type icon + name + expiry line), FAB → system
@@ -88,6 +102,16 @@ internal fun DocumentListScreen(
         }
     }
 
+    // Live search over name + type label. UI state only (rememberSaveable survives
+    // rotation); the match itself is the pure DocumentSearch so it is unit-tested.
+    var query by rememberSaveable { mutableStateOf("") }
+    val typeLabels =
+        DocumentTypePresets.ordered.associateWith { type -> stringResource(DocumentTypePresets.labelRes(type)) }
+    val visible =
+        remember(documents, query, typeLabels) {
+            documents?.let { DocumentSearch.filter(it, query) { type -> typeLabels.getValue(type) } }
+        }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -99,15 +123,38 @@ internal fun DocumentListScreen(
                 )
             }
         },
+        bottomBar = {
+            // Docked at the BOTTOM, right above the app's NavigationBar (user
+            // steering: thumb reach). Only once there is something to search.
+            if (!documents.isNullOrEmpty()) {
+                DocumentSearchField(
+                    query = query,
+                    onQueryChange = { query = it },
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            // The keyboard must not cover the box it is typing into.
+                            .imePadding()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
+        },
     ) { padding ->
-        val current = documents
+        val current = visible
         when {
             current == null -> Unit
-            current.isEmpty() ->
+            documents?.isEmpty() == true ->
                 EmptyState(
                     icon = Icons.Filled.Folder,
                     title = stringResource(R.string.documents_empty_title),
                     message = stringResource(R.string.documents_empty_message),
+                    modifier = Modifier.padding(padding),
+                )
+            current.isEmpty() ->
+                EmptyState(
+                    icon = Icons.Filled.SearchOff,
+                    title = stringResource(R.string.documents_search_empty_title),
+                    message = stringResource(R.string.documents_search_empty_message, query.trim()),
                     modifier = Modifier.padding(padding),
                 )
             else ->
@@ -188,6 +235,46 @@ internal fun DocumentListScreen(
             },
         )
     }
+}
+
+/**
+ * The bottom-docked search box: leading search icon, trailing clear control while a
+ * query is set, IME "Search" action just hides the keyboard (filtering is live).
+ */
+@Composable
+private fun DocumentSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusManager = LocalFocusManager.current
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        modifier = modifier.testTag(DOCUMENTS_SEARCH_TEST_TAG),
+        singleLine = true,
+        placeholder = { Text(stringResource(R.string.documents_search_hint)) },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Filled.Search,
+                contentDescription = stringResource(R.string.documents_search_icon),
+            )
+        },
+        trailingIcon =
+            if (query.isEmpty()) {
+                null
+            } else {
+                {
+                    ExplainableIcon(
+                        icon = Icons.Filled.Clear,
+                        explanationRes = R.string.documents_search_clear,
+                        onClick = { onQueryChange("") },
+                    )
+                }
+            },
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
