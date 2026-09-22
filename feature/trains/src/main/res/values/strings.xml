@@ -153,8 +153,10 @@
     <string name="trains_seatmap_coach_box">Coach %1$s at position %2$d — tap to view its seat map</string>
     <string name="trains_seatmap_passenger_chip">%1$s - %2$d</string>
     <string name="trains_seatmap_passenger_chip_no_coach">Berth %1$d</string>
+    <string name="trains_seatmap_passenger_chip_no_coach_seat">Seat %1$d</string>
     <string name="trains_seatmap_passenger_chip_unallotted">%1$s</string>
     <string name="trains_seatmap_passenger_chip_none">No berth yet</string>
+    <string name="trains_seatmap_passenger_chip_none_seat">No seat yet</string>
     <string name="trains_seatmap_warning">Coach position may not be accurate for certain trains — verify at the station.</string>
     <string name="trains_seatmap_no_coaches_title">Coach positions not fetched</string>
     <string name="trains_seatmap_no_coaches_message">Fetch the route once and the coach order is saved offline.</string>
@@ -165,6 +167,8 @@
     <string name="trains_seatmap_row">Row %1$d</string>
     <string name="trains_seatmap_cell">Berth %1$d, %2$s</string>
     <string name="trains_seatmap_cell_yours">Berth %1$d, %2$s — your berth</string>
+    <string name="trains_seatmap_seat">Seat %1$d, %2$s</string>
+    <string name="trains_seatmap_seat_yours">Seat %1$d, %2$s — your seat</string>
     <string name="trains_seatmap_type_lower">LOWER</string>
     <string name="trains_seatmap_type_middle">MIDDLE</string>
     <string name="trains_seatmap_type_upper">UPPER</string>

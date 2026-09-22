@@ -109,7 +109,7 @@ internal fun SeatMapScreen(
             contentPadding = PaddingValues(bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(key = "passengers") { PassengerChips(seats = state.passengerSeats) }
+            item(key = "passengers") { PassengerChips(seats = state.passengerSeats, kind = state.layout?.kind) }
             item(key = "strip") {
                 if (state.hasCoaches) {
                     CoachStrip(items = state.strip, onSelect = viewModel::selectCoach)
@@ -191,6 +191,7 @@ private fun SeatMapTopBar(
 @Composable
 private fun PassengerChips(
     seats: List<PassengerSeat>,
+    kind: SeatKind?,
     modifier: Modifier = Modifier,
 ) {
     if (seats.isEmpty()) return
@@ -204,9 +205,9 @@ private fun PassengerChips(
                 when {
                     seat.berthNumber != null && seat.coach.isNotEmpty() ->
                         stringResource(R.string.trains_seatmap_passenger_chip, seat.coach, seat.berthNumber)
-                    seat.berthNumber != null -> stringResource(R.string.trains_seatmap_passenger_chip_no_coach, seat.berthNumber)
+                    seat.berthNumber != null -> stringResource(SeatMapWording.chipNoCoachRes(kind), seat.berthNumber)
                     seat.rawSeat.isNotEmpty() -> stringResource(R.string.trains_seatmap_passenger_chip_unallotted, seat.rawSeat)
-                    else -> stringResource(R.string.trains_seatmap_passenger_chip_none)
+                    else -> stringResource(SeatMapWording.chipNoneRes(kind))
                 }
             SuggestionChip(onClick = {}, label = { Text(label) })
         }
@@ -421,11 +422,11 @@ private fun BayBlock(
         bay.rows.forEach { row ->
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    row.left.forEach { berth -> BerthCell(berth = berth, highlighted = berth.number in highlighted) }
+                    row.left.forEach { berth -> BerthCell(berth = berth, kind = kind, highlighted = berth.number in highlighted) }
                 }
                 Spacer(modifier = Modifier.weight(1f).width(24.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    row.right.forEach { berth -> BerthCell(berth = berth, highlighted = berth.number in highlighted) }
+                    row.right.forEach { berth -> BerthCell(berth = berth, kind = kind, highlighted = berth.number in highlighted) }
                 }
             }
         }
@@ -435,17 +436,13 @@ private fun BayBlock(
 @Composable
 private fun BerthCell(
     berth: Berth,
+    kind: SeatKind,
     highlighted: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
     val typeLabel = stringResource(berthTypeLabel(berth.type))
-    val description =
-        if (highlighted) {
-            stringResource(R.string.trains_seatmap_cell_yours, berth.number, typeLabel)
-        } else {
-            stringResource(R.string.trains_seatmap_cell, berth.number, typeLabel)
-        }
+    val description = stringResource(SeatMapWording.cellRes(kind, yours = highlighted), berth.number, typeLabel)
     Column(
         modifier =
             modifier
@@ -486,3 +483,26 @@ internal fun berthTypeLabel(type: BerthType): Int =
         BerthType.WINDOW -> R.string.trains_seatmap_type_window
         BerthType.AISLE -> R.string.trains_seatmap_type_aisle
     }
+
+/**
+ * Berth vs seat wording (ADR-022 validation note): sleeper classes have BERTHS,
+ * chair-car / second-sitting layouts (`SeatKind.SEAT`) have SEATS — the cell and
+ * passenger-chip descriptions must say so. An unknown kind (no layout resolved yet)
+ * falls back to the berth wording.
+ */
+internal object SeatMapWording {
+    fun cellRes(
+        kind: SeatKind,
+        yours: Boolean,
+    ): Int =
+        when (kind) {
+            SeatKind.BERTH -> if (yours) R.string.trains_seatmap_cell_yours else R.string.trains_seatmap_cell
+            SeatKind.SEAT -> if (yours) R.string.trains_seatmap_seat_yours else R.string.trains_seatmap_seat
+        }
+
+    fun chipNoCoachRes(kind: SeatKind?): Int =
+        if (kind == SeatKind.SEAT) R.string.trains_seatmap_passenger_chip_no_coach_seat else R.string.trains_seatmap_passenger_chip_no_coach
+
+    fun chipNoneRes(kind: SeatKind?): Int =
+        if (kind == SeatKind.SEAT) R.string.trains_seatmap_passenger_chip_none_seat else R.string.trains_seatmap_passenger_chip_none
+}

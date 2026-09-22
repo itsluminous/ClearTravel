@@ -83,12 +83,13 @@ class SeatMapE2eTest {
         // Seating class → "Row n" bays with the first row on screen.
         val row1 = hasContentDescription(composeRule.string(TrainsR.string.trains_seatmap_row, 1))
         composeRule.onNode(row1).assertIsDisplayed()
-        // The passenger's berth carries the "your berth" semantics (CC 32 = MIDDLE).
+        // The passenger's seat carries the "your seat" semantics (CC is a SEAT-kind
+        // layout, so the cells say Seat, not Berth; CC 32 = MIDDLE).
         // Bays live in a LazyColumn, so scroll the list itself until the node composes.
         val yours =
             hasContentDescription(
                 composeRule.string(
-                    TrainsR.string.trains_seatmap_cell_yours,
+                    TrainsR.string.trains_seatmap_seat_yours,
                     32,
                     composeRule.string(TrainsR.string.trains_seatmap_type_middle),
                 ),
@@ -99,7 +100,7 @@ class SeatMapE2eTest {
         val anyRow = hasContentDescription(rowPrefix, substring = true)
         composeRule.onNode(hasScrollAction() and hasAnyDescendant(anyRow)).performScrollToNode(yours)
         composeRule.onNode(yours).assertIsDisplayed()
-        // Exactly one berth is marked as the passenger's.
+        // Exactly one seat is marked as the passenger's.
         composeRule.onAllNodes(yours).assertCountEquals(1)
     }
 
