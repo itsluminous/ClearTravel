@@ -145,4 +145,7 @@
     <string name="itinerary_maps_target_existing_trip">Add to existing trip</string>
     <string name="itinerary_maps_no_trips">No trips yet — create one above.</string>
     <string name="itinerary_maps_add_place">Add place</string>
+    <string name="itinerary_place_search_hint">Search a place</string>
+    <string name="itinerary_place_search_clear">Clear search</string>
+    <string name="itinerary_place_search_no_results">No places found — try a different search or pan the map.</string>
 </resources>

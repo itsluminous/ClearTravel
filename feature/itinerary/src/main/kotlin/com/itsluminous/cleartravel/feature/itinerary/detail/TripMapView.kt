@@ -36,7 +36,6 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.MarkerState
-import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
@@ -137,13 +136,9 @@ private fun ReadyMap(
             properties = MapProperties(isMyLocationEnabled = locationGranted),
             onMapLoaded = { mapLoaded = true },
         ) {
-            content.paths.forEach { path ->
-                Polyline(
-                    points = path.points.map { LatLng(it.latitude, it.longitude) },
-                    color = Color(dayColorArgb(path.dayIndex)),
-                    width = 8f,
-                )
-            }
+            // Connecting polylines intentionally not rendered (user request
+            // 2026-09-22): markers alone read better on dense city maps. The
+            // per-day path builder stays in MapContent for potential reuse.
             content.markers.forEach { marker ->
                 val markerState =
                     remember(marker.item.id, marker.point) {

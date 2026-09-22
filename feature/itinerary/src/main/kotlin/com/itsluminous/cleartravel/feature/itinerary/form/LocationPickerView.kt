@@ -7,33 +7,51 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
+import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.feature.itinerary.R
 import com.itsluminous.cleartravel.feature.itinerary.hasMapsApiKey
 import com.itsluminous.cleartravel.feature.itinerary.hasPlayServices
+import com.itsluminous.cleartravel.feature.itinerary.logic.GeocodedPlace
 import com.itsluminous.cleartravel.feature.itinerary.logic.MapPoint
 import com.itsluminous.cleartravel.feature.itinerary.logic.formatLatLng
 import com.itsluminous.cleartravel.feature.itinerary.logic.mapUnavailableReason
+import com.itsluminous.cleartravel.feature.itinerary.logic.platformPlaceGeocoder
+import kotlinx.coroutines.launch
 
 /** Default picker start (central India) when the item has no coordinates yet. */
 private val DEFAULT_PICKER_POINT = MapPoint(21.0, 78.0)
@@ -80,8 +98,84 @@ internal fun LocationPickerView(
                     if (initial != null) PICKER_ZOOM_WITH_INITIAL else PICKER_ZOOM_DEFAULT,
                 )
         }
+    val geocoder = remember { platformPlaceGeocoder(context) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<GeocodedPlace>>(emptyList()) }
+    var searched by remember { mutableStateOf(false) }
+    var searching by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val focusManager = LocalFocusManager.current
+
+    fun runSearch() {
+        if (query.isBlank() || searching) return
+        focusManager.clearFocus()
+        searching = true
+        scope.launch {
+            results = geocoder.search(query)
+            searched = true
+            searching = false
+        }
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = {
+                query = it
+                searched = false
+            },
+            singleLine = true,
+            placeholder = { Text(stringResource(R.string.itinerary_place_search_hint)) },
+            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+            trailingIcon =
+                if (query.isNotEmpty()) {
+                    {
+                        ExplainableIcon(
+                            icon = Icons.Filled.Close,
+                            explanationRes = R.string.itinerary_place_search_clear,
+                            onClick = {
+                                query = ""
+                                results = emptyList()
+                                searched = false
+                            },
+                        )
+                    }
+                } else {
+                    null
+                },
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { runSearch() }),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        if (searched && results.isEmpty()) {
+            Text(
+                text = stringResource(R.string.itinerary_place_search_no_results),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp),
+            )
+        }
+        results.forEach { place ->
+            TextButton(
+                onClick = {
+                    cameraPositionState.position =
+                        CameraPosition.fromLatLngZoom(
+                            LatLng(place.point.latitude, place.point.longitude),
+                            PICKER_ZOOM_WITH_INITIAL,
+                        )
+                    results = emptyList()
+                    searched = false
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = place.label,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
         Box(modifier = Modifier.weight(1f)) {
             GoogleMap(
                 modifier = Modifier.fillMaxSize(),
