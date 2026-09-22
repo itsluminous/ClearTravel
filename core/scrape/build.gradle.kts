@@ -30,6 +30,13 @@ android {
         lintConfig = rootProject.file("lint.xml")
         abortOnError = true
     }
+
+    testOptions {
+        unitTests {
+            // ScrapeWebViewControllerTest drives a Robolectric WebView shadow.
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -44,4 +51,6 @@ dependencies {
     testImplementation(libs.truth)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.turbine)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.core.ktx)
 }

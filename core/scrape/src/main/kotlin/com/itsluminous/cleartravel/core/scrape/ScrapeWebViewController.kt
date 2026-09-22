@@ -11,8 +11,10 @@ import org.json.JSONTokener
  * THIN WebView host wiring a caller-owned [WebView] to a [RuleDrivenScrapeSession]
  * (ADR-008): load URL → inject prefill → optional auto-submit → poll the ready
  * signal → dump `outerHTML` → hand it to the session. All parsing intelligence lives
- * in the pure, fixture-tested [RuleExtractor]; this class is deliberately dumb and is
- * verified by instrumented tests later, not unit tests.
+ * in the pure, fixture-tested [RuleExtractor]; this class is deliberately dumb. Its
+ * sequencing (dismiss → prefill → poll with per-tick dismissal → dump, the ready-signal
+ * TIMEOUT dump, `stop`, the touch-scroll setup) is pinned by
+ * `ScrapeWebViewControllerTest` on Robolectric's WebView shadow.
  *
  * The WebView's lifecycle stays with the caller's composable — call [stop] when the
  * composable leaves composition.

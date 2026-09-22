@@ -34,7 +34,14 @@ RuleExtractor.extract(rule, html)  ← PURE jsoup fn = the fixture-tested code p
   `Extracted(data: ScrapedData, rawHtml)` (the dump the rule ran on, for feature-side
   post-processing — ADR-026), `ParseFailed(reason, rawHtml)`.
 - `ScrapeWebViewController(webView, session)` — `start()` / `stop()`; caller's
-  composable owns the WebView lifecycle. Deliberately thin, instrumented-tested later.
+  composable owns the WebView lifecycle. Deliberately thin; its sequencing (dismiss →
+  prefill → poll with per-tick dismissal → dump, ready-signal timeout dump, stop,
+  touch-scroll hardening) is pinned by `ScrapeWebViewControllerTest` on Robolectric's
+  WebView shadow.
+- `WebView.configureTouchScrolling()` — the shared touch/scroll setup every
+  Compose-hosted WebView applies (ADR-024 §4).
+- `di/ScrapeModule` — the single Hilt `@Provides` for `RuleRegistry` (shared by trains
+  and flights, ADR-014).
 - `RuleExtractor.extract(rule, html): ExtractionResult` — pure, never throws.
 
 ## Rule file schema (`assets/scrape-rules/<id>.json`)
@@ -71,30 +78,14 @@ extracted at all ⇒ `ExtractionResult.Failure(reason, rawHtml)`.
 
 ## Shipped rules
 
-- `indianrail-pnr` v1 — https://www.indianrail.gov.in/enquiry/PNR/PnrEnquiry.html
-  (prefills `#inputPnrNo`; NO auto-submit — captcha; extracts journey/passenger/chart
-  tables). Selectors derived from the live page skeleton + its render JS
-  (`pnrEnquiryJS.js` `showPnr()`/`drawRow()`); see `docs/recon-followup.md` for the
-  post-captcha live-DOM verification TODO.
-- `erail-route` v1 — https://erail.in/train-enquiry/{trainNumber} (train schedule /
-  full station route; ADR-018). Direct GET, no prefill/submit/captcha/consent banner —
-  a fully hands-free flow. Extracts `trainNumber`/`trainName` from the
-  `#divRouteList` header and one row per station from `table.RouteList`
-  (code/name/arr/dep/halt/platform/distance/day). Quirks captured in the rule +
-  fixture: times are dot-separated `HH.MM`; the origin's arrival and the terminus'
-  departure cells hold the literals `First`/`Last` (normalized by `feature:trains`'
-  `RouteMapper`, not by the rule). Selectors + fixture from the real captured DOM of
-  train 22346 (recon 2026-09-21).
-- `google-flights` v1 — https://www.google.com/search?q={airlineIata}+{flightNumber}+flight+status&hl=en
-  (ADR-026). Airline-AGNOSTIC fallback: `iataCodes` is empty so `flightRuleFor` never
-  selects it; `feature:flights` looks it up by id when no airline rule exists (or one
-  failed). Direct GET, defensive consent `dismissSelectors`, ready when the results
-  container (or a bot-wall captcha form) rendered. Extraction is class-free — the
-  visible `h2` "Flight status" is a `required` sentinel (absent = Google shows no card
-  = clean failure), plus ARIA/text anchors for the flight label, selected date tab,
-  header status, data source and freshness. Per-card details are parsed from the same
-  dump by the pure `GoogleFlightsExtractor` in `feature:flights` (label/value sibling
-  pairing the schema cannot express). Fixtures: `page.html` = REAL recon capture
-  (AI 101), `no-panel.html` = no-card page, `live-landed-6e2001.html` = REAL WebView
-  dump from the emulator whose DOM differs from the recon (empty tabpanels, card in an
-  async sibling, no `data-maindata` status blob — hence that blob is optional).
+| Rule | Version | Source | Notes |
+|---|---|---|---|
+| `indianrail-pnr` | 1 | indianrail.gov.in PNR enquiry | Prefills `#inputPnrNo`; NO auto-submit (captcha, user-solved); extracts journey/passenger/chart tables. Selectors from the live page skeleton + its render JS; live-verified on a real PNR (ADR-023). |
+| `airindia` | 2 | airindia.com flight status | `?fno=&on=` (yyyyMMdd) direct query; v2 dismisses the OneTrust banner (`dismissSelectors`); multi-card result rows, disambiguated by `feature:flights`. |
+| `ixigo-route` | 4 | ixigo.com train page | PRIMARY route source (ADR-019): direct GET, day column, `extraRows.coaches` for the seat-map strip (ADR-022). v4 pins the LIVE mobile coach markup as well as the desktop capture. |
+| `erail-route` | 2 | erail.in train enquiry | FALLBACK route source ("Try another source"): v2 targets the MOBILE layout the WebView actually receives (`#divResult table.DataTable`, no day column — `RouteMapper` infers days). |
+| `google-flights` | 2 | Google "flight status" card | Airline-AGNOSTIC fallback (ADR-026): `iataCodes` empty (looked up by id), consent `dismissSelectors`, `h2` sentinel; v2 adds `+{date}` to the query. Card details are parsed by `feature:flights`' pure `GoogleFlightsExtractor`. |
+
+Each rule ships its `fixtures/<id>/{page.html,expected.json}` pair (plus extra live
+captures where the served DOM differed from the recon); `docs/recon-followup.md`
+tracks the remaining live-verification TODOs.
