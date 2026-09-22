@@ -60,6 +60,8 @@ dependencies {
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.kotlinx.coroutines.android)
+    // ADR-026: pure jsoup parser for Google's flight-status card (GoogleFlightsExtractor).
+    implementation(libs.jsoup)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

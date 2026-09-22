@@ -43,8 +43,9 @@ import com.itsluminous.cleartravel.feature.flights.R
 /**
  * The "Check status" flow: a VISIBLE WebView driven by the rule engine (ADR-008/
  * ADR-013). Rule found → prefill + poll + extract; extraction lands in Room and the
- * screen closes. No rule (e.g. SpiceJet) → plain web search the user reads, plus
- * manual edit back on the detail sheet. Parse failure/timeout → the raw page STAYS
+ * screen closes. No airline rule (e.g. SpiceJet) → the airline-agnostic Google
+ * flight-status panel rule runs the same way (ADR-026); only an undated flight gets
+ * the plain web search the user reads, plus manual edit back on the detail sheet. Parse failure/timeout → the raw page STAYS
  * visible (single WebView call site keyed on attempt, so the Scraping→ParseFailed
  * flip does NOT reload the page) under a "data unchanged" banner with retry/close
  * (defect D2 — parity with the trains PNR flow).
@@ -95,10 +96,10 @@ fun StatusCheckScreen(
                 is StatusCheckUiState.Scraping -> {
                     LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                     StatusBanner(
-                        if (current.waitingForUser) {
-                            R.string.flights_check_waiting_user
-                        } else {
-                            R.string.flights_check_scraping
+                        when {
+                            current.waitingForUser -> R.string.flights_check_waiting_user
+                            current.viaWebSearch -> R.string.flights_check_scraping_web
+                            else -> R.string.flights_check_scraping
                         },
                     )
                 }
@@ -118,7 +119,14 @@ fun StatusCheckScreen(
 
                 is StatusCheckUiState.ParseFailed -> {
                     ParseFailedBanner(
+                        messageRes =
+                            if (current.viaWebSearch) {
+                                R.string.flights_check_parse_failed_web
+                            } else {
+                                R.string.flights_check_parse_failed
+                            },
                         onRetry = viewModel::retry,
+                        onTryWebSearch = if (current.canTryWebSearch) viewModel::retryViaWebSearch else null,
                         onClose = { onClose(lastOutcome) },
                     )
                 }
@@ -154,10 +162,16 @@ private fun StatusBanner(textRes: Int) {
     )
 }
 
-/** Failure banner (D2): explains the data is unchanged and offers retry/close. */
+/**
+ * Failure banner (D2): explains the data is unchanged and offers retry/close, plus
+ * [onTryWebSearch] when an airline rule failed and the Google panel rule can be
+ * tried instead (ADR-026).
+ */
 @Composable
 private fun ParseFailedBanner(
+    messageRes: Int,
     onRetry: () -> Unit,
+    onTryWebSearch: (() -> Unit)?,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -167,13 +181,18 @@ private fun ParseFailedBanner(
     ) {
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Text(
-                text = stringResource(R.string.flights_check_parse_failed),
+                text = stringResource(messageRes),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onRetry) {
                     Text(stringResource(R.string.flights_check_retry))
+                }
+                if (onTryWebSearch != null) {
+                    TextButton(onClick = onTryWebSearch) {
+                        Text(stringResource(R.string.flights_check_try_web_search))
+                    }
                 }
                 TextButton(onClick = onClose) {
                     Text(stringResource(R.string.flights_check_close))

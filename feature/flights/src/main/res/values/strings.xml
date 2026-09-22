@@ -104,11 +104,14 @@
     <string name="flights_check_title">Check status</string>
     <string name="flights_check_loading">Preparing…</string>
     <string name="flights_check_scraping">Waiting for the airline page to load results…</string>
+    <string name="flights_check_scraping_web">Looking up the flight on Google…</string>
     <string name="flights_check_waiting_user">Complete the search on the page below if it doesn\'t submit automatically.</string>
     <string name="flights_check_done">Status updated</string>
     <string name="flights_check_parse_failed">Couldn\'t read the results — your saved data is unchanged. Retry, or read the page below and update the flight manually.</string>
+    <string name="flights_check_parse_failed_web">Google didn\'t show a flight status card for this flight and date — your saved data is unchanged. Retry, or read the results below and update the flight manually.</string>
     <string name="flights_check_retry">Retry</string>
-    <string name="flights_check_fallback_hint">No status rule for this airline — showing a web search instead. Update the flight manually from what you see.</string>
+    <string name="flights_check_try_web_search">Try web search</string>
+    <string name="flights_check_fallback_hint">Set a date on this flight to look up its status automatically — showing a web search instead. Update the flight manually from what you see.</string>
     <string name="flights_check_close">Close</string>
     <string name="flights_check_snackbar_updated">Flight status updated</string>
     <string name="flights_check_snackbar_no_changes">Status checked — no changes</string>

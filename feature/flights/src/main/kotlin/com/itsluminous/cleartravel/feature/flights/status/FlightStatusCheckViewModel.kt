@@ -2,6 +2,7 @@ package com.itsluminous.cleartravel.feature.flights.status
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itsluminous.cleartravel.core.data.repository.FlightIdentity
 import com.itsluminous.cleartravel.core.data.repository.FlightRepository
 import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.core.scrape.RuleDrivenScrapeSession
@@ -30,14 +31,21 @@ sealed interface StatusCheckUiState {
     /**
      * A rule exists — the WebView runs [session]; [waitingForUser] = manual submit.
      * [attempt] increments on retry so the host recreates the WebView + controller.
+     * [viaWebSearch] = the airline-agnostic Google panel rule is running (ADR-026),
+     * so the banner talks about a web lookup rather than "the airline page".
      */
     data class Scraping(
         val session: RuleDrivenScrapeSession,
         val attempt: Int,
         val waitingForUser: Boolean = false,
+        val viaWebSearch: Boolean = false,
     ) : StatusCheckUiState
 
-    /** No rule for this airline (spec fallback): show a plain web search. */
+    /**
+     * Neither an airline rule nor the Google panel rule can run (no date on the
+     * flight, or the Google rule is missing from the registry): a plain web search
+     * the user reads.
+     */
     data class WebSearchFallback(
         val url: String,
     ) : StatusCheckUiState
@@ -56,6 +64,10 @@ sealed interface StatusCheckUiState {
         val session: RuleDrivenScrapeSession,
         val attempt: Int,
         val reason: String,
+        /** True when an AIRLINE rule failed and the Google panel rule is available as a second try (ADR-026). */
+        val canTryWebSearch: Boolean = false,
+        /** True when the failed attempt was the Google panel rule itself. */
+        val viaWebSearch: Boolean = false,
     ) : StatusCheckUiState
 }
 
@@ -98,14 +110,21 @@ class FlightStatusCheckViewModel
         private var attempt = 0
         private var scrapeJob: Job? = null
 
-        /** Idempotent — safe to call from a LaunchedEffect. */
+        /**
+         * Idempotent — safe to call from a LaunchedEffect. Rule selection (ADR-026):
+         * airline rule → the Google flight-status panel rule (any airline) → plain web
+         * search. A flight without a date never scrapes: the Google card shows a
+         * date window around today, and applying another day's gate/times to an
+         * undated journey would be a silent lie.
+         */
         fun start(id: String) {
             if (flightId == id) return
             flightId = id
             viewModelScope.launch {
                 val flight = repository.getFlight(id) ?: return@launch
-                val rule = ruleRegistry.flightRuleFor("${flight.airlineIata}-${flight.flightNumber}")
-                if (rule == null || flight.date == null) {
+                val airlineRule = ruleRegistry.flightRuleFor("${flight.airlineIata}-${flight.flightNumber}")
+                val rule = if (flight.date == null) null else airlineRule ?: googleRule()
+                if (rule == null) {
                     state.value =
                         StatusCheckUiState.WebSearchFallback(
                             url =
@@ -130,6 +149,21 @@ class FlightStatusCheckViewModel
             beginAttempt(flight, rule)
         }
 
+        /**
+         * After an AIRLINE rule failed: switch this check to the Google panel rule
+         * (ADR-026). Later plain retries stay on Google for this check.
+         */
+        fun retryViaWebSearch() {
+            val flight = currentFlight ?: return
+            val rule = googleRule() ?: return
+            currentRule = rule
+            beginAttempt(flight, rule)
+        }
+
+        private fun googleRule(): ScrapeRule? = ruleRegistry.ruleById(GoogleFlightsExtractor.RULE_ID)
+
+        private fun isGoogle(rule: ScrapeRule): Boolean = rule.id == GoogleFlightsExtractor.RULE_ID
+
         private fun beginAttempt(
             flight: FlightJourney,
             rule: ScrapeRule,
@@ -141,11 +175,14 @@ class FlightStatusCheckViewModel
                     params =
                         ScrapeParams(
                             pnr = flight.pnrBookingRef,
-                            flightNumber = flight.flightNumber,
+                            // Google's query wants the bare number ("101", not "0101").
+                            flightNumber =
+                                if (isGoogle(rule)) FlightIdentity.normalizeFlightNumber(flight.flightNumber) else flight.flightNumber,
                             date = FlightStatusFallbacks.formatDateForRule(rule.id, flight.date!!),
+                            airlineIata = FlightIdentity.normalizeAirline(flight.airlineIata),
                         ),
                 )
-            state.value = StatusCheckUiState.Scraping(session, attempt)
+            state.value = StatusCheckUiState.Scraping(session, attempt, viaWebSearch = isGoogle(rule))
             scrapeJob?.cancel()
             scrapeJob =
                 viewModelScope.launch {
@@ -161,18 +198,30 @@ class FlightStatusCheckViewModel
             when (event) {
                 is ScrapeEvent.PageReady -> Unit
                 is ScrapeEvent.NeedsUserAction ->
-                    state.value = StatusCheckUiState.Scraping(session, attempt, waitingForUser = true)
-                is ScrapeEvent.Extracted -> applyExtracted(event.data, flight, session)
+                    // The Google rule is a direct GET with nothing for the user to do; the
+                    // engine still emits this because the rule has no submitSelector
+                    // (same reasoning as the erail route flow, ADR-018).
+                    if (!isGoogle(session.rule)) {
+                        state.value = StatusCheckUiState.Scraping(session, attempt, waitingForUser = true)
+                    }
+                is ScrapeEvent.Extracted -> applyExtracted(event.data, event.rawHtml, flight, session)
                 is ScrapeEvent.ParseFailed -> failAttempt(flight, session, event.reason)
             }
         }
 
         private suspend fun applyExtracted(
             data: ScrapedData,
+            rawHtml: String,
             flight: FlightJourney,
             session: RuleDrivenScrapeSession,
         ) {
-            val result = AirlineStatusMapper.map(data, flight, fetchedAt = clock.instant())
+            val fetchedAt = clock.instant()
+            val result =
+                if (isGoogle(session.rule)) {
+                    GoogleFlightsExtractor.map(rawHtml, flight, fetchedAt = fetchedAt)
+                } else {
+                    AirlineStatusMapper.map(data, flight, fetchedAt = fetchedAt)
+                }
             if (result == null) {
                 failAttempt(flight, session, REASON_UNMAPPABLE)
                 return
@@ -181,10 +230,14 @@ class FlightStatusCheckViewModel
             val updated = repository.getFlight(flight.id) ?: return
             val changes = FlightChangeDetector.detect(old = flight, new = updated)
             if (changes.isNotEmpty()) alerts.announce(updated, changes)
+            // "Updated" = anything the user can SEE changed (status, times, terminal...),
+            // not only the notifiable subset — e.g. SCHEDULED → DEPARTED with no gate
+            // is not a notification, but it is new data on the sheet (ADR-026).
+            val dataChanged = updated.copy(lastFetchedAt = flight.lastFetchedAt, updatedAt = flight.updatedAt) != flight
             outcome.value =
                 CheckOutcome(
                     flightId = flight.id,
-                    kind = if (changes.isEmpty()) CheckOutcomeKind.NO_CHANGES else CheckOutcomeKind.UPDATED,
+                    kind = if (changes.isEmpty() && !dataChanged) CheckOutcomeKind.NO_CHANGES else CheckOutcomeKind.UPDATED,
                     at = clock.instant(),
                 )
             state.value = StatusCheckUiState.Done(changes)
@@ -197,7 +250,15 @@ class FlightStatusCheckViewModel
         ) {
             outcome.value =
                 CheckOutcome(flightId = flight.id, kind = CheckOutcomeKind.FAILED, at = clock.instant())
-            state.value = StatusCheckUiState.ParseFailed(session, attempt, reason)
+            val viaGoogle = isGoogle(session.rule)
+            state.value =
+                StatusCheckUiState.ParseFailed(
+                    session = session,
+                    attempt = attempt,
+                    reason = reason,
+                    canTryWebSearch = !viaGoogle && googleRule() != null,
+                    viaWebSearch = viaGoogle,
+                )
         }
 
         internal companion object {

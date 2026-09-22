@@ -1287,3 +1287,89 @@ ViewModel, 7 expiry/preset/extension, 3 file-store = 31 new/extended unit tests;
 `DocumentsE2eTest.seededDocument_appearsInList_andOpensViewer` (compiles in this
 change; device run in the validation stage). Drive sync of documents is the one
 documented gap.
+
+## ADR-026 — Google flight-status panel as the airline-agnostic status fallback (2026-09-22)
+
+**Context.** Only Air India ships an airline scrape rule (ADR-013). Every other
+airline's "Check status" opened a plain Google search the user had to read and copy
+from by hand. The 2026-09-22 recon (`docs/recon/google-flights-NOTES.md`, captured
+panel HTML alongside) showed Google renders a rich "Flight status" card for
+`q={IATA}+{number}+flight+status&hl=en` — the same card for every airline — with
+stable *semantic* anchors (visible `<h2>Flight status</h2>`, ARIA `tab`/`tabpanel`/
+`button[aria-expanded]`, `aria-label="Airport info for XXX"`, a closed English caption
+vocabulary, `<del>` for the original time when a flight deviates) and unstable
+obfuscated CSS classes that rotate per deploy.
+
+**Decisions.**
+
+1. **Hybrid: a rule file for the engine contract, a pure parser for the card.**
+   `core/scrape/src/main/assets/scrape-rules/google-flights.json` (kind `flight`,
+   `iataCodes: []` so IATA dispatch never selects it — looked up by id only) owns the
+   URL template, defensive `dismissSelectors` for consent.google.com (`#L2AGLb`,
+   `#introAgreeButton`, "Accept all"/"I agree" buttons — no wall was seen from an
+   India egress, EU users are known to get one), the ready signal (results container
+   or a bot-wall captcha form) and a `required` **heading sentinel**: when Google shows
+   no rich card there is no "not found" message, the `h2` is simply absent, so the
+   rule fails cleanly and the raw page stays. Its fixture pair pins the class-free
+   extract fields (flight label, selected date tab, header text/status, data source,
+   "Updated …"). Per-card detail extraction (dep/arr caption+time, struck original,
+   Terminal/Gate, `City · Day, DD Mon`, tab→panel resolution, card disambiguation)
+   needs sibling pairing and ARIA references the declarative `ExtractSpec` schema
+   cannot express, so it lives in `feature:flights`' pure jsoup
+   `GoogleFlightsExtractor.map(html, flight, fetchedAt): FlightStatusResult?`
+   (never throws; null = keep the page). Rejected alternatives: a generic rule
+   with `rows` (no way to pair a label with its value sibling or to scope to the
+   selected tab); a parser-only path bypassing the engine (would fork the
+   load/dismiss/ready/dump host and lose the fixture-harness contract).
+2. **Engine additions (additive).** `ScrapeParams.airlineIata` + `{airlineIata}`
+   placeholder (Google needs the carrier separately from the bare number, which is
+   `FlightIdentity.normalizeFlightNumber`ed — `0101` → `101`).
+   `ScrapeEvent.Extracted.rawHtml` (default `""`) carries the same dump the rule
+   extracted from so a feature mapper can post-process it. Existing rules and
+   callers are untouched.
+3. **Flow.** `FlightStatusCheckViewModel.start`: airline rule → else the Google rule →
+   else plain web search. A flight **without a date never scrapes Google**: the card
+   shows a ±2-day window and applying another day's gate/times to an undated journey
+   would be a silent lie (`flights_check_fallback_hint` now says to set a date).
+   An airline rule's `ParseFailed` offers a third action, **"Try web search"**
+   (`retryViaWebSearch`), which switches that check to the Google rule; later plain
+   retries stay on Google. The Google rule's mechanical `NeedsUserAction` (no
+   `submitSelector`) is ignored — direct GET, nothing to submit (ADR-018 precedent).
+   Success runs the unchanged `applyStatusResult` → `FlightChangeDetector` →
+   notifications → `Done` path; failure is the unchanged raw-page banner
+   (`flights_check_parse_failed_web` wording for the Google case).
+4. **Parser safety rules.** The card must be for the journey's date (departure
+   column's own `City · Day, DD Mon` caption, else the selected tab; year resolved to
+   the nearest around the journey, so Dec/Jan wraps work); otherwise null. Cards are
+   scoped to the `aria-selected` tab's panel; when that panel is EMPTY (live DOM, see
+   below) the parser falls back to the panel root while skipping anything inside a
+   non-selected tabpanel. Card choice prefers the journey's departure airport, then
+   arrival airport (multi-leg groups such as AI 101 DEL→FCO→JFK). A caption that is
+   not `Scheduled …` marks the shown time as ACTUAL/ESTIMATED and the `<del>` original
+   as the schedule. Status: `Cancelled`/`Delayed` words win; `Landed`/`Arrived` →
+   LANDED; `Departed` caption → DEPARTED; a shown departure LATER than the struck
+   original → DELAYED (an EARLIER one — Google renders early running identically —
+   does not); otherwise SCHEDULED. `-` placeholders → empty (merge-only-known, ADR-005).
+5. **"Updated" outcome semantics.** `CheckOutcomeKind.UPDATED` now also fires when
+   any *visible* field changed (status/times/terminals), not only when a
+   notifiable `FlightChange` exists — SCHEDULED→LANDED with no gate is new data on
+   the sheet and must not read "no changes".
+6. **Recon vs. live DOM — pinned by fixtures.** The Playwright recon put the card
+   inside the selected tabpanel with `8:20 am` tokens and exposed a
+   `data-maindata` JSON blob (`flight_status` enums) recommended as the "best
+   anchor". The WebView dump on the Android 16 emulator (fixture
+   `live-landed-6e2001.html`, kept in both modules) differs: **every tabpanel is
+   empty and the current day's card sits in a sibling async container**, tokens are
+   `8:20am`, header/caption say `Arrived`, and the `flight_status` blob is
+   **absent** from the page. The blob is therefore optional diagnostics only
+   (`mainStatuses`/`mainDepDelays`, never required, never used for status). Fixtures:
+   two REAL recon captures (AI 101 scheduled multi-leg; 6E 2001 departed early), the
+   LIVE device dump (landed), the no-card page, and three SYNTHETIC files derived
+   from the real DOMs with only the state edited (delayed with gate, cancelled,
+   decoy second tabpanel) — labelled synthetic inside because no live
+   delayed/cancelled card could be observed (recon gap).
+
+**Consequences.** Every airline gets one-tap status when Google has the flight; the
+user is never worse off than the previous read-it-yourself page. No schema/DB
+change. `core:model`/`core:data` untouched; `core:scrape` contract grows by two
+defaulted fields. Verified live on the emulator (docs/validation-report.md).
