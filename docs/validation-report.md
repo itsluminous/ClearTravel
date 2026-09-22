@@ -654,3 +654,36 @@ Archived filter → detail: "Unarchive" is still a single 53 px `TextView` besid
 "Edit"/"Delete" in both the train and flight sheets (`61-unarchive-single-line-recheck.png`,
 blind capture). Full gate green: unit tests 723/723, ktlint + lint clean;
 `connectedDebugAndroidTest` **12/12 PASS**, `core:ocr` capture harness SKIPPED (`@Ignore`).
+
+## Google flight-status fallback (2026-09-22, emulator Android_16_AOSP_Medium, API 36, ADR-026)
+
+Flight added manually: **6E 2001, 2026-09-22** (IndiGo — no airline rule file), no
+route/times. "Save & check status" → the new `google-flights` rule ran in the visible
+WebView (banner "Looking up the flight on Google…"). Google served the **real rich
+card** to the emulator's WebView — **no bot wall, no consent wall** (first anonymous
+load; UA is the stock Android WebView).
+
+- First run (`62-google-fallback-first-run.png`): rule extraction succeeded but the
+  pure parser returned null → the D2 banner ("Google didn't show a flight status
+  card…", Retry / Close) with the live card still readable underneath — the
+  never-worse-than-today path worked as designed. Root cause from the dumped
+  `outerHTML` (captured via a temporary log dump, removed before commit): the live
+  DOM differs from the Playwright recon — all four `role=tabpanel`s are EMPTY and the
+  day's card is rendered in a sibling async container; time tokens are `8:20am`
+  (no space); header/caption read `Arrived`; the recon's `data-maindata`
+  `flight_status` blob is absent. That dump is now the fixture
+  `live-landed-6e2001.html` (feature:flights + core:scrape).
+- Second run after the parser fix (`63-google-fallback-status-updated.png`): "Status
+  updated" within ~4 s of tapping Check status; the detail sheet
+  (`64-google-fallback-detail-sheet.png`, uiautomator dump) shows **Landed**,
+  Departure Scheduled 08:20 / Estimated 08:09, Terminal — / Gate —, Arrival
+  Scheduled 10:15 / Estimated 09:37, Terminal 2 / Gate —, "Checked 22 Sep, 09:47",
+  "Last check (22 Sep, 09:47): status updated". Matches the card (8:20am struck →
+  departed 8:09am; 10:15am struck → arrived 9:37am, T2, Cirium).
+- Not observed live: consent wall, bot wall, a delayed/cancelled card (synthetic
+  fixtures cover those states). Note for future runs: typing into the add form while
+  the host machine was at load ~14 produced an emulator ANR ("Waited 22 s for
+  FocusEvent") unrelated to the app; retyping at low load worked.
+
+Blind screenshots used: 3 of ≤3. Emulator left running with the app installed and
+the 6E 2001 journey (status Landed) present.
