@@ -6,6 +6,7 @@ import com.itsluminous.cleartravel.core.data.repository.SettingsRepository
 import com.itsluminous.cleartravel.core.data.security.SecureStorageInitializer
 import com.itsluminous.cleartravel.core.security.biometric.BiometricKeyWrapper
 import com.itsluminous.cleartravel.core.security.lock.AppLockController
+import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import com.itsluminous.cleartravel.core.security.vault.KeyVault
 import com.itsluminous.cleartravel.core.security.vault.VaultState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -107,6 +109,16 @@ class AppLockViewModel
                     else -> AppLockUiState.Ready
                 }
             }.stateIn(viewModelScope, SharingStarted.Eagerly, initialState())
+
+        /**
+         * ADR-031 follow-up: `FLAG_SECURE` on the activity window while the lock timing
+         * is *Immediately* (`LockTiming.securesWindow`) — the gate applies it through
+         * [SecureWindowEffect]. Defaults to the stored fallback's behaviour until read.
+         */
+        val secureWindow: StateFlow<Boolean> =
+            settingsRepository.lockTiming
+                .map { it.securesWindow }
+                .stateIn(viewModelScope, SharingStarted.Eagerly, LockTiming.DEFAULT.securesWindow)
 
         /**
          * Synchronous first value. The onboarding flag is not known yet; that is safe

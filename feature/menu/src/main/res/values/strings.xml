@@ -136,7 +136,7 @@
     <string name="menu_security_biometric_disabled">Biometric unlock disabled</string>
     <string name="menu_security_biometric_failed">Biometric unlock could not be enabled.</string>
     <string name="menu_security_lock_timing_title">Lock when in the background for</string>
-    <string name="menu_security_lock_immediately">Immediately</string>
+    <string name="menu_security_lock_immediately">Immediately — also hides the app preview in Recents and blocks screenshots</string>
     <string name="menu_security_lock_1m">1 minute</string>
     <string name="menu_security_lock_5m">5 minutes</string>
     <string name="menu_security_lock_15m">15 minutes</string>

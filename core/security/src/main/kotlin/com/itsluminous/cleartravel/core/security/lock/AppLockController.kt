@@ -21,6 +21,15 @@ enum class LockTiming(
     NEVER("never", null),
     ;
 
+    /**
+     * ADR-031 follow-up: with [IMMEDIATELY] the user wants nothing of the app visible
+     * the moment it leaves the foreground — so the window is also flagged
+     * `FLAG_SECURE` (no Recents task snapshot, no screenshots / screen recording of the
+     * content). Every other timing keeps the normal window; the app is still on screen
+     * for that long by the user's own choice.
+     */
+    val securesWindow: Boolean get() = this == IMMEDIATELY
+
     companion object {
         /**
          * ADR-034: one minute. Long enough to switch to a wallet/SMS app and back at a

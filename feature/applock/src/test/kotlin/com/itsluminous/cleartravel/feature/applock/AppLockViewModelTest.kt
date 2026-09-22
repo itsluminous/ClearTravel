@@ -6,6 +6,7 @@ import com.itsluminous.cleartravel.core.data.security.StorageMigrationReport
 import com.itsluminous.cleartravel.core.security.biometric.BiometricKeyWrapper
 import com.itsluminous.cleartravel.core.security.crypto.CryptoPrimitives
 import com.itsluminous.cleartravel.core.security.lock.AppLockController
+import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import com.itsluminous.cleartravel.core.security.vault.DefaultKeyVault
 import com.itsluminous.cleartravel.core.security.vault.InMemoryKeyFileStore
 import com.itsluminous.cleartravel.core.security.vault.VaultState
@@ -74,6 +75,20 @@ class AppLockViewModelTest {
     private fun wizardDone() {
         settings.onboarding.value = false
     }
+
+    @Test
+    fun secureWindow_followsTheLockTiming() =
+        runTest {
+            val viewModel = viewModel()
+            // ADR-034 default is one minute → normal window.
+            assertThat(viewModel.secureWindow.value).isFalse()
+
+            settings.setLockTiming(LockTiming.IMMEDIATELY)
+            assertThat(viewModel.secureWindow.value).isTrue()
+
+            settings.setLockTiming(LockTiming.NEVER)
+            assertThat(viewModel.secureWindow.value).isFalse()
+        }
 
     @Test
     fun freshInstall_showsSetup_validatesPair_thenPreparesAndOpens() =

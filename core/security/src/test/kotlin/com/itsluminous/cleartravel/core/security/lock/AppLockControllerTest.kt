@@ -72,4 +72,10 @@ class AppLockControllerTest {
         assertThat(LockTiming.fromStorage("garbage")).isEqualTo(LockTiming.DEFAULT)
         assertThat(LockTiming.fromStorage(null)).isEqualTo(LockTiming.ONE_MINUTE)
     }
+
+    @Test
+    fun securesWindow_onlyForImmediately() {
+        assertThat(LockTiming.IMMEDIATELY.securesWindow).isTrue()
+        assertThat(LockTiming.entries.filter { it.securesWindow }).containsExactly(LockTiming.IMMEDIATELY)
+    }
 }

@@ -60,6 +60,8 @@ fun AppLockGate(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val feedback by viewModel.feedback.collectAsStateWithLifecycle()
+    val secureWindow by viewModel.secureWindow.collectAsStateWithLifecycle()
+    SecureWindowEffect(secure = secureWindow)
     LaunchedEffect(state) {
         if (state is AppLockUiState.Ready) onUnlocked()
     }

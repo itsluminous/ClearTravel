@@ -1901,8 +1901,15 @@ vault, ciphers, lock timing), 8 `core:data` (lazy factory, storage migration) +
 4 + 2 `feature:menu` (security settings, backup password prompt), 1 e2e — 949 unit
 tests total. Follow-ups: per-file "needs source password" prompt for Drive
 attachments; a "re-upload Drive files" action for pre-encryption uploads; Argon2 if a
-platform KDF ever lands; lock-timing "immediately" could also blank the task
-snapshot (`FLAG_SECURE`).
+platform KDF ever lands. *Done in the 2026-09-22 cleanup pass:* lock timing
+"Immediately" also sets `FLAG_SECURE` on the window (`LockTiming.securesWindow` →
+`AppLockViewModel.secureWindow` → `SecureWindowEffect` in the gate), blanking the
+Recents snapshot and refusing screenshots; every other timing keeps the normal window.
+*Documented limitation, not planned:* the per-file "needs source password" prompt for
+foreign Drive attachment envelopes (`ResolvedAttachment.NeedsSourcePassword`) — the
+restore ladder is not wired into any sheet (ADR-016), and a backup restore with the
+old password already adopts the key that opens those files, so the prompt would only
+ever fire for the Drive-attachment-without-backup case.
 
 ## ADR-032 — First-run onboarding wizard: password → Google → restore-or-fresh → backup password (2026-09-22)
 
