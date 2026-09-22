@@ -1,25 +1,38 @@
 # feature:trains
 
-Train journeys: manual ticket entry (PNR, train, date, stations, class, coach/seat,
-passengers, quota, booking status), the ticket detail bottom sheet (per-passenger
-booking/chart status, seat details, train schedule/route, derived journey duration),
-user-initiated PNR status refresh via the rule-driven WebView scrape of the Indian
-Railways enquiry page (foreground-only — captcha, ADR-011), SMS/email paste and OCR
-prefill paths, and the archive list (auto-archive is a later polish stage; the pure
-`isPastJourney(ticket, today)` predicate ships now). Renders inside the Journeys tab
-(Trains segment) — the app module composes it next to `feature:flights`, and this
-module depends only on `core:*`, never on another feature.
+Train journeys, rendered as the Trains segment of the Journeys tab (the app module
+composes it next to `feature:flights`; this module depends only on `core:*`).
+
+- **Add paths** (`form/`, `prefill/`): manual form (journey date via the shared
+  `LocalDatePickerDialog`), pasted IRCTC SMS/email, PDF/image via `core:ocr`, shared
+  PNR link. Every save runs the ADR-024 duplicate-PNR guard (`TrainRepository.findByPnr`).
+- **Cards + list** (`list/`): ADR-020 redesign — header band, status pills, action
+  column (PNR check, seat map, route, share); Active|Archived via the shared
+  `FullWidthFilterRow`; pure formatting in `TrainCardFormat`.
+- **Detail sheet** (`detail/`): passengers/status, route + seat-map buttons,
+  unconfirmed-seat hint, "Part of" trips (ADR-028).
+- **PNR check** (`pnr/`): foreground WebView on the `indianrail-pnr` rule (user solves
+  the captcha, ADR-011), pure `PnrStatusMapper`, `applyStatusResult` (inserts new
+  passengers, ADR-023); injects the shared `RuleRegistry`.
+- **Route** (`route/`): hands-free fetch — ixigo primary, erail fallback, "Try another
+  source" (ADR-019); pure `RouteMapper`/`CoachMapper`; the OFFLINE `TrainRouteScreen`
+  renders from Room only.
+- **Seat map** (`seatmap/`): coach strip from `train_coaches`, bay/row grid from the
+  `assets/seat-layouts/<class>.json` data files (ADR-022; `SeatLayoutAssetTest` pins
+  every file), berth vs seat wording per `SeatKind`.
+- **Share** (`share/`): off-screen card render → PNG via the app `FileProvider` + PNR
+  deep link (`TicketShareLinks`).
+- `provider/ManualTrainStatusProvider` keeps the `TrainStatusProvider` seam alive.
 
 ## Public surface (integration contract)
 
-- `TrainsContent(modifier: Modifier = Modifier)` — the Trains segment root. Hosts the
-  ticket list, add/edit form, detail sheet and PNR-check WebView behind internal
-  navigation state; the app module only places it.
-- `TrainsSharedTextEntry(sharedText: String, onDone: () -> Unit, modifier: Modifier = Modifier)`
-  — share-sheet entry point for the DEFERRED `ACTION_SEND` text intent filter. The
-  integrator passes `intent.getStringExtra(Intent.EXTRA_TEXT)` and a close callback;
-  the composable opens the add form prefilled from the IRCTC SMS/email parser and
-  calls `onDone` after save or cancel.
-- `ManualTrainStatusProvider` — the Hilt-bound `TrainStatusProvider` (ADR-011): the
-  interactive WebView refresh bypasses the provider seam by design (captcha), so this
-  always-available stub keeps the seam alive for a future API-backed provider.
+- `TrainsContent(initialTicketId, initialAction, landingNonce, onLandingConsumed,
+  addRequest, onAddRequestDone, onOpenTrip, …)` — segment root with internal
+  navigation (`TrainsNavigation.kt`); all hooks are defaulted.
+- `TrainsExternalEntry(request: TrainsEntryRequest.Text|File|Pnr, onDone: (TrainsEntryResult) -> Unit)`
+  — share-sheet / PNR-link intake host (`TrainsSharedTextEntry` is a thin wrapper);
+  reports `Saved` / `DuplicatePnr` / `Cancelled`.
+- `isPastJourney(ticket, today)` — used by the app's auto-archive housekeeping.
+
+Strings are `trains_*`; scrape rules live in `core:scrape`; tests cover every mapper,
+ViewModel, layout file and the navigation targets.

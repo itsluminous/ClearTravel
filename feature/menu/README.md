@@ -1,10 +1,12 @@
 # feature:menu
 
-The Menu tab: Settings (theme light/dark/system, checklist preset manager, optional
-status-API keys stored in encrypted DataStore, Google account connect/disconnect with
-incremental Calendar/Drive toggles), Backup & Restore (export/import entry points,
-merge-on-import), and the About screen (version from `BuildConfig.VERSION_NAME`,
-source link). Settings subscreens stay nested inside this tab's graph so the bottom
-bar keeps the Menu tab highlighted. Depends only on `core:*` modules; heavy work
-(backup, Google) is delegated to `core:data`/`core:google`. The skeleton ships the tab
-route and empty state.
+The Menu tab (nested NavHost, ADR-010): **Settings** — theme (light/dark/system),
+**Security** (change password = re-wrap only, biometric unlock toggle, lock timing incl.
+the `FLAG_SECURE` *Immediately* option; ADR-031/034/036), Manage presets (built-ins
+editable, delete guarded; ADR-021), Google account connect/disconnect with the
+incremental Calendar / Drive uploads / Drive backup toggles (ADR-016);
+**Backup & Restore** — export via SAF, import with preview-then-confirm (counts incl.
+travel documents), local + Drive restore with the source-password dialog for foreign
+envelopes and the fresh-install Drive prompt (ADR-015/031/032); **About**. Heavy work is
+delegated to `core:data` (`BackupManager`) and `core:google`; this module holds the
+ViewModels and screens only. Strings are `menu_*`.

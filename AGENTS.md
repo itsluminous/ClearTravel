@@ -18,7 +18,7 @@ Package root: `com.itsluminous.cleartravel`.
 | Module | Contents | Status |
 |---|---|---|
 | `app` | Hilt application, MainActivity (single-activity Compose), bottom bar (Trips / Journeys / Checklist / Documents / Menu), NavHost, Journeys Trains\|Flights segmented composition, deep links, launcher icon, manifest (Maps key placeholder), androidTest e2e suite (4 classes, Hilt test modules) | done |
-| `core:designsystem` | `ClearTravelTheme` (dynamic color + #0B57D0 seed fallback), typography ≥16sp body, `EmptyState`, `ChipRow`, `ExplainableIcon`, `ClearTravelCard`, `ClearTravelFab`, `DocumentViewerScreen` (shared image/PDF viewer: zoom/rotate, fullscreen, landscape rail; ADR-030/034) | done |
+| `core:designsystem` | `ClearTravelTheme` (dynamic color + #0B57D0 seed fallback), typography ≥16sp body, `EmptyState`, `ChipRow`, `FullWidthFilterRow`/`FullWidthFilterChip`, `LocalDatePickerDialog`, `DateFormats`, `ExplainableIcon`, `ClearTravelCard`, `ClearTravelFab`, `TextEditDialog`, `PasswordField`, reorderable-list helpers, `ShellChromeController` seam, `DocumentViewerScreen` (shared image/PDF viewer: zoom/rotate, fullscreen, landscape rail; ADR-030/034) — anything two features need lives here (ADR-036) | done |
 | `core:model` | `SyncableEntity` (UUID + updatedAt + tombstone, ADR-002), `EntityIds`, `ThemeMode`, domain models/enums — **contract: changes need an ADR** | done |
 | `core:database` | Room entities/DAOs/converters, `ClearTravelDatabase` (schema v3: v2 `train_coaches`, v3 `travel_documents`; committed `schemas/` + `MigrationTest`) — **contract: changes need an ADR**. Encryption lives BELOW it (SQLCipher factory in `core:data`), so schemas and DAO tests are untouched | done |
 | `core:data` | Repository interfaces + Room-backed impls, `TrainStatusProvider`/`FlightStatusProvider` contracts (Hilt-bound), settings DataStore (+ `lockTiming`), backup export/merge — format v2 password envelope (ADR-015/031, `docs/backup-format.md`), `JourneyAddRequestBus` cross-tab seam (ADR-028), `security/`: `VaultKeyedOpenHelperFactory` (lazy SQLCipher), plaintext→encrypted DB + file migrations, `AppFileLayout`, `SecureStorageInitializer` | done |
@@ -28,11 +28,11 @@ Package root: `com.itsluminous.cleartravel`.
 | `core:scrape` | Rule-driven WebView scraper engine (DOM storage on, `dismissSelectors`, ready-signal timeout → raw-page fallback); per-site JSON rule files in assets + HTML fixtures (ADR-003) | done |
 | `core:ocr` | PDF→bitmap→preprocess→ML Kit text recognition + BCBP barcode decode; pure extraction functions + OCR-text fixtures | done |
 | `core:testing` | `MainDispatcherRule`, generic `inMemoryDatabase<T>()`, `Fixtures` builders — exposed as MAIN source | done |
-| `feature:trains` | Train tickets CRUD, detail sheet, PNR refresh (foreground WebView, user-solved captcha), SMS/OCR prefill, archive | done (on-device validated, `docs/validation-report.md`) |
-| `feature:flights` | Flight CRUD, boarding-pass import, status check WebView + failure banner/retry + outcome line, check-in windows data, WorkManager polling + notifications | done (on-device validated; Air India rule verified live) |
-| `feature:itinerary` | Trips tab: trips, day-grouped items, timeline + Google Maps view | done (map needs-user-setup: `MAPS_API_KEY` + Play-services device) |
+| `feature:trains` | Train tickets CRUD, redesigned cards (ADR-020), detail sheet, PNR refresh (foreground WebView, user-solved captcha; injected `RuleRegistry`), SMS/OCR/PNR-link prefill + de-duplication (ADR-024), hands-free route fetch (ixigo primary / erail fallback) + offline route page (ADR-019), seat map from `train_coaches` + seat-layout data files (ADR-022), ticket share image + PNR link, archive | done (on-device validated, `docs/validation-report.md`) |
+| `feature:flights` | Flight CRUD (date is picker-only), boarding-pass + booking-confirmation import (ADR-017), de-duplication (ADR-025), status check WebView: airline rule → Google flight-status card fallback (`GoogleFlightsExtractor`, ADR-026) → web search, failure banner/retry + outcome line, check-in windows data, WorkManager polling (EntryPoint workers, ADR-013) + notifications | done (on-device validated; Air India + Google rules verified live) |
+| `feature:itinerary` | Trips tab: trips, day-grouped items (auto-sort by time + drag override, ADR-029), timeline + Google Maps view (markers only), location picker with Nominatim place search + platform-Geocoder fallback (ADR-035), Google Maps link intake (ADR-029 D), commute legs linked to journeys incl. add-from-form via `JourneyAddRequestBus` (ADR-028) | done (map needs-user-setup: `MAPS_API_KEY` + Play-services device) |
 | `feature:checklist` | Checklist tab: per-trip checklists, preset templates + manager | done |
-| `feature:documents` | Documents tab: travel documents (passport, visa, …) as local files with typed labels + expiry, add via system picker, shared viewer, edit/delete (ADR-027; local-only, Drive sync is a follow-up) | done (build-only; device validation pending) |
+| `feature:documents` | Documents tab: travel documents (passport, visa, …) as encrypted local files with typed labels + expiry, add via system picker, bottom-docked live search (ADR-033), shared viewer, edit/delete (ADR-027; local-only, Drive sync is a follow-up) | done (device-validated: `docs/validation-report.md`, ADR-030/033/034 runs) |
 | `feature:menu` | Menu tab: Settings (theme, Security: change password / biometric unlock / lock timing, presets, Google account), Backup/Restore (local + Drive, source-password prompt for foreign backups), About | done |
 | `feature:applock` | ADR-031 gate composed around the whole shell: blocking first-run password setup (autofill `NewPassword`, strength hint, data-loss warning, fingerprint toggle), unlock (password autofill or BiometricPrompt), "Securing your data" storage preparation, process-lifecycle re-lock; ADR-032 first-run wizard steps 2–4 in `onboarding/` (Google link or offline → restore from file / Drive or start fresh → backup password) gated on `SettingsRepository.onboardingPending` | done (device-validated on the emulator: fresh setup + plaintext→SQLCipher migration + wizard incl. foreign-password restore) |
 
@@ -54,8 +54,10 @@ data/database/features. UI never touches Room DAOs or WebView engines directly.
 ./gradlew assembleDebug              # app/build/outputs/apk/debug/ClearTravel-debug.apk
 
 # the full local quality gate (same as CI) — ALWAYS redirect to build.log (git-ignored):
-./gradlew ktlintCheck lintDebug testDebugUnitTest assembleDebug > build.log 2>&1
+./gradlew ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest > build.log 2>&1
 tail -n 30 build.log                 # inspect with tail/grep; output is huge
+./gradlew connectedDebugAndroidTest  # e2e suite on a running emulator (see anti-stall rules)
+# macOS has no `timeout`: wrap long emulator steps yourself (e.g. `perl -e 'alarm 600; exec @ARGV' -- cmd`)
 ```
 
 Run ktlint + unit tests before EVERY commit. No milestone is done until its tests
@@ -86,7 +88,7 @@ exist and the full gate passes.
    wrong type fails linking with error `[28444]`) or in encrypted DataStore for
    user-entered API keys. Empty values are safe defaults. NEVER commit
    `local.properties`, `*.log`, `.DS_Store`, keystores.
-9. **Encryption at rest is not optional** (ADR-031): every user file is written
+7. **Encryption at rest is not optional** (ADR-031): every user file is written
    through `LocalFileCipher` (never a raw `outputStream()` under `filesDir`), Room
    only ever opens through the vault-keyed factory, anything leaving the device
    (backups, Drive uploads) goes through `PortableCipher`, and nothing touches Room
@@ -95,13 +97,21 @@ exist and the full gate passes.
    password; never add a recovery/reset path — data loss on a forgotten password is
    the documented design. New user-file directories must be added to `AppFileLayout`
    so the one-time migration and the backup engine see them.
-7. **Git**: NEVER push, never add a remote, never force-push. Conventional Commits,
+   First run is the ADR-032 wizard (password → Google → restore-or-fresh → backup
+   password) gated on `SettingsRepository.onboardingPending`; anything that must not
+   overlay it (the notification permission request, startup housekeeping) runs inside
+   the gate's content / `onUnlocked`, never at the top of the activity tree.
+8. **Git**: NEVER push, never add a remote, never force-push. Conventional Commits,
    imperative mood, subject ≤50 chars (`feat(trains): add ticket form`). Commit after
    every completed task. Never commit generated `build/` output.
-8. Every icon-only control uses `ExplainableIcon` (long-press explanation); empty
+9. Every icon-only control uses `ExplainableIcon` (long-press explanation); empty
    screens use `EmptyState`; errors/confirmations use snackbars, not toasts; FAB
    (`ClearTravelFab`) is the primary add action per tab; detail views are bottom
    sheets; body text ≥16sp.
+   Shared UI (any composable/helper two features need — filter rows, date picker,
+   date formats, dialogs) lives in `core:designsystem`, never as private per-feature
+   copies (ADR-036); picker-backed read-only fields observe their own
+   `InteractionSource`, never a transparent overlay.
 
 ## Working conventions
 

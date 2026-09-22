@@ -8,27 +8,40 @@ optional Google account link for Calendar/Drive sync.
 
 ## Features
 
-- **Train journeys** — add tickets manually, from a pasted IRCTC SMS/email, or from a
-  PDF/image via on-device OCR. Refresh PNR status through a rule-driven in-app
-  WebView (you solve the captcha; the app reads the result automatically). Detail
-  bottom sheets, archive, deep-linkable notifications.
-- **Flight journeys** — add flights manually or import a boarding pass (BCBP barcode
-  / OCR). One-tap "Save & check status" opens the airline's status page in a WebView,
-  auto-fills the query, dismisses consent walls, and extracts status / gate /
-  terminal / times into the app. Clear failure banner with Retry when the page can't
-  be read, timestamped last-check outcome on the sheet, background status polling
-  with gate/delay notifications, and per-airline web check-in shortcuts.
-- **Trip itineraries** — day-grouped timeline of stays, activities and transport,
-  plus a Google Maps view of the trip (needs a Maps key and Play services). Commute
-  legs link to your train/flight journeys — pick an existing one or add a new one
-  right from the leg (you are taken to Journeys and brought back with it linked);
-  a journey's detail sheet lists the trips it is part of, one tap apart.
+- **Train journeys** — add tickets manually, from a pasted IRCTC SMS/email, from a
+  PDF/image via on-device OCR, or from a shared PNR link; the same PNR is never added
+  twice. Refresh PNR status through a rule-driven in-app WebView (you solve the
+  captcha; the app reads the result automatically). One-tap hands-free route fetch
+  (ixigo, erail.in fallback) stored for an offline route page, a **seat map** of your
+  coach with the rake's coach positions, ticket cards with status pills, share a
+  ticket as an image + PNR link, detail bottom sheets, archive, deep-linkable
+  notifications.
+- **Flight journeys** — add flights manually (date from a picker), import a boarding
+  pass (BCBP barcode / OCR) or a booking confirmation (e-ticket PDF/image); duplicates
+  are refused. One-tap "Save & check status" opens the airline's status page in a
+  WebView, auto-fills the query, dismisses consent walls, and extracts status / gate /
+  terminal / times into the app — and for every airline without a dedicated rule the
+  same flow reads **Google's flight-status card** (cancelled / delayed / landed, gates,
+  struck-through originals). Clear failure banner with Retry when the page can't be
+  read, timestamped last-check outcome on the sheet, background status polling with
+  gate/delay notifications, and per-airline web check-in shortcuts.
+- **Trip itineraries** — day-grouped timeline of stays, activities and transport
+  (auto-sorted by time, drag to override), plus a Google Maps view of the trip (needs
+  a Maps key and Play services). Places come from a **place search** (OpenStreetMap
+  Nominatim suggestions, platform geocoder fallback), a tap on the map, typed
+  coordinates or a **shared Google Maps link** (short links resolved in the
+  background). Commute legs link to your train/flight journeys — pick an existing
+  one or add a new one right from the leg (you are taken to Journeys and brought back
+  with it linked) and take their departure time from the journey; a journey's detail
+  sheet lists the trips it is part of, one tap apart.
 - **Packing checklists** — per-trip checklists built from editable preset templates
   (append multiple presets, track packed counts).
 - **Travel documents** — keep scans of your passport, visas, ID, insurance and
-  tickets as local files with typed labels and optional expiry dates (expiring-soon
-  and expired flags), opened in a document viewer. Stored on-device only and
-  included in backups.
+  tickets as encrypted local files with typed labels and optional expiry dates
+  (expiring-soon and expired flags), find them with a live search box, and open them
+  in the shared **document viewer** (pinch-zoom, rotate, fullscreen, PDF paging,
+  share, save a copy; a side rail in landscape). Stored on-device only and included
+  in backups.
 - **Backup & restore** — versioned local export/import with tombstone-aware merge
   (see `docs/backup-format.md`), plus optional Google Drive backups with a restore
   ladder on fresh installs.
