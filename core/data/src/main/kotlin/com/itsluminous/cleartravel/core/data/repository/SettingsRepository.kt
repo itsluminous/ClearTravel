@@ -1,5 +1,6 @@
 package com.itsluminous.cleartravel.core.data.repository
 
+import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ThemeMode
 import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import kotlinx.coroutines.flow.Flow
@@ -49,4 +50,9 @@ interface SettingsRepository {
     val onboardingPending: Flow<Boolean>
 
     suspend fun setOnboardingPending(pending: Boolean)
+
+    /** ADR-037: cadence of the automatic backup (local always, Drive when enabled); [BackupSchedule.OFF] by default. */
+    val backupSchedule: Flow<BackupSchedule>
+
+    suspend fun setBackupSchedule(schedule: BackupSchedule)
 }

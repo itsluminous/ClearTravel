@@ -1,6 +1,7 @@
 package com.itsluminous.cleartravel.feature.applock
 
 import com.itsluminous.cleartravel.core.data.repository.SettingsRepository
+import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ThemeMode
 import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import kotlinx.coroutines.flow.Flow
@@ -53,5 +54,12 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun setOnboardingPending(pending: Boolean) {
         onboardingWrites += pending
         onboarding.value = pending
+    }
+
+    private val schedule = MutableStateFlow(BackupSchedule.DEFAULT)
+    override val backupSchedule: Flow<BackupSchedule> = schedule
+
+    override suspend fun setBackupSchedule(schedule: BackupSchedule) {
+        this.schedule.value = schedule
     }
 }

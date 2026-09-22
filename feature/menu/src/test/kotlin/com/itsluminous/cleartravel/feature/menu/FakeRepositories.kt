@@ -2,6 +2,7 @@ package com.itsluminous.cleartravel.feature.menu
 
 import com.itsluminous.cleartravel.core.data.repository.ChecklistPresetRepository
 import com.itsluminous.cleartravel.core.data.repository.SettingsRepository
+import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ChecklistPreset
 import com.itsluminous.cleartravel.core.model.ChecklistPresetItem
 import com.itsluminous.cleartravel.core.model.ThemeMode
@@ -60,6 +61,13 @@ class FakeSettingsRepository : SettingsRepository {
 
     override suspend fun setOnboardingPending(pending: Boolean) {
         onboarding.value = pending
+    }
+
+    private val schedule = MutableStateFlow(BackupSchedule.DEFAULT)
+    override val backupSchedule: Flow<BackupSchedule> = schedule
+
+    override suspend fun setBackupSchedule(schedule: BackupSchedule) {
+        this.schedule.value = schedule
     }
 }
 

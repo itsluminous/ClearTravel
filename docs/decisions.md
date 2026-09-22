@@ -2296,3 +2296,70 @@ data/database/security/feature module. Tests added/updated: `LocalDatePickerDial
 `JourneyLabelsTest` 3, `TripDetailViewModelTest` +2, `ImportPreviewSummaryTest` 2,
 `AppLockControllerTest` +1, `AppLockViewModelTest` +1, `ScrapeWebViewControllerTest` 6;
 e2e `FlightsE2eTest` and `SeatMapE2eTest` updated.
+
+## ADR-037 — Scheduled automatic backups: Off / Daily / Weekly / Monthly (2026-09-22)
+
+**Context.** Backups so far were manual only (Menu → Backup & Restore → Export, which
+also refreshes the app-storage copy and, when Drive backups are on, queues the Drive
+upload — ADR-015/016). Users asked for a schedule: the app should back itself up
+without being asked. The user's spec: a setting Off (default) / Daily / Weekly /
+Monthly; when it fires, ALWAYS the local backup, and IF the existing Drive-backup
+toggle is on AND an account is linked, the Drive upload follows automatically —
+exactly like the manual chain.
+
+**Decisions.**
+
+1. **`BackupSchedule` lives in `core:model`** (`OFF`, `DAILY`, `WEEKLY`, `MONTHLY`;
+   `storageValue` + `period: Duration?`, `fromStorage` falling back to `OFF`). It is
+   a plain preference enum like `ThemeMode`, not a security concept, so it does not
+   join `LockTiming` in `core:security`. `SettingsRepository` gains the additive pair
+   `backupSchedule: Flow<BackupSchedule>` / `setBackupSchedule` (Preferences DataStore
+   key `backup_schedule`; every fake updated).
+2. **The pass is a pure runner, the worker a thin shell.** `ScheduledBackupRunner`
+   (`core:google/backup`) fixes the observable order: vault gate → `BackupManager.
+   exportLatestToAppStorage()` (encrypted portable envelope, pruned to 3 — the same
+   file the manual export keeps) → only if `driveBackupEnabled && isLinked`,
+   `DriveBackupService.uploadLatestBackup()` (the very call `DriveBackupWorker`
+   makes for the manual chain; dedupes by name, prunes Drive to 5). Outcomes are a
+   sealed `ScheduledBackupOutcome`. `ScheduledBackupWorker` keeps the `@EntryPoint`
+   pattern of its siblings (ADR-013 assessment) and maps outcomes to verdicts.
+3. **Module placement: `core:google`.** `core:data` owns `BackupManager` but the
+   Drive leg needs `DriveBackupService`, and `core:google` already depends on
+   `core:data` — so the worker, the runner and the `ScheduledBackupScheduler`
+   seam live next to `DriveBackupWorker`. No new inter-module edge.
+4. **ADR-031 lock rule.** A locked vault posts `AppLockNotifier.notifyUnlockToSync()`
+   and returns `Result.success()` — never `retry()`, so a phone left locked for a
+   week produces one replaced notification, not a backoff storm. The next period (or
+   the app-open re-affirm) runs it.
+5. **No constraints on the periodic job.** The LOCAL backup must happen offline, so
+   the request carries no `NetworkType`. The Drive leg is not retried by this worker
+   (a retry would re-export for nothing): a transient upload failure calls
+   `GoogleSyncScheduler.scheduleBackupUpload()`, handing the already-sealed file to
+   the existing network-gated one-shot `DriveBackupWorker` with its own backoff
+   (`UploadDeferred`). `GoogleNotAvailableException` (no token right now) is a quiet
+   `LocalOnly`. Only a failed EXPORT retries (exponential, 30 s base, capped at 5).
+6. **Scheduling policy.** Unique periodic work `scheduled-backup`, period 1 d / 7 d /
+   30 d from `BackupSchedule.period`; `OFF` → `cancelUniqueWork`. Always
+   `ExistingPeriodicWorkPolicy.UPDATE`: re-affirming with the same cadence keeps the
+   pending next-run time, changing the cadence keeps the job id and swaps the
+   interval. Applied by the ViewModel on every change and re-affirmed on app open
+   by `AppStartupTasks` (the ADR-014 hook that also restarts flight polling), for the
+   same reason: the job exists only inside WorkManager.
+7. **UI.** Backup & Restore gets an "Automatic backup" card above the manual export
+   card: a four-option radio list (shared `RadioOptionRow`, promoted from the
+   Security section's lock-timing rows) with a subtitle stating local-always and
+   Drive-follows-when-enabled. The existing "Last backup" line already reflects the
+   automatic runs since they write the same app-storage file. Strings `menu_backup_
+   schedule_*`.
+
+**Consequences.** Additive `SettingsRepository` change (this ADR). `core:google` gains
+the `work-testing` test dependency. Tests: `BackupScheduleTest` 2,
+`DefaultSettingsRepositoryTest` +1, `ScheduledBackupRunnerTest` 7 (locked → nudge and
+nothing else; drive off → export only; enabled+unlinked → export only;
+enabled+linked → export THEN upload, in order; export failure → no upload; transient
+upload failure → deferred to the Drive worker; no token → quiet), `ScheduledBackup
+SchedulerTest` 3 (enum → period/no constraints, apply enqueues/UPDATEs/OFF cancels
+on the test WorkManager, verdict mapping), `BackupRestoreViewModelTest` +2, e2e
+`BackupScheduleE2eTest` 1 (picker card present). Follow-ups: a "last automatic run"
+timestamp distinct from the manual one is not tracked (the shared file's timestamp
+is enough for now); 30-day "monthly" is a fixed interval, not calendar months.

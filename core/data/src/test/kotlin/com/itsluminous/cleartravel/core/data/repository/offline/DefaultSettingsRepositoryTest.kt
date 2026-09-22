@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ThemeMode
 import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import kotlinx.coroutines.CoroutineScope
@@ -122,5 +123,17 @@ class DefaultSettingsRepositoryTest {
 
             repository.setLockTiming(LockTiming.IMMEDIATELY)
             assertThat(repository.lockTiming.first()).isEqualTo(LockTiming.IMMEDIATELY)
+        }
+
+    @Test
+    fun `backup schedule defaults to off and round-trips every cadence`() =
+        runTest(testDispatcher) {
+            // ADR-037: automatic backups are opt-in.
+            assertThat(repository.backupSchedule.first()).isEqualTo(BackupSchedule.OFF)
+
+            for (schedule in BackupSchedule.entries) {
+                repository.setBackupSchedule(schedule)
+                assertThat(repository.backupSchedule.first()).isEqualTo(schedule)
+            }
         }
 }

@@ -22,6 +22,7 @@ import com.itsluminous.cleartravel.core.data.repository.offline.OfflineItinerary
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTrainRepository
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTravelDocumentRepository
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTripRepository
+import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ThemeMode
 import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import dagger.Binds
@@ -141,5 +142,12 @@ class FakeSettingsRepository
 
         override suspend fun setOnboardingPending(pending: Boolean) {
             onboarding.value = pending
+        }
+
+        private val schedule = MutableStateFlow(BackupSchedule.DEFAULT)
+        override val backupSchedule: Flow<BackupSchedule> = schedule
+
+        override suspend fun setBackupSchedule(schedule: BackupSchedule) {
+            this.schedule.value = schedule
         }
     }

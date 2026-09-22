@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.itsluminous.cleartravel.core.data.di.SecurePreferences
 import com.itsluminous.cleartravel.core.data.repository.SettingsRepository
+import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ThemeMode
 import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +66,13 @@ class DefaultSettingsRepository
             dataStore.edit { it[KEY_ONBOARDING_PENDING] = pending }
         }
 
+        override val backupSchedule: Flow<BackupSchedule> =
+            dataStore.data.map { BackupSchedule.fromStorage(it[KEY_BACKUP_SCHEDULE]) }
+
+        override suspend fun setBackupSchedule(schedule: BackupSchedule) {
+            dataStore.edit { it[KEY_BACKUP_SCHEDULE] = schedule.storageValue }
+        }
+
         override suspend fun trainApiKey(): String? = readSecure(SECURE_KEY_TRAIN_API)
 
         override suspend fun setTrainApiKey(key: String?) = writeSecure(SECURE_KEY_TRAIN_API, key)
@@ -90,6 +98,7 @@ class DefaultSettingsRepository
             private val KEY_FLIGHT_PROVIDER_ID = stringPreferencesKey("flight_provider_id")
             private val KEY_LOCK_TIMING = stringPreferencesKey("lock_timing")
             private val KEY_ONBOARDING_PENDING = booleanPreferencesKey("onboarding_pending")
+            private val KEY_BACKUP_SCHEDULE = stringPreferencesKey("backup_schedule")
             private const val SECURE_KEY_TRAIN_API = "train_api_key"
             private const val SECURE_KEY_FLIGHT_API = "flight_api_key"
         }
