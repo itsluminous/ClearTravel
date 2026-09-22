@@ -2005,3 +2005,57 @@ setOnboardingPending`. The POST_NOTIFICATIONS system prompt still fires over ste
 (pre-existing follow-up). Follow-ups: the ADR-031 per-file source-password prompt for
 Drive attachments (a wizard restore with the old password already adopts the key that
 opens them); a "skip for now, remind me" for Drive backup when the user stayed offline.
+
+## ADR-033 — UI polish: chained route-fetch landing, bottom Journeys segment, full-width filters, Documents search (2026-09-22)
+
+**Context.** Live use of the PNR-only quick add (ADR-023 chain: save → PNR check →
+hands-free route fetch) ended on the OFFLINE route page the user never asked to open;
+the Trains|Flights segmented control sat at the top of the Journeys tab, out of thumb
+reach and visually competing with the Active|Archived filter row; the filter chips were
+two small chips hugging the left edge; and the Documents list had no way to find a
+document once the list grew.
+
+**Decision.**
+
+1. **Route-fetch landing depends on WHO opened it** (`feature:trains`).
+   `TrainsScreen.RouteFetch` gains `chained: Boolean = false`; the PNR-check
+   `onApplied` chain sets it. The pure `routeFetchLanding(fetch)` decides where an
+   applied fetch lands: opener (`returnTo` seat map, ADR-022, or route-page refresh)
+   wins; else `chained` → the LIST (the existing "N stations loaded" snackbar reports
+   the outcome); else the offline route page (ADR-019, unchanged for the place-pin
+   and detail-sheet entry points). System back is untouched (`trainsBackTarget`
+   already sends a list-opened fetch to the list). Unit-tested in
+   `TrainsNavigationTest` (+5).
+2. **Journeys segmented control at the bottom** (`app/JourneysScreen`). The
+   `Column` now holds the segment content in a `weight(1f)` `Box` and the
+   `SingleChoiceSegmentedButtonRow` LAST, so it sits directly above the app's
+   `NavigationBar`. State (`rememberSaveable` segment), ADR-029 landings and the
+   deep-link segment selection are unchanged. Tagged `JOURNEYS_SEGMENT_TEST_TAG`.
+3. **Full-width Active|Archived filter** on the trains, flights and trips lists: the
+   same Material 3 `FilterChip`s (32dp — the row does NOT grow) in a plain
+   `Row(fillMaxWidth)` with `weight(1f)` each and a centered label, replacing the
+   scrollable `ChipRow` (which stays in use for genuinely multi-chip rows: type
+   presets in dialogs). Implemented as a private `FullWidthFilterChip` per feature
+   module — the modules never share code except through `core:*`, and promoting it to
+   `core:designsystem` is a follow-up once a fourth caller appears.
+4. **Documents search** (`feature:documents`). A bottom-docked `OutlinedTextField`
+   in the list `Scaffold`'s `bottomBar` (shown only when there are documents;
+   `imePadding` so the keyboard never covers it; leading search icon; trailing
+   `ExplainableIcon` Clear while a query is set; IME action Search just hides the
+   keyboard — filtering is live). The match is the pure `DocumentSearch`
+   (`matches`/`filter`): case-insensitive substring over the NAME and the localized
+   TYPE LABEL, never the note or path; a blank query is a no-op. Resources are
+   resolved once per composition into a type→label map so the object stays
+   resource-free and unit-tested (`DocumentSearchTest`, 7). A miss shows the
+   "No matches" `EmptyState` variant (`documents_search_empty_*`); the no-documents
+   empty state is unchanged. Strings are `documents_search_*`.
+
+**Verification.** New e2e `LayoutE2eTest` (segment docked above the nav bar +
+switching; equal-width filter chips spanning ≥ root − 41dp at ≤ 33dp height on all
+three lists) and `DocumentsE2eTest.searchBox_isDockedAtBottom_filtersLive_andClearRestores`;
+helpers `assertFullWidthFilterRow` / `assertDockedAboveNavBar` in `E2eHelpers`.
+On-device run recorded in `docs/validation-report.md`.
+
+**Consequences.** No contract change (`core:model` / `core:database` / `core:data`
+untouched). The explicit route-fetch landing (ADR-019) and the seat-map return
+(ADR-022) are unchanged; only the chained fetch closes to the list.

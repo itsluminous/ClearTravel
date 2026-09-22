@@ -890,3 +890,23 @@ Notes:
 - The POST_NOTIFICATIONS prompt was pre-granted with `pm grant` for the walk; it
   still fires over step 1 on a real first run (pre-existing follow-up).
 - Emulator shut down at the end of the run (`emu kill`, `adb devices` empty).
+
+## UI polish — chained route landing, bottom Journeys segment, full-width filters, Documents search (2026-09-22 15:20–15:35 IST, emulator Android_16_AOSP_Medium, API 36, ADR-033)
+
+Goal: prove the three steering changes on device. Method: `uiautomator dump` → text
+(bounds in px on the 1080×2400 AVD; the nav bar's labels sit at y 2253–2295, the
+`NavigationBar` starts at y ≈ 2127), five blind captures `43`–`47` (downscaled with
+`sips -Z 800`, never viewed). Fresh install (`adb install -r` on a wiped AVD → wizard:
+password → offline → start fresh).
+
+| # | Check | Verdict | Evidence |
+|---|---|---|---|
+| 1 | **Explicit route fetch unchanged (ADR-019).** Manual ticket PNR `4412345678`, train `22346` → card's place-pin ("Train route") → *Fetch train route* WebView (ixigo, hands-free) → lands on the **offline route page**: "Train route" title, refresh icon, "22346 · Vande Bharat Exp", "8h 25m", "Route fetched Sep 22, 2026, 3:31 PM", stops Gomati Nagar → Ayodhya → Varanasi Jn → DDU → Buxar → Ara → Patna … with platforms/halts; Back → list | PASS | `47-explicit-route-fetch-lands-route-page.png`, dumps |
+| 2 | **Chained landing** (quick add → PNR check → auto route fetch → LIST). The chain needs a user-solved IRCTC captcha, so it is proved by the pure decision `routeFetchLanding` in `TrainsNavigationTest` (chained → `List`; explicit → `RouteView`; seat-map / route-page opener wins even if flagged) rather than on the device | PASS (unit) | `feature/trains` `TrainsNavigationTest` 9 → 14 |
+| 3 | **Journeys segmented control at the bottom.** Trains/Flights labels at y 2017–2070, the selected segment view `[538,1981][1038,2107]` — directly above the nav bar (2127), below the list/FAB (FAB `[944,1823][1007,1886]`). Tapping Flights → "No flight journeys yet" + *Add flight* FAB; tapping Trains → *Add train ticket* FAB. Segment survives leaving/re-entering the tab (rememberSaveable) | PASS | `44-journeys-segment-bottom.png`, dumps |
+| 4 | **Deep link selects the segment**: on the Trips tab, `am start … --es …deeplink.TARGET flight --es …ENTITY_ID nonexistent-flight` (single-top) → Journeys tab, **Flights** segment `checked=true` (bottom-right view), flight list shown | PASS | dump |
+| 5 | **Active/Archived full width, same height** on Trips, Trains and Flights lists: chip bounds `[42,63][529,189]` + `[550..1038]` (487 px = 185.5 dp each, equal; together 1080 − 42 px of 16/8/16 dp padding); labels centered (`Active` text `[84..487]`, `Archived` `[592..996]`); chip height 126 px = the FilterChip's 48 dp minimum interactive size, unchanged | PASS | `43-trips-fullwidth-filter.png`, dumps |
+| 6 | **Documents search docked at the bottom**: with no documents the box is absent (empty state only); after adding "Ada Lovelace passport" (Passport, `scan.png`) and "Schengen" (Visa, `Visa.png`) via the SAF picker the field `[42,1956][1038,2106]` sits above the nav bar with the leading *Search* icon and "Search documents" placeholder; FAB floats above it (`[944,1799]`) | PASS | `45-documents-search-bottom.png`, dumps |
+| 7 | **Type-to-filter**: focus → keyboard → the field moves up to `[42,1328][1038,1478]` (`imePadding`, never covered); typing `visa` keeps **only Schengen** (matched on its TYPE label — the name has no "visa"), *Clear search* trailing icon appears; `visazz` → **"No matches" / "No document name or type contains “visazz”."**; Clear → both cards back, placeholder restored | PASS | `46-documents-search-no-matches.png`, dumps |
+| 8 | `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → BUILD SUCCESSFUL; unit **979/979**, 0 failures (was 967: `TrainsNavigationTest` +5, `DocumentSearchTest` +7) | PASS | `ui-polish.log` (git-ignored) |
+| 9 | `connectedDebugAndroidTest` → **18/18 PASS** (was 15: new `LayoutE2eTest` ×2 — segment docked above the nav bar + switching, equal-width filter chips spanning ≥ root − 41 dp at ≤ 48 dp on all three lists — and `DocumentsE2eTest.searchBox_isDockedAtBottom_filtersLive_andClearRestores`); no existing assertion referenced the old layout, so none needed changing | PASS | `connected.log` (git-ignored) |
