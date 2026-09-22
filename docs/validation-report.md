@@ -713,3 +713,35 @@ cancel paths (sheet dismissed, form Cancel, system back, manual tab tap → form
 stays unlinked, no stale add sheet on re-entering Journeys), refused-duplicate PNR
 in pick mode linking the EXISTING ticket, "Open in Journeys" from the leg sheet,
 "Part of" tap landing on the trip detail, dark theme rendering of the new rows.
+
+## Final validation of the wave (2026-09-22, emulator Android_16_AOSP_Medium, API 36)
+
+Closing pass over the pending fixes, the Documents tab (ADR-027), the Google
+flight-status fallback (ADR-026) and the cross-tab integration (ADR-028). Every
+observation below is a `uiautomator` dump (text only); the five blind captures
+(`68`–`72`, downscaled, never viewed) are references only. The emulator carried the
+prior stage's install of `266f607` (built 10:25, installed 10:27); the connected suite
+reinstalled the same source at the end.
+
+| # | Check | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Back: detail sheet → list; seat map → list; route page → list; add form (+typed PNR) → list, nothing saved; Journeys base → Trips (shell pop) → trip list → launcher (`QuickstepLauncher` focus); relaunch fine | PASS | dumps |
+| 1 | "Archived" wording: filter chip, card badge, empty state ("No archived journeys"); "Unarchive" = one 53 px `TextView` beside Edit/Delete ([451,2164][629,2217]) | PASS | `68-final-unarchive-single-line.png` |
+| 2 | Documents = 5th tab (Trips · Journeys · Checklist · **Documents** · Menu); `EmptyState` on first open | PASS | dump |
+| 2 | Add: pushed `passport-scan.png` (178 B) + `pan-card.pdf` (341 B) to `/sdcard/Download`; system picker lists both; PNG → dialog pre-selects **Passport** with the name prefilled → Save → "Document added"; PDF → **ID card** preset, name retyped to **PAN card** → Save; list newest-first (PAN card / ID card, Passport / Passport) | PASS | `69-final-documents-list.png` |
+| 2 | Viewer: PAN card → full-screen PDF page (`Stored document`, title "PAN card", Close) → back; Passport → image viewer → back to list | PASS | dumps |
+| 2 | Rename: overflow → Edit details → "Passport old" → "Document updated". Delete: overflow → Delete → dialog "Delete document? “PAN card” and its stored file will be removed from this device." → Delete → "“PAN card” deleted"; `files/documents/` holds only the remaining `.png` | PASS | dumps + `run-as ls` |
+| 2 | Backup: Menu → Backup & Restore → Export → system Save (`cleartravel-backup-20260922-1048.zip`) → "Last backup: Sep 22, 2026, 10:48 AM (8.2 kB)". Pulled zip: `entities/travel_documents.json` + `attachments/<docId>` (178 B) present; manifest `travel_documents: 2` (export ran before the delete), trips 2, train_tickets 1, train_coaches 20 | PASS | zip listing |
+| 3 | Google fallback: 6E 2001 / 2026-09-22 re-added (prior stage's `pm clear` had wiped it) → "Save & check status" → **"Status updated" within 4 s** → sheet: **Landed**, Departure Scheduled 08:20 / Estimated 08:09, Terminal — / Gate —, Arrival Scheduled 10:15 / Estimated 09:41, Terminal 2, "Checked 22 Sep, 10:50", "Last check (22 Sep, 10:50): status updated". Extracted to the sheet, matching ADR-026 (arrival estimate moved 09:37 → 09:41 vs the earlier run — live data) | PASS | `70-final-google-6e2001-card.png` |
+| 4 | Cancel paths: (a) "Add a new train ticket" → Journeys add sheet → system back → Trips form restored, "Link a journey" still unlinked; (b) → Manual entry → back from the train form → form restored unlinked; (c) manual **Trips** tab tap while the pick form was open → form unlinked, re-entering Journeys shows the LIST (no stale add sheet/form), a ticket then saved normally there (PNR 5555566666) did NOT link the waiting form | PASS | dumps |
+| 4 | Hand-off: trip "Kerala" → Commute leg → picker rows "Add a new train ticket" / "Add a new flight" above the existing Trains/Flights → add train → Journeys/Trains add sheet already open → Manual entry → PNR 9876501234, train 12345 → Save ticket → **auto-return to Trips with the same form**: "Linked journey: Train 12345" (+ Remove link icon). From/To stay blank because the minimal ticket has none — the commute leg requires them (`ITEM_ROUTE_REQUIRED` snackbar on Save), filled SBC → ERS → Save → leg on the Day 1 timeline | PASS | `71-final-crosstab-form-linked.png` |
+| 4 | Leg sheet → "Open in Journeys" → the 9876501234 ticket sheet opens on Journeys/Trains with **"Part of — Kerala · Day 1 / Open the trip in the Trips tab"** → tap → Trips tab selected, Kerala trip detail with the SBC → ERS leg | PASS | `72-final-crosstab-part-of-kerala.png` |
+| 4+ | Flights variant + refused duplicate: new Commute leg → "Add a new flight" → Journeys/Flights add sheet open → Enter manually 6E 2001 / 2026-09-22 (already exists) → Save → back on the Trips form linked to the **existing** "Flight 6E 2001", planned time prefilled **08:20** from `schedDep`; Flights list still shows exactly one 6E 2001 | PASS | dumps |
+| 5 | `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → BUILD SUCCESSFUL (tree unchanged since the prior gate, so style/lint were up-to-date); unit tests forced with `testDebugUnitTest --rerun`: **812/812**, 0 failures (app 32, core:data 87, core:database 37, core:designsystem 7, core:google 58, core:model 10, core:notifications 14, core:ocr 49, core:scrape 77, feature:checklist 21, documents 18, flights 123, itinerary 52, menu 49, trains 178) | PASS | `final-validate*.log` (git-ignored) |
+| 5 | `connectedDebugAndroidTest`: **14/14 PASS** — BackNavigationE2eTest 5, ChecklistE2eTest 1, CrossTabE2eTest 1, DocumentsE2eTest 1, FlightsE2eTest 2, SeatMapE2eTest 1, TrainsE2eTest 2, TripsE2eTest 1; `core:ocr` OcrCaptureHarnessTest SKIPPED (`@Ignore`). No flakiness, no test edits | PASS | `connected.log` |
+
+Notes: the "Import boarding pass" flights path and the dark theme of the new rows
+were not re-walked (the former needs a real BCBP file and was validated in ADR-017's
+run; colour cannot be judged from dumps). A modal add sheet covers the bottom bar,
+so the "manual tab tap" case only arises from the non-modal form — that is the path
+tested. No code fixes were needed in this pass. Emulator shut down at the end.
