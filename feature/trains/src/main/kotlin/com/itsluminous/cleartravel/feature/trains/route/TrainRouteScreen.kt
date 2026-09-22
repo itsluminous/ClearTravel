@@ -25,18 +25,13 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.DateFormats
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
 import com.itsluminous.cleartravel.feature.trains.R
 import com.itsluminous.cleartravel.feature.trains.haltMinutes
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-
-private val FETCHED_FORMAT: DateTimeFormatter =
-    DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
 
 private const val MINUTES_PER_HOUR = 60L
 
@@ -159,7 +154,7 @@ private fun RouteHeader(
                 text =
                     stringResource(
                         R.string.trains_route_last_fetched,
-                        FETCHED_FORMAT.format(fetched.atZone(ZoneId.systemDefault())),
+                        DateFormats.formatTimestamp(fetched),
                     ),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,

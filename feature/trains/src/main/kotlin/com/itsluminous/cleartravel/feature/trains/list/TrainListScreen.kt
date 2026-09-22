@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.itsluminous.cleartravel.core.designsystem.DateFormats
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
@@ -59,13 +60,6 @@ import com.itsluminous.cleartravel.core.model.TrainTicket
 import com.itsluminous.cleartravel.feature.trains.R
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-
-private val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
-private val TIMESTAMP_FORMAT: DateTimeFormatter =
-    DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
 
 /** How the user wants to start a new ticket (FAB → add-options sheet). */
 internal sealed interface AddChoice {
@@ -366,9 +360,9 @@ internal fun lastFetchedText(ticket: TrainTicket): String {
     } else {
         stringResource(
             R.string.trains_card_last_fetched,
-            TIMESTAMP_FORMAT.format(fetched.atZone(ZoneId.systemDefault())),
+            DateFormats.formatTimestamp(fetched),
         )
     }
 }
 
-internal fun formatDate(date: LocalDate): String = DATE_FORMAT.format(date)
+internal fun formatDate(date: LocalDate): String = DateFormats.formatDate(date)

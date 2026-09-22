@@ -23,11 +23,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.core.content.ContextCompat
 import com.google.android.gms.common.ConnectionResult
 import com.google.android.gms.common.GoogleApiAvailability
+import com.itsluminous.cleartravel.core.designsystem.DateFormats
 import com.itsluminous.cleartravel.core.model.CommuteMode
 import com.itsluminous.cleartravel.core.model.PlaceCategory
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
 /** Localized snackbar text for a ViewModel message. */
 @StringRes
@@ -93,9 +92,7 @@ internal fun CommuteMode.icon(): ImageVector =
 internal fun parseCoverColor(hex: String): Color? =
     if (hex.isBlank()) null else runCatching { Color(android.graphics.Color.parseColor(hex)) }.getOrNull()
 
-private val tripDateFormatter: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
-
-internal fun LocalDate.formatMedium(): String = format(tripDateFormatter)
+internal fun LocalDate.formatMedium(): String = DateFormats.formatDate(this)
 
 /** Whether the manifest carries a non-empty Maps API key (empty-safe placeholder). */
 internal fun hasMapsApiKey(context: Context): Boolean =

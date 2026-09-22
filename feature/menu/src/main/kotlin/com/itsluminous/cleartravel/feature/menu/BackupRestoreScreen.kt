@@ -38,15 +38,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.data.backup.ImportPreview
+import com.itsluminous.cleartravel.core.designsystem.DateFormats
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordField
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordFieldRole
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupInfo
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
 private const val BACKUP_MIME_TYPE = "application/zip"
 
@@ -163,7 +160,7 @@ internal fun BackupRestoreScreen(
                         } else {
                             stringResource(
                                 R.string.menu_backup_last_backup,
-                                formatInstant(lastBackup.createdAt),
+                                DateFormats.formatTimestamp(lastBackup.createdAt),
                                 Formatter.formatShortFileSize(context, lastBackup.sizeBytes),
                             )
                         },
@@ -220,7 +217,7 @@ internal fun BackupRestoreScreen(
                             } else {
                                 stringResource(
                                     R.string.menu_backup_drive_last,
-                                    formatInstant(newest.createdAt),
+                                    DateFormats.formatTimestamp(newest.createdAt),
                                     Formatter.formatShortFileSize(context, newest.sizeBytes),
                                 )
                             },
@@ -273,7 +270,7 @@ internal fun BackupRestoreScreen(
                 Text(
                     stringResource(
                         R.string.menu_backup_fresh_restore_message,
-                        formatInstant(backup.createdAt),
+                        DateFormats.formatTimestamp(backup.createdAt),
                         Formatter.formatShortFileSize(context, backup.sizeBytes),
                     ),
                 )
@@ -321,7 +318,7 @@ private fun DriveBackupListDialog(
                                 text =
                                     stringResource(
                                         R.string.menu_backup_drive_last,
-                                        formatInstant(backup.createdAt),
+                                        DateFormats.formatTimestamp(backup.createdAt),
                                         Formatter.formatShortFileSize(context, backup.sizeBytes),
                                     ),
                                 style = MaterialTheme.typography.bodyMedium,
@@ -391,7 +388,7 @@ private fun ImportConfirmDialog(
                 Text(
                     stringResource(
                         R.string.menu_backup_import_confirm_message,
-                        formatInstant(preview.createdAt),
+                        DateFormats.formatTimestamp(preview.createdAt),
                         preview.totalRows,
                     ),
                 )
@@ -415,9 +412,3 @@ private fun ImportConfirmDialog(
         },
     )
 }
-
-private fun formatInstant(instant: Instant): String =
-    DateTimeFormatter
-        .ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
-        .withZone(ZoneId.systemDefault())
-        .format(instant)

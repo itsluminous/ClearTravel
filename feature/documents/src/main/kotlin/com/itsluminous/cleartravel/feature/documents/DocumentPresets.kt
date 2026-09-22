@@ -11,10 +11,9 @@ import androidx.compose.material.icons.filled.HealthAndSafety
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Vaccines
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.itsluminous.cleartravel.core.designsystem.DateFormats
 import com.itsluminous.cleartravel.core.model.TravelDocumentType
 import java.time.LocalDate
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 import java.time.temporal.ChronoUnit
 
 /**
@@ -80,8 +79,6 @@ object DocumentExpiry {
     /** Passports need ≥6 months validity for most visas — flag anything closer than that. */
     const val SOON_DAYS = 180L
 
-    private val FORMATTER: DateTimeFormatter = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
-
     fun stateOf(
         expiryDate: LocalDate?,
         today: LocalDate,
@@ -93,6 +90,6 @@ object DocumentExpiry {
             else -> ExpiryState.VALID
         }
 
-    /** Medium locale date, e.g. `12 Mar 2031`. */
-    fun format(date: LocalDate): String = FORMATTER.format(date)
+    /** Medium locale date, e.g. `12 Mar 2031` (the app-wide [DateFormats]). */
+    fun format(date: LocalDate): String = DateFormats.formatDate(date)
 }

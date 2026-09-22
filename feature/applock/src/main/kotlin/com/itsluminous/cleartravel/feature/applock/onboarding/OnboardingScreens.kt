@@ -34,6 +34,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.DateFormats
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordField
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordFieldRole
@@ -42,10 +43,6 @@ import com.itsluminous.cleartravel.core.google.backup.DriveBackupInfo
 import com.itsluminous.cleartravel.feature.applock.LockScaffold
 import com.itsluminous.cleartravel.feature.applock.R
 import com.itsluminous.cleartravel.feature.applock.StepIndicator
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 
 /** Accept any file on import — SAF providers label backup files inconsistently. */
 private val IMPORT_MIME_TYPES = arrayOf("application/zip", "application/octet-stream", "*/*")
@@ -243,7 +240,7 @@ internal fun RestoreStep(
                                 Text(
                                     stringResource(
                                         R.string.applock_onboarding_restore_drive_row,
-                                        formatInstant(backup.createdAt),
+                                        DateFormats.formatTimestamp(backup.createdAt),
                                         Formatter.formatShortFileSize(context, backup.sizeBytes),
                                     ),
                                     style = MaterialTheme.typography.bodyMedium,
@@ -351,11 +348,5 @@ private fun OnboardingError.labelRes(): Int =
         OnboardingError.BACKUP_UNREADABLE -> R.string.applock_onboarding_error_backup_unreadable
         OnboardingError.BACKUP_IO -> R.string.applock_onboarding_error_backup_io
     }
-
-private fun formatInstant(instant: Instant): String =
-    DateTimeFormatter
-        .ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
-        .withZone(ZoneId.systemDefault())
-        .format(instant)
 
 private const val MAX_DRIVE_ROWS = 5
