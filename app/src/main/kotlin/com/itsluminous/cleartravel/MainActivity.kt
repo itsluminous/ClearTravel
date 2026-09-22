@@ -29,6 +29,7 @@ import com.itsluminous.cleartravel.core.notifications.NotificationPermissions
 import com.itsluminous.cleartravel.feature.flights.FlightsEntryRequest
 import com.itsluminous.cleartravel.feature.flights.FlightsExternalEntry
 import com.itsluminous.cleartravel.feature.itinerary.TripsLanding
+import com.itsluminous.cleartravel.feature.itinerary.intake.MapsLinkIntakeHost
 import com.itsluminous.cleartravel.feature.trains.TrainsEntryRequest
 import com.itsluminous.cleartravel.feature.trains.TrainsExternalEntry
 import com.itsluminous.cleartravel.feature.trains.share.TicketShareLinks
@@ -40,6 +41,8 @@ import com.itsluminous.cleartravel.ui.ThemeViewModel
 import com.itsluminous.cleartravel.ui.intake.IntakeRoute
 import com.itsluminous.cleartravel.ui.intake.SharedFileIntakeDialog
 import com.itsluminous.cleartravel.ui.intake.SharedFileIntakeViewModel
+import com.itsluminous.cleartravel.ui.intake.SharedTextRoute
+import com.itsluminous.cleartravel.ui.intake.routeSharedText
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -72,6 +75,9 @@ class MainActivity : ComponentActivity() {
 
     /** A shared image/PDF awaiting the "What's this file?" intake dialog. */
     private val pendingSharedFile = mutableStateOf<Uri?>(null)
+
+    /** Shared text carrying a Google Maps link, awaiting the "Add place" intake (ADR-029 part D). */
+    private val pendingMapsLink = mutableStateOf<String?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // AndroidX splash (Theme.ClearTravel.Splash): must be installed before
@@ -159,6 +165,15 @@ class MainActivity : ComponentActivity() {
                     },
                     onCancelled = { pendingSharedFile.value = null },
                 )
+                // ADR-029 part D: the added place's trip is shown in the Trips tab.
+                MapsLinkIntakeHost(
+                    sharedText = pendingMapsLink.value,
+                    onDone = { tripId ->
+                        pendingMapsLink.value = null
+                        pendingTripsLanding.value = TripsLanding(tripId = tripId)
+                    },
+                    onCancelled = { pendingMapsLink.value = null },
+                )
             }
         }
     }
@@ -169,19 +184,21 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Routes an arriving intent: ACTION_SEND text (train SMS → form directly),
-     * ACTION_SEND image/PDF (→ intake dialog), ACTION_VIEW PNR link (→ train form
-     * carrying the PNR), else a notification deep link.
+     * Routes an arriving intent: ACTION_SEND text (a Google Maps link → the "Add
+     * place" intake, ADR-029; anything else → train SMS form directly), ACTION_SEND
+     * image/PDF (→ intake dialog), ACTION_VIEW PNR link (→ train form carrying the
+     * PNR), else a notification deep link.
      */
     private fun consumeIntent(intent: Intent?) {
         intent ?: return
         when (intent.action) {
             Intent.ACTION_SEND -> {
                 if (intent.type == MIME_TEXT_PLAIN) {
-                    intent
-                        .getStringExtra(Intent.EXTRA_TEXT)
-                        ?.takeIf(String::isNotBlank)
-                        ?.let { pendingEntry.value = ExternalEntry.Trains(TrainsEntryRequest.Text(it)) }
+                    when (val route = routeSharedText(intent.getStringExtra(Intent.EXTRA_TEXT))) {
+                        is SharedTextRoute.MapsLink -> pendingMapsLink.value = route.text
+                        is SharedTextRoute.TrainText -> pendingEntry.value = ExternalEntry.Trains(TrainsEntryRequest.Text(route.text))
+                        null -> Unit
+                    }
                 } else {
                     IntentCompat
                         .getParcelableExtra(intent, Intent.EXTRA_STREAM, Uri::class.java)

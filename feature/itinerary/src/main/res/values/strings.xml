@@ -134,4 +134,15 @@
     <string name="itinerary_confirm_location">Use this location</string>
     <string name="itinerary_center_pin">Map center pin</string>
     <string name="itinerary_location_picker_unavailable">The map is unavailable — enter coordinates manually on the form instead.</string>
+
+    <!-- Google Maps link intake (ADR-029 part D) -->
+    <string name="itinerary_maps_intake_title">Add place from Google Maps</string>
+    <string name="itinerary_maps_unknown_place">Shared place</string>
+    <string name="itinerary_maps_resolving">Reading the link…</string>
+    <string name="itinerary_maps_coordinates">%1$.5f, %2$.5f</string>
+    <string name="itinerary_maps_no_coordinates">No coordinates in this link — the link itself is kept on the place.</string>
+    <string name="itinerary_maps_target_new_trip">Create new trip</string>
+    <string name="itinerary_maps_target_existing_trip">Add to existing trip</string>
+    <string name="itinerary_maps_no_trips">No trips yet — create one above.</string>
+    <string name="itinerary_maps_add_place">Add place</string>
 </resources>

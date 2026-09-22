@@ -1557,3 +1557,112 @@ unit tests; `DocumentsE2eTest` now waits for the async image, asserts the rotate
 share / save controls exist and that no page bar shows for an image, and rotates once
 (compiles in this change; the device run belongs to the validation stage). Follow-ups:
 live-zoom PDF re-render with a cache, and swipe-between-pages when not zoomed.
+
+## ADR-029 — Journeys once-only landing, day auto-sort + drag override, linked-leg time, Google Maps link intake (2026-09-22)
+
+**Context.** Four Trips/Journeys reports from the on-device runs: (1) opening the
+Journeys tab auto-opened a ticket's detail sheet with no tap; (2) items within a day
+were ordered only by hand (up/down arrows) even when they carried times; (3) a commute
+leg linked to a journey still had to be given its time by hand; (4) a Google Maps
+share landed in the train-SMS form.
+
+**Decisions.**
+
+### A. Journeys landings fire EXACTLY once per deep-link nonce
+
+*Root cause.* `JourneysScreen` kept the per-segment landing (`trainDeepLinkId` +
+`trainAction`, flights alike) in `rememberSaveable` and NEVER cleared it. Every
+re-entry of the tab (bottom-bar revisit restores the saved state) and every
+Trains ↔ Flights toggle (the segment is re-created) fed the stale id into
+`TrainsContent`'s `LaunchedEffect(initialTicketId, initialAction)`, which faithfully
+re-opened the sheet. Same family as the stale-`Applied` bug fixed in 4e46f1c: a
+one-shot signal modelled as durable state.
+
+1. **`JourneysLandings` (app) — pure, in-memory, nonce-keyed one-shots.** `land(link)`
+   records `SegmentLanding(entityId, action, nonce)` for the link's segment (an
+   entity-less link — cancelled entry, pick mode — clears that segment's pending
+   landing); `consumeTrains(nonce)` / `consumeFlights(nonce)` clear it only when the
+   nonce matches, so a late consume for an older link cannot cancel a newer one. Held
+   in plain `remember` (like the ADR-028 pick request): plain tab entry finds nothing.
+2. **Segments consume the landing the moment they act.** `TrainsContent` /
+   `FlightsContent` gain `landingNonce` + `onLandingConsumed(nonce)` (defaulted,
+   additive). The landing effect is keyed on the nonce too, so two consecutive links
+   to the SAME entity both act — the `JourneysDeepLink.nonce` promise that was never
+   actually honoured. Trains run the suspending actions (duplicate notice, PNR-check
+   card lookup) on the segment scope: consuming re-keys the effect to null on the
+   next frame and would otherwise cancel them mid-flight. Flights copy the sheet
+   landing into segment-local state that is dropped whenever the list is left, so a
+   return from a form/check never re-opens it either (the `initialDetailFlightId`
+   prop used to stay set forever).
+3. **Pick-mode landing latched per request.** `JourneyPickCoordinator.takeLanding`
+   returns a request the first time only; `pendingRequest` is a StateFlow re-offered
+   on every activity re-creation, which used to drop the user back into pick mode.
+
+### B. Days auto-sort by planned time; a drag is the manual override
+
+4. **`orderInDay` stays the single source of truth for display.** `groupItemsByDay`
+   still sorts by `(orderInDay, name)` and never re-sorts by time on read, so what the
+   user sees is exactly what is stored (map polyline included).
+5. **Auto-sort is a WRITE, applied when a time is set or changed.** On save the item
+   form re-derives the day with `sortDayByTime(items, dayIndex)` — timed items
+   ascending (`parsePlannedTime`: `HH:mm`/`H:mm`, anything else counts as
+   unscheduled), untimed last, ties and untimed items stable by current order — and
+   persists only the rows whose position changed (the day is renumbered 0..n-1).
+   Trigger = new item, day move, or `plannedTime` different from the stored one. Any
+   other edit (note, name, link…) leaves the day's explicit order alone, so a
+   hand-arranged day survives unrelated edits.
+6. **Drag replaces the arrows.** `moveWithinDay` is gone; `reorderWithinDay(items,
+   dayIndex, from, to)` rewrites the day from the drop. The timeline keeps ONE
+   `ReorderableListState` per day over the shared `LazyListState`; the designsystem
+   helper now resolves drag targets by KEY instead of layout index (a 3-line,
+   backwards-compatible generalisation — checklist/preset lists are unaffected), so
+   day headers and other days' rows are never drop targets and a drag cannot leave
+   its day. Conflict rule, in one sentence: *the last write wins — a drag sets the
+   order, the next time change re-sorts that day.*
+
+### C. A linked commute leg takes its time from the journey
+
+7. **Derivation.** Train: the boarding station's scheduled departure from the stored
+   route stops (`trainDepartureTime` — matched by full name, the " (CODE)" suffix, or
+   a name prefix; first stop as fallback; null without a route). Flight:
+   `schedDep` rendered in the device zone (`flightDepartureTime`). Pure functions in
+   `feature:itinerary/logic/JourneyTimes.kt`; the station match mirrors the trains
+   card logic because feature modules must not depend on each other.
+8. **When.** (a) On link — pick or ADR-028 `Added` result — the derived time REPLACES
+   whatever was typed (linking is an explicit "this leg is that journey"); trains do
+   it asynchronously (route is a separate table) and only if the link is still the
+   same. (b) On opening the edit form of a linked leg whose time is BLANK (covers a
+   route fetched after linking). A stored time is never overwritten on open, so a
+   deliberate override survives; re-linking refreshes it. Journey changes are NOT
+   pushed into legs (no observer): out of scope, documented.
+
+### D. Google Maps link intake
+
+9. **One share filter, two destinations.** The existing `text/plain` ACTION_SEND
+   filter stays; `routeSharedText` (app, pure) sends text containing a Maps URL to
+   the new intake and everything else to the train-SMS form as before.
+10. **Pure parser `MapsLinks` (feature:itinerary/logic).** Hosts: `maps.app.goo.gl`,
+    `goo.gl/maps/…` (short), `maps.google.<tld>`, `google.<tld>/maps…`. Coordinates,
+    most precise first: `!3d<lat>!4d<lng>` pin → `@lat,lng` viewport centre →
+    `q`/`query`/`ll`/`center`/`destination`/`daddr` = `lat,lng` (`loc:` prefix and
+    `%2C` accepted); range-checked. Name: `/place/<name>/` segment, else a
+    non-coordinate `q`/`query`/`destination`; `%`-decoded, `+` → space.
+11. **Short links resolve in the background, never blocking.** `MapsLinkResolver`
+    (Hilt-bound `HttpMapsLinkResolver`: `HttpURLConnection` HEAD, redirects not
+    auto-followed, ≤4 hops, 5 s timeouts — no new dependency) expands the redirect;
+    the dialog is already open with "Reading the link…" and degrades to "name
+    unknown + no coordinates" on failure. The item keeps the URL the user shared in
+    `link` either way.
+12. **Dialog → PLACE on day 1.** `MapsLinkIntakeHost` (public hook the shell renders
+    over the tabs, like the file intake): "Create new trip" (name defaults to the
+    place name) or "Add to existing trip" (picker; preselected from Room when trips
+    exist). Confirm writes one `ItineraryItem(PLACE, dayIndex 0, orderInDay =
+    next, date = trip start, lat/lng, name or the `itinerary_maps_unknown_place`
+    fallback, link)` and the shell lands on the trip (`TripsLanding(tripId)`).
+
+**Consequences.** Tests: `JourneysLandingsTest` 8, `JourneyPickCoordinatorTest` 4,
+`ItineraryDaysTest` +6 (reorder, time sort, parser), `TripDetailViewModelTest` 2
+(reorderDay), `ItineraryItemFormViewModelTest` +8 (auto-sort, link/open time),
+`JourneyTimesTest` 5, `MapsLinksTest` 10, `MapsLinkIntakeViewModelTest` 9,
+`SharedTextRouteTest` 4 — 56 across the four fixes. Follow-ups: drag across days,
+observing journey changes into linked legs, geocoding a name-only Maps link.

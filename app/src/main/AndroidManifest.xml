@@ -33,9 +33,11 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- Share-sheet entry: shared IRCTC SMS/email text prefills the train
-                 ticket form directly; shared images/PDFs open the "What's this file?"
-                 intake (train ticket / boarding pass / booking confirmation). -->
+            <!-- Share-sheet entry: shared text is classified (ADR-029) — a Google Maps
+                 link opens the "Add place from Google Maps" intake, any other text
+                 (IRCTC SMS/email) prefills the train ticket form directly; shared
+                 images/PDFs open the "What's this file?" intake (train ticket /
+                 boarding pass / booking confirmation). -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
