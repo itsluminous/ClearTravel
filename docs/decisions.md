@@ -4,6 +4,53 @@ Short, numbered entries for every contract change, schema change, or non-obvious
 choice — additive-only, newest at the bottom. An agent or human joining later must be
 able to reconstruct the reasoning from this file alone.
 
+## ADR index
+
+Numbers were assigned when a wave STARTED, so the file order is by landing date and a
+few entries sit out of numeric sequence (008/009 before 004, 018 before 017, 027 before
+026, 030 before 029); numbers are never reused or reordered. *Status:* **active** = still
+how the code works; **amended** = active, but a later ADR changed part of it (named);
+**superseded** = replaced.
+
+| ADR | Title | Status |
+|---|---|---|
+| 001 | Module layout (incl. `core:scrape` / `core:ocr` as dedicated modules) | active — amended by 027 (`feature:documents`), 031 (`core:security`, `feature:applock`) |
+| 002 | UUID id + `updated_at` + tombstone on every entity | active |
+| 003 | Behavior-as-data (scrape rules, presets, check-in windows, OCR patterns) | active |
+| 004 | Entity catalog and relations (schema v1) | active — amended by 022 (schema v2), 027 (schema v3) |
+| 005 | Provider result contracts (`TrainStatusResult` / `FlightStatusResult`) | active — passenger merge amended by 023 |
+| 006 | Checklist preset append semantics | active |
+| 007 | User-entered API keys in EncryptedSharedPreferences | active |
+| 008 | Scrape engine — JS-dump + pure jsoup extraction, events Flow, fixture enforcement | active — amended by 022 (`extraRows`), 026 (`airlineIata`, `Extracted.rawHtml`) |
+| 009 | OCR pipeline — staged classes, pure extractors, confidence ladder, fixtures | active — reading order amended by 024 |
+| 010 | Per-tab nested NavHost; built-in presets read-only | **amended** — read-only built-ins and up/down reorder superseded by 021; nested NavHost stands |
+| 011 | Train PNR refresh bypasses `TrainStatusProvider`; manual stub keeps the seam | active |
+| 012 | Itinerary — nested NavHost, pure map/day logic, map degradation, maps-compose pin | active — pin moved to 6.7.0 (see its update note; 035) |
+| 013 | Flights — interactive-only scrape, data-driven check-in windows, EntryPoint worker | active — `RuleRegistry` provisioning superseded by 014 (hoist) |
+| 014 | App-shell integration — theme, deep links, share sheet, `RuleRegistry` hoist, hermetic e2e | active — notification-permission timing amended by 036 |
+| 015 | Backup, export & import — versioned ZIP, generic LWW merge, `BackupManager` seam | active — container superseded by 031 (v2 envelope); entity files added by 022, 027 |
+| 016 | Google integration — REST clients, state-store reconciliation, menu-hosted hooks | active — sealed uploads per 031 |
+| 017 | Booking-confirmation import — third add-flight path, attachment-row storage | active |
+| 018 | Train route fetch — erail.in rule, hands-free auto-flow, pure `RouteMapper` | **amended** — erail demoted to fallback by 019 |
+| 019 | Train-route redesign — ixigo primary + erail fallback, offline route page, card actions | active — chained landing amended by 033 |
+| 020 | Train card redesign, ticket sharing, share-sheet file intake | active |
+| 021 | Checklist UX rework — editable built-ins, drag-to-reorder, per-row edit | active |
+| 022 | Train seat map — `train_coaches` (schema v2), scrape `extraRows`, seat layouts as data | active (incl. v4 addendum) |
+| 023 | `applyStatusResult` inserts scraped train passengers | active |
+| 024 | PNR de-duplication, intake landing, OCR reading order, touch-scroll hardening | active |
+| 025 | Flight de-duplication | active |
+| 026 | Google flight-status panel as the airline-agnostic fallback (+ v2 live addendum) | active |
+| 027 | Documents tab — `travel_documents` (schema v3), local-only files, shared viewer | active — viewer upgraded by 030/034 |
+| 028 | Cross-tab integration — journey-add bus, "Part of" lookup, Trips landing hook | active |
+| 029 | Journeys once-only landing, day auto-sort + drag, linked-leg time, Maps-link intake | active |
+| 030 | Shared document viewer — zoom/pan, rotate, share, save-a-copy, PDF paging | active — brightness/fullscreen/landscape amended by 034 |
+| 031 | At-rest encryption + app lock — vault, SQLCipher, CTEF/CTEB, backup v2, biometrics | active — lock default amended by 034; `FLAG_SECURE` follow-up closed by 036 |
+| 032 | First-run onboarding wizard | active — step-1 enrolment fix in 034 |
+| 033 | UI polish — chained route-fetch landing, bottom Journeys segment, full-width filters, Documents search | active — filter chip hoisted to `core:designsystem` by 036 |
+| 034 | Viewer & lock polish — enrolment fix, 1-minute lock default, no forced brightness, fullscreen + landscape rail | active |
+| 035 | Itinerary place search (Nominatim), view-in-map, flights date picker, maps-compose 6.7.0 | active |
+| 036 | Cleanup pass — shared UI components, deferred follow-ups closed | active |
+
 ---
 
 ## ADR-001: Module layout (incl. core:scrape and core:ocr as dedicated modules)
@@ -2156,3 +2203,96 @@ start → auto BiometricPrompt; brightness before/after; fullscreen and landscap
 slot (backwards-compatible). New public test tags `DOCUMENT_VIEWER_TOOLBAR/RAIL/
 CONTENT_TEST_TAG`. Follow-up: a multi-page PDF landscape check on device (the rail's
 page controls are covered by composition only).
+
+## ADR-035 — Itinerary place search (Nominatim), view-in-map, flights date picker, maps-compose 6.7.0 (2026-09-22)
+
+*Recorded after the fact by the cleanup pass; these landed as commits d55da82…b2b2159
+without an entry.*
+
+**Context.** The location picker only accepted a tap on the map or a typed
+`lat, lng`; the trip map drew per-day polylines that cluttered dense city maps; a
+place with coordinates but no link could not be opened in a maps app; the flight
+form's date was typed free-text; and maps-compose 6.12.2 crashed at runtime.
+
+**Decisions.**
+
+1. **Place search = OpenStreetMap Nominatim, platform `Geocoder` fallback**
+   (`logic/PlaceGeocoder.kt`). The picker's search box debounces the query and shows
+   up to five ranked suggestions from `nominatim.openstreetmap.org/search` (free,
+   key-less, identifying `User-Agent` as its usage policy requires); a network
+   failure falls back to the platform `Geocoder`'s single best match. The Google
+   Places SDK was rejected: it would force API enablement + billing on every fork.
+   The response parser is pure (`parseNominatimResponse`, `NominatimParserTest`).
+   New dependencies for `feature:itinerary`: `okhttp` + `kotlinx-serialization`
+   (both already in the catalog).
+2. **No connecting polylines on the trip map.** Markers alone read better on dense
+   maps (user steering); `buildTripMapContent` keeps producing the per-day paths for
+   potential reuse, the map view just does not render them.
+3. **"View in map" for coordinate-only places.** The item sheet's open-link action
+   now targets the stored link, else a `maps.google.com/?q=lat,lng` URL built from
+   the coordinates. The add FAB is hidden while the map view is shown (it covered
+   markers).
+4. **Flight date is picker-only.** The flights form date field is read-only and
+   opens the Material date picker (now the shared `LocalDatePickerDialog`, ADR-036);
+   the ISO text mirrors the pick, so `FlightFormState.parseDate` is unchanged.
+5. **maps-compose pinned to 6.7.0** — see the ADR-012 update note: 6.12.x is built
+   against Compose 1.9 and throws `NoSuchMethodError` on the project's BOM 2025.06;
+   bump only together with the Compose BOM.
+
+## ADR-036 — Cleanup pass: shared UI components, deferred follow-ups closed (2026-09-22)
+
+**Context.** A senior-engineer quality pass over the whole codebase after the feature
+waves: duplicated composables, a leftover from the ADR-014 hoist, an overlay hack, a
+handful of noted-but-deferred defects and stale documentation. No new features; no
+changes to the validated scrape rules, backup format or crypto.
+
+**Decisions (each with its own commit).**
+
+1. **Shared UI belongs in `core:designsystem` as soon as two features need it** —
+   the "wait for a fourth caller" rule of ADR-033 §3 is dropped. Hoisted:
+   `FullWidthFilterRow` + `RowScope.FullWidthFilterChip` (trains, flights, trips
+   lists), `LocalDatePickerDialog` over `LocalDate` (four private `DatePickerDialog`
+   wrappers deleted, per-feature OK/Cancel strings removed), `DateFormats`
+   (`formatDate` medium, `formatTimestamp` medium+short; six private formatter copies
+   deleted — feature-specific compact card patterns stay in their features).
+2. **Read-only picker fields observe their own `InteractionSource`**
+   (`PressInteraction.Release` → open the picker) instead of a transparent `Box`
+   overlay; the flights form is the reference implementation. `FlightsE2eTest`
+   drives the picker (today) — typing into the read-only field had silently stopped
+   working when b2b2159 landed.
+3. **`PnrCheckViewModel` injects the shared `RuleRegistry`** (ADR-014 hoist
+   completed; `PnrCheckViewModelTest`).
+4. **Seat vs berth wording** follows `SeatKind` (`SeatMapWording`); the e2e asserts
+   the CC coach's "your seat" semantics.
+5. **Linked-journey labels resolve from Room** in the itinerary item sheet
+   (`TripDetailViewModel.journeyLabels`, read-only `TrainRepository`/`FlightRepository`
+   lookups per ADR-028's rule; pure `JourneyLabels` shared with the form and picker;
+   id prefix only for a journey that no longer exists).
+6. **Import preview counts travel documents** (`ImportPreviewSummary`; the
+   "Attachments: 0" report).
+7. **POST_NOTIFICATIONS is requested inside the gate's content** (after password,
+   storage preparation and the wizard) — amends ADR-014/032.
+8. **`FLAG_SECURE` for lock timing "Immediately"** (`LockTiming.securesWindow` →
+   `AppLockViewModel.secureWindow` → `SecureWindowEffect`); closes the ADR-031
+   follow-up. The per-file Drive source-password prompt stays a documented limitation
+   (ADR-031 follow-ups note).
+9. **Workers keep the `@EntryPoint` pattern** — assessed and recorded in ADR-013.
+10. **`ScrapeWebViewController` is unit-tested on Robolectric's WebView shadow**
+    (`ScrapeWebViewControllerTest`: dismiss → prefill → per-tick dismiss → dump,
+    timeout dump, stop, touch hardening); the "instrumented later" note is gone.
+11. **maps-compose exclusions re-verified** (ADR-012 update note).
+
+**Verdicts on the rest of the debt list.** E2e helpers were already consolidated in
+`E2eHelpers` (no CENTER/tap duplicates existed); `relativeAge` exists only in trains;
+DI modules are correctly placed (one `@Provides`/`@Binds` per seam, `CrossTabModule`
+deliberately separate from `RepositoryModule`); same-VALUE strings under different
+keys (`Cancel`, `Delete`, `Close` per context) are intentional per-context keys, not
+duplication.
+
+**Consequences.** No `core:model` / `core:database` / repository-interface change.
+`core:designsystem` gains three public components and still depends on no
+data/database/security/feature module. Tests added/updated: `LocalDatePickerDialogTest`
+2, `DateFormatsTest` 2, `PnrCheckViewModelTest` 4, `SeatMapWordingTest` 3,
+`JourneyLabelsTest` 3, `TripDetailViewModelTest` +2, `ImportPreviewSummaryTest` 2,
+`AppLockControllerTest` +1, `AppLockViewModelTest` +1, `ScrapeWebViewControllerTest` 6;
+e2e `FlightsE2eTest` and `SeatMapE2eTest` updated.
