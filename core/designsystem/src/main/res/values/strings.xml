@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="designsystem_reorder_handle">Reorder</string>
+
+    <!-- Shared full-brightness document viewer (ADR-027). -->
+    <string name="designsystem_viewer_close">Close</string>
+    <string name="designsystem_viewer_image_description">Stored document</string>
+    <string name="designsystem_viewer_missing">This file is no longer available on the device.</string>
 </resources>
