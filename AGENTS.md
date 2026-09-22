@@ -20,8 +20,9 @@ Package root: `com.itsluminous.cleartravel`.
 | `app` | Hilt application, MainActivity (single-activity Compose), bottom bar (Trips / Journeys / Checklist / Documents / Menu), NavHost, Journeys Trains\|Flights segmented composition, deep links, launcher icon, manifest (Maps key placeholder), androidTest e2e suite (4 classes, Hilt test modules) | done |
 | `core:designsystem` | `ClearTravelTheme` (dynamic color + #0B57D0 seed fallback), typography ≥16sp body, `EmptyState`, `ChipRow`, `ExplainableIcon`, `ClearTravelCard`, `ClearTravelFab`, `DocumentViewerScreen` (shared full-brightness image/PDF viewer) | done |
 | `core:model` | `SyncableEntity` (UUID + updatedAt + tombstone, ADR-002), `EntityIds`, `ThemeMode`, domain models/enums — **contract: changes need an ADR** | done |
-| `core:database` | Room entities/DAOs/converters, `ClearTravelDatabase` (schema v3: v2 `train_coaches`, v3 `travel_documents`; committed `schemas/` + `MigrationTest`) — **contract: changes need an ADR** | done |
-| `core:data` | Repository interfaces + Room-backed impls, `TrainStatusProvider`/`FlightStatusProvider` contracts (Hilt-bound), settings DataStore, backup export/merge (ADR-002, `docs/backup-format.md`), `JourneyAddRequestBus` cross-tab seam (ADR-028) | done |
+| `core:database` | Room entities/DAOs/converters, `ClearTravelDatabase` (schema v3: v2 `train_coaches`, v3 `travel_documents`; committed `schemas/` + `MigrationTest`) — **contract: changes need an ADR**. Encryption lives BELOW it (SQLCipher factory in `core:data`), so schemas and DAO tests are untouched | done |
+| `core:data` | Repository interfaces + Room-backed impls, `TrainStatusProvider`/`FlightStatusProvider` contracts (Hilt-bound), settings DataStore (+ `lockTiming`), backup export/merge — format v2 password envelope (ADR-015/031, `docs/backup-format.md`), `JourneyAddRequestBus` cross-tab seam (ADR-028), `security/`: `VaultKeyedOpenHelperFactory` (lazy SQLCipher), plaintext→encrypted DB + file migrations, `AppFileLayout`, `SecureStorageInitializer` | done |
+| `core:security` | ADR-031: `KeyVault` (random DEK wrapped by PBKDF2 password KEK + optional biometric Keystore key; `vault.json`), `LocalFileCipher` (CTEF chunked AES-GCM), `PortableCipher` (CTEB password envelope for backups/Drive), `BiometricKeyWrapper`/`BiometricUnlock`, `AppLockController` + `LockTiming`. Pure JVM except the Keystore/BiometricPrompt wrappers; never depends on data/database | done |
 | `core:notifications` | Channels (trains/flights/reminders), builders, deep links, POST_NOTIFICATIONS permission gate | done |
 | `core:google` | Google linking (Credential Manager), Calendar sync (dedicated "ClearTravel" calendar), Drive uploads/backups + restore ladder, sync workers | done (needs-user-setup: `GOOGLE_WEB_CLIENT_ID`, see `docs/google-setup.md`) |
 | `core:scrape` | Rule-driven WebView scraper engine (DOM storage on, `dismissSelectors`, ready-signal timeout → raw-page fallback); per-site JSON rule files in assets + HTML fixtures (ADR-003) | done |
@@ -32,9 +33,12 @@ Package root: `com.itsluminous.cleartravel`.
 | `feature:itinerary` | Trips tab: trips, day-grouped items, timeline + Google Maps view | done (map needs-user-setup: `MAPS_API_KEY` + Play-services device) |
 | `feature:checklist` | Checklist tab: per-trip checklists, preset templates + manager | done |
 | `feature:documents` | Documents tab: travel documents (passport, visa, …) as local files with typed labels + expiry, add via system picker, full-brightness viewer, edit/delete (ADR-027; local-only, Drive sync is a follow-up) | done (build-only; device validation pending) |
-| `feature:menu` | Menu tab: Settings (theme, presets, Google account), Backup/Restore (local + Drive), About | done |
+| `feature:menu` | Menu tab: Settings (theme, Security: change password / biometric unlock / lock timing, presets, Google account), Backup/Restore (local + Drive, source-password prompt for foreign backups), About | done |
+| `feature:applock` | ADR-031 gate composed around the whole shell: blocking first-run password setup (autofill `NewPassword`, strength hint, data-loss warning), unlock (password autofill or BiometricPrompt), "Securing your data" storage preparation, process-lifecycle re-lock | done (device-validated on the emulator: fresh setup + plaintext→SQLCipher migration) |
 
 **Ownership boundaries:** feature modules depend ONLY on `core:*`, NEVER on each other;
+`core:designsystem` reads document bytes only through its `DocumentFileReader` seam
+(`LocalDocumentFileReader`, installed by the app shell with the decrypting reader);
 cross-feature interaction goes through `core:data` contracts (e.g. the ADR-028
 `JourneyAddRequestBus` + `ItineraryRepository.observeItemsLinkedToJourney`) and the
 app shell's landing hooks (`JourneysDeepLink`, `TripsLanding`). The app module is the
@@ -82,6 +86,15 @@ exist and the full gate passes.
    wrong type fails linking with error `[28444]`) or in encrypted DataStore for
    user-entered API keys. Empty values are safe defaults. NEVER commit
    `local.properties`, `*.log`, `.DS_Store`, keystores.
+9. **Encryption at rest is not optional** (ADR-031): every user file is written
+   through `LocalFileCipher` (never a raw `outputStream()` under `filesDir`), Room
+   only ever opens through the vault-keyed factory, anything leaving the device
+   (backups, Drive uploads) goes through `PortableCipher`, and nothing touches Room
+   before the `AppLockGate` opens (workers check `KeyVault.isUnlocked` and no-op with
+   the "unlock to sync" notification). Never persist the DEK, a sub-key or the
+   password; never add a recovery/reset path — data loss on a forgotten password is
+   the documented design. New user-file directories must be added to `AppFileLayout`
+   so the one-time migration and the backup engine see them.
 7. **Git**: NEVER push, never add a remote, never force-push. Conventional Commits,
    imperative mood, subject ≤50 chars (`feat(trains): add ticket form`). Commit after
    every completed task. Never commit generated `build/` output.
@@ -103,6 +116,12 @@ exist and the full gate passes.
   `FlightStatusProvider` in `core:data`): WebView scrape provider is the default,
   API provider optional, mock/manual always available — the UI never depends on a
   concrete provider.
+- **Security seams in tests**: `KeyVault` is `DefaultKeyVault(InMemoryKeyFileStore(),
+  iterations = 1_000)` (cheap KDF; strength is not under test), `LocalFileCipher(key =
+  { vault.fileKey() })`, `BiometricKeyWrapper` faked with a plain AES key. DAO tests
+  keep the plain in-memory Room factory — SQLCipher has no host natives. The e2e
+  suite's `TestSecurityModule` is pre-unlocked; flip `freshInstall` per class for
+  first-run flows.
 - **Versioning**: `versionName` default lives in `app/build.gradle.kts` (currently
   `0.1.0`), overridable with `-PappVersionName` / `-PappVersionCode` (the release
   workflow derives them from the `v*` tag).

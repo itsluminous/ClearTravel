@@ -37,6 +37,12 @@ optional Google account link for Calendar/Drive sync.
   Fully optional; everything works without it.
 - **Material You** — dynamic color with a sensible seed fallback, dark/light/system
   theme, large accessible type, long-press explanations on every icon-only control.
+- **Encrypted at rest, locked by you** — on first run you create a password; it
+  protects a random master key that encrypts the database (SQLCipher), every stored
+  document/boarding pass/attachment, and every backup — including the copies kept
+  in Google Drive, which only ClearTravel can read. Unlock with the password or,
+  optionally, biometrics; password fields work with password managers. **There is
+  no recovery: forget the password and the data is gone by design.**
 
 ## Architecture
 
@@ -46,9 +52,10 @@ Multi-module Gradle project, package root `com.itsluminous.cleartravel`:
 |---|---|
 | Shell | `app` (single-activity Compose, bottom navigation, deep links, e2e suite) |
 | Design | `core:designsystem` (theme + shared components) |
-| Contracts | `core:model` (syncable domain models), `core:database` (Room), `core:data` (repositories, status-provider interfaces, settings, backup) |
+| Contracts | `core:model` (syncable domain models), `core:database` (Room), `core:data` (repositories, status-provider interfaces, settings, backup, SQLCipher wiring) |
+| Security | `core:security` (key vault, file ciphers, portable backup envelope, biometric wrapper, UI lock) |
 | Engines | `core:scrape` (rule-driven WebView scraper), `core:ocr` (ML Kit text + BCBP), `core:notifications`, `core:google` (Calendar/Drive sync) |
-| Features | `feature:trains`, `feature:flights`, `feature:itinerary`, `feature:checklist`, `feature:documents`, `feature:menu` |
+| Features | `feature:applock`, `feature:trains`, `feature:flights`, `feature:itinerary`, `feature:checklist`, `feature:documents`, `feature:menu` |
 | Test infra | `core:testing` |
 
 Key principles (full details in `AGENTS.md` and `docs/decisions.md`):
@@ -61,6 +68,25 @@ Key principles (full details in `AGENTS.md` and `docs/decisions.md`):
   enabling conflict-free backup merges and Drive restore.
 - **Feature isolation** — feature modules depend only on `core:*`; cross-feature
   interaction goes through `core:data` contracts.
+- **Encryption below the data layer** (ADR-031) — a random master key, wrapped by
+  the password (PBKDF2-HMAC-SHA256, 210k) and optionally by a biometric Keystore
+  key, keys SQLCipher and a chunked AES-GCM file format; backups and Drive uploads
+  use a password-derived portable envelope so they restore on any install that
+  knows the password. Details: `docs/decisions.md` ADR-031, `docs/backup-format.md`.
+
+## Security notes
+
+- The password is never stored; the master key is stored only wrapped. Losing the
+  password loses the data — there is intentionally no reset or recovery path.
+- Sharing or "Save a copy" from the viewer, and exporting a backup to a location
+  you choose, produce files outside the app's control: shared copies are plaintext
+  (that is the point of sharing); exported backups are encrypted with your password.
+- Background jobs (flight polling, calendar sync, Drive uploads) need the key, which
+  exists only after you unlock the app in the current process; until then they post
+  a single "Unlock ClearTravel to sync" reminder and skip.
+- Upgrading from a pre-encryption build converts the database and files in place on
+  the first unlock; Drive files uploaded before the upgrade remain unencrypted until
+  pruned or deleted.
 
 ## Building
 

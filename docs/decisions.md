@@ -1719,3 +1719,186 @@ one-shot signal modelled as durable state.
 `JourneyTimesTest` 5, `MapsLinksTest` 10, `MapsLinkIntakeViewModelTest` 9,
 `SharedTextRouteTest` 4 — 56 across the four fixes. Follow-ups: drag across days,
 observing journey changes into linked legs, geocoding a name-only Maps link.
+
+## ADR-031 — At-rest encryption + app lock: vault, SQLCipher, CTEF/CTEB, backup v2, biometrics (2026-09-22)
+
+**Context.** Everything ClearTravel stores is sensitive (passports, tickets, travel
+plans) and it all sat in plaintext: a Room database, files under `filesDir`, plain
+ZIP backups in app storage and on Drive. Requirements from the user: a user-set
+password encrypts ALL data and documents INCLUDING backups and Drive uploads (Drive
+files only readable by this app); first install FORCES password creation with a clear
+"if you forget it you lose your data" warning; unlock via password OR biometrics
+(configurable, biometrics requires a password); password fields integrate with
+password managers. Forgetting the password loses the data **by design** — there is
+deliberately no recovery key, escrow or reset.
+
+**Decision.**
+
+1. **Keys — one random DEK, wrapped, never stored raw** (`core:security`, new
+   module below `core:data`). A 256-bit Data Encryption Key is generated once per
+   install and persisted in `filesDir/security/vault.json` (`VaultFile`) only in
+   wrapped form: (a) `passwordWrap` — AES-256-GCM under a KEK from
+   `PBKDF2-HMAC-SHA256(password, salt16, 210 000 iterations, 64 bytes)`, whose
+   first 32 bytes are the KEK and last 32 bytes the *portable key* (§4) — one
+   derivation per unlock serves both; (b) `biometricWrap` (optional) — AES-GCM under
+   an Android Keystore key with `setUserAuthenticationRequired(true)` +
+   `setInvalidatedByBiometricEnrollment(true)` (API 30+:
+   `AUTH_BIOMETRIC_STRONG` per use), so the unwrap can only run inside a successful
+   `BiometricPrompt(CryptoObject)`; (c) `portableWrap` — the portable key sealed
+   under a DEK-derived key, so a biometric-only session (no password in hand) can
+   still export backups and upload to Drive. Sub-keys are HMAC-SHA256 derivations of
+   the DEK (`cleartravel/db/v1`, `cleartravel/files/v1`), so neither the database nor
+   the files ever see the DEK itself. **Password change = re-wrap only** (new salt,
+   new wraps, same DEK — zero data re-encryption). *Argon2 considered:* not in the
+   platform, would need a native dependency for one KDF call — PBKDF2 at the OWASP
+   2023 floor was chosen. The key file is plain JSON in app storage by design (its
+   confidentiality rests on the password, like a KeePass database); Robolectric has
+   no Keystore, so the biometric half is the `BiometricKeyWrapper` interface with a
+   plain-AES fake in tests.
+2. **Database — SQLCipher, keyed lazily** (`core:data`). Room gets a
+   `VaultKeyedOpenHelperFactory`: `Room.databaseBuilder().build()` runs while wiring
+   the Hilt graph, long before any unlock, so the factory returns a shell helper and
+   only on the FIRST `writableDatabase`/`readableDatabase` fetches
+   `KeyVault.databaseKey()` (typed `VaultLockedException` while locked), runs the
+   one-time plaintext migration and builds SQLCipher's `SupportOpenHelperFactory`
+   with the raw-key form `x'<64 hex>'` (SQLCipher then skips its own redundant
+   ~0.5 s KDF per open). **Migration of existing installs**: header-detected —
+   `SqliteFiles.isPlaintextDatabase` (`"SQLite format 3\0"`; a SQLCipher file starts
+   with its random salt, so no flag can drift) → `SqlCipherDatabaseEncryptionMigrator`
+   opens the plaintext file with SQLCipher and an empty key, `ATTACH DATABASE ? AS
+   encrypted KEY ?`, `SELECT sqlcipher_export('encrypted')`, copies `user_version`
+   (the export does not), detaches, deletes the plaintext + `-wal`/`-shm`/`-journal`
+   and renames the encrypted file into place. The plaintext connection MUST be opened
+   with `CREATE_IF_NECESSARY` — an attached database inherits the main connection's
+   open flags and the ATTACH otherwise fails with `SQLITE_CANTOPEN` (found on the
+   emulator). A failure leaves the plaintext file untouched and surfaces on the
+   unlock screen with Retry. *Dependency*: `net.zetetic:sqlcipher-android` **4.17.0**
+   (4.18+ declare `minCompileSdk 37`, AGP 8.7 tops out at 36) + `androidx.sqlite`
+   **2.6.2** pinned (the version SQLCipher is built against; Room 2.6.1 would
+   otherwise pull 2.4). *Tests*: SQLCipher ships no host natives, so DAO/repository
+   tests keep the plain in-memory factory (`core:testing` untouched); the laziness,
+   locked path, header detection and key form are tested on Robolectric with the
+   framework helper injected as the delegate; the export itself is verified on
+   device (validation report of the next stage).
+3. **Files — CTEF v1, chunked AES-GCM, format-tolerant reads.** Documents, boarding
+   passes and attachments are written through `LocalFileCipher` (file sub-key):
+   header `"CTEF" | v1 | chunkSize | nonce8`, then 64 KiB plaintext chunks each
+   sealed with IV `nonce ‖ index` and AAD `header ‖ isLast` — chunk reorder, drop,
+   truncation (even at a chunk boundary) and wrong key all fail as
+   `AEADBadTagException`; memory stays at one chunk regardless of the provider's GCM
+   buffering. *Jetpack `EncryptedFile` rejected*: it can only key from a Keystore
+   `MasterKey` alias, not from a DEK-derived key, and `security-crypto` is deprecated.
+   Reads without the magic pass through as plaintext: required by the migration
+   (it must read the old bytes) and harmless for confidentiality (the app only ever
+   WRITES encrypted). `AppFileLayout` (`core:data`) names the encrypted directories
+   once for writers, the backup engine and the migration. **One-time file
+   migration** — `StorageEncryptionMigrator`, run by `SecureStorageInitializer`
+   right after unlock behind the "Securing your data…" screen: every file under the
+   three directories without the header is `encryptInPlace`d (temp + swap), every
+   local backup ZIP that is not yet an envelope is wrapped (§4); resumable (already
+   converted files are header-marked), and `filesMigrated` is flagged only after a
+   pass with zero failures. A fresh install sets the flag at setup.
+   **Viewer**: `core:designsystem` must not depend on data/security, so it gained the
+   `DocumentFileReader` seam (`open(path)`, `materialize(path, cacheDir)`) and the
+   `LocalDocumentFileReader` composition local; the app shell installs
+   `EncryptedDocumentFileReader` once at the top of the tree and features keep passing
+   plain paths. Images decode from the decrypting stream; PDFs render from a
+   plaintext copy in `cache/viewer-pdf` materialised once per document and deleted on
+   dispose (`PdfRenderer` needs a seekable file). **Share and Save-a-copy produce
+   plaintext by intent** — the user is explicitly exporting: share copies go to
+   `cache/share/viewer` (previous copies removed first) via the existing
+   `FileProvider`; save streams the plaintext to the SAF target.
+4. **Backups — format v2 = the same ZIP inside a password envelope (CTEB v1).**
+   Header `"CTEB" | v1 | iterations | salt16 | chunkSize | nonce8` + the §3 chunked
+   body, keyed by the **portable key** (password-derived) — never the per-install
+   DEK, so a backup restores on any install that knows the password. Bundled files
+   are decrypted from disk into the ZIP (plaintext inside the envelope) and
+   re-encrypted under the RESTORING install's file key on extraction.
+   `BackupManifest.SCHEMA_VERSION = 2`; a file without the magic is read as a v1
+   plain ZIP (pre-encryption exports import forever). `BackupManager.importPreview/
+   importApply(uri, sourcePassword: CharArray? = null)`: an envelope whose salt
+   matches this vault's decrypts silently (restoring your own backups on the same
+   install); any other salt — another device, a fresh install, a changed password —
+   is typed `BackupException.PasswordRequired`; the caller supplies the source
+   password, a wrong one is typed `WrongPassword` (first-chunk tag failure), and a key
+   that actually opened the envelope is **adopted** for the process
+   (`KeyVault.adoptPortableKey`) so preview → apply prompts once. An explicitly
+   supplied password always wins over a cached key (a previous wrong attempt must not
+   shadow the right one). *Why not "silent when the app password matches" on a fresh
+   install*: with a new random salt the app cannot verify the typed password against
+   a foreign header without re-running PBKDF2 with THAT salt, which needs the password
+   itself — caching the password in memory was rejected as a weakening; the user types
+   it once. `docs/backup-format.md` documents v2; Backup & Restore shows the password
+   dialog (`PasswordField`) for local files and Drive restores alike.
+5. **Drive — only sealed artefacts leave the device.** Backup uploads are unchanged
+   (the file is already an envelope). `DriveUploadEngine` re-seals each attachment
+   into a portable envelope (`<name>.cteb`, `application/octet-stream`) from a
+   scratch copy deleted afterwards — never the on-device CTEF bytes, whose key is
+   per-install and would be useless after a reinstall. `AttachmentFileResolver`
+   opens own/adopted-key envelopes and legacy plaintext uploads, stores the result
+   CTEF-encrypted and re-points `localPath`; a foreign envelope resolves to the new
+   `ResolvedAttachment.NeedsSourcePassword` (not kept) — wiring a per-file prompt is
+   follow-up UI work (the ladder itself is not wired into any sheet yet, ADR-016), and
+   a backup restore with the old password adopts the key that also opens those files.
+   Drive backups/uploads made before this version stay plaintext until pruned or
+   deleted by the user (documented; no remote rewrite).
+6. **App lock UX** (`feature:applock`, composed in `MainActivity` as `AppLockGate`).
+   `VaultState.NotSetUp` → blocking `SetupPasswordScreen`: two `PasswordField`s with
+   `ContentType.NewPassword` (Compose ≥ 1.8 autofill — password managers offer to
+   save; no `androidx.autofill` view plumbing needed, hence not added), live strength
+   hint (`PasswordRules`: ≥ 8 chars, length first then variety), and a red
+   data-loss warning card. `Locked` → `UnlockScreen`: `ContentType.Password` field
+   (managers fill) or `BiometricPrompt` (auto-shown once, BIOMETRIC_STRONG only —
+   weak/credential authenticators cannot satisfy a `CryptoObject` bound to an
+   auth-required key); an invalidated Keystore key (re-enrolment) disables biometric
+   unlock and falls back to the password. After any unlock,
+   `SecureStorageInitializer.prepare()` (open DB → §2 migration → §3 migration) runs
+   behind "Securing your data…" and only then `AppLockController.unlock()` reveals
+   the tabs; startup housekeeping (`AppStartupTasks`) moved from `onCreate` to the
+   gate's `onUnlocked` so nothing touches Room while locked. `MainActivity` became a
+   `FragmentActivity` (BiometricPrompt requires one). **Lock timing** (Settings):
+   `LockTiming` (Immediately / 1 / 5 / 15 min / Never = default) via
+   `SettingsRepository.lockTiming` (additive contract extension); a process-lifecycle
+   observer re-locks the UI (`AppLockController`) after that much background time.
+   The UI lock is deliberately separate from the vault: re-locking hides the screens
+   but keeps the DEK cached so background jobs continue (§7); a cold start always
+   locks because the process — and the DEK — is gone. **Settings → Security**
+   (`feature:menu`): change password (current verified, re-wrap only; older backups
+   then ask for the old password), biometric toggle (gated on a password and on
+   strong biometrics being available; enrolment wraps inside the prompt), lock timing.
+7. **Background jobs before any unlock.** The DEK exists only in memory after an
+   unlock; `FlightStatusWorker`, `CalendarSyncWorker` (reconcile; the calendar-delete
+   action needs no database) and `DriveUploadWorker` check `KeyVault.isUnlocked`
+   first and, while locked, post ONE fixed-id "Unlock ClearTravel to sync"
+   notification (`AppLockNotifier`, reminders channel, later posts replace it) and
+   return success without re-chaining; the app-open re-kick (`AppStartupTasks`) and
+   the periodic passes resume them, and the shell clears the nudge on unlock.
+   `DriveBackupWorker` keeps running locked — it only uploads an already sealed
+   envelope (`latestLocalBackup` falls back to the file's mtime for the date).
+   *Never weakened*: no DEK on disk unwrapped, no password cached, no
+   `allowBackup`-style escape hatch.
+8. **Hermetic e2e.** `TestSecurityModule` (`@TestInstallIn` replacing
+   `SecurityModule`) provides an in-memory vault already set up and unlocked, a
+   plain-AES `FakeBiometricKeyWrapper` and an open lock, so the 14 existing e2e run
+   unchanged (plaintext files seeded by tests read through the tolerant cipher).
+   A `@TestInstallIn` module cannot be uninstalled per test, so it exposes a
+   `freshInstall` switch flipped in `@BeforeClass`; `AppLockSetupE2eTest` uses it to
+   assert the first-run setup shows instead of the tabs, refuses a short password
+   and opens the app on a valid one. All 15 e2e pass on the emulator.
+
+**Consequences.** New modules `core:security` and `feature:applock`; `core:data`,
+`core:google`, `feature:documents`, `feature:flights`, `feature:menu` and `app`
+depend on `core:security`; catalog additions `sqlcipher-android 4.17.0`,
+`androidx.sqlite(-framework) 2.6.2`, `androidx.biometric 1.1.0`,
+`androidx.fragment-ktx 1.8.5`. Contract changes (additive): `SettingsRepository.
+lockTiming/setLockTiming`, `BackupManager.importPreview/importApply(uri,
+sourcePassword)`, `BackupException.PasswordRequired/WrongPassword/Locked`,
+`ResolvedAttachment.NeedsSourcePassword`; `core:model`/`core:database` schemas are
+untouched (encryption is below Room). Tests: 27 `core:security` (chunked AEAD,
+vault, ciphers, lock timing), 8 `core:data` (lazy factory, storage migration) +
+4 backup v2, 7 `core:google` (sealed uploads, resolver), 7 `feature:applock`,
+4 + 2 `feature:menu` (security settings, backup password prompt), 1 e2e — 949 unit
+tests total. Follow-ups: per-file "needs source password" prompt for Drive
+attachments; a "re-upload Drive files" action for pre-encryption uploads; Argon2 if a
+platform KDF ever lands; lock-timing "immediately" could also blank the task
+snapshot (`FLAG_SECURE`).
