@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -21,13 +20,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.IntentCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.lifecycleScope
 import com.itsluminous.cleartravel.core.designsystem.component.LocalDocumentFileReader
 import com.itsluminous.cleartravel.core.designsystem.theme.ClearTravelTheme
 import com.itsluminous.cleartravel.core.model.ThemeMode
 import com.itsluminous.cleartravel.core.notifications.NotificationChannelRegistrar
 import com.itsluminous.cleartravel.core.notifications.NotificationPermissions
+import com.itsluminous.cleartravel.feature.applock.AppLockGate
+import com.itsluminous.cleartravel.feature.applock.AppLockLifecycleObserver
 import com.itsluminous.cleartravel.feature.flights.FlightsEntryRequest
 import com.itsluminous.cleartravel.feature.flights.FlightsExternalEntry
 import com.itsluminous.cleartravel.feature.itinerary.TripsLanding
@@ -47,16 +48,20 @@ import com.itsluminous.cleartravel.ui.intake.SharedTextRoute
 import com.itsluminous.cleartravel.ui.intake.routeSharedText
 import com.itsluminous.cleartravel.ui.security.EncryptedDocumentFileReader
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
  * Single-activity Compose shell. `singleTask` in the manifest, so notification deep
  * links, PNR share links and share-sheet sends arrive here — cold via [onCreate]'s
  * intent, warm via [onNewIntent] — instead of stacking duplicate instances.
+ *
+ * ADR-031: the whole tree sits behind [AppLockGate] (first-run password setup, unlock
+ * by password or biometrics, storage preparation); nothing touches the database
+ * before the gate opens — startup housekeeping runs from its `onUnlocked`. A
+ * [FragmentActivity] because `BiometricPrompt` requires one.
  */
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     @Inject
     lateinit var channelRegistrar: NotificationChannelRegistrar
 
@@ -66,6 +71,10 @@ class MainActivity : ComponentActivity() {
     /** ADR-031: every document viewer in the app decrypts through this reader. */
     @Inject
     lateinit var documentFileReader: EncryptedDocumentFileReader
+
+    /** ADR-031: re-locks the UI after the configured background time. */
+    @Inject
+    lateinit var lockLifecycleObserver: AppLockLifecycleObserver
 
     /** Pending notification deep link (ADR-013 contract); cleared once consumed. */
     private val pendingDeepLink = mutableStateOf<JourneysDeepLink?>(null)
@@ -95,10 +104,7 @@ class MainActivity : ComponentActivity() {
 
         // Idempotent channel creation — every module can post immediately after.
         channelRegistrar.registerAll()
-
-        // Housekeeping off the UI thread: auto-archive past journeys + restart the
-        // flight poll chain for existing future flights (work runs on Dispatchers.IO).
-        lifecycleScope.launch { startupTasks.runOnAppOpen() }
+        lockLifecycleObserver.install()
 
         consumeIntent(intent)
 
@@ -117,7 +123,13 @@ class MainActivity : ComponentActivity() {
             }
             ClearTravelTheme(darkTheme = themeMode.resolveDarkTheme()) {
                 CompositionLocalProvider(LocalDocumentFileReader provides documentFileReader) {
-                    ShellContent(themeViewModel, intakeViewModel, pickCoordinator)
+                    AppLockGate(
+                        // Housekeeping (auto-archive past journeys, restart the flight
+                        // poll chain) runs on IO once the encrypted store is open.
+                        onUnlocked = { startupTasks.runOnAppOpen() },
+                    ) {
+                        ShellContent(themeViewModel, intakeViewModel, pickCoordinator)
+                    }
                 }
             }
         }

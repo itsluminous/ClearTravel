@@ -1,6 +1,7 @@
 package com.itsluminous.cleartravel.core.data.repository
 
 import com.itsluminous.cleartravel.core.model.ThemeMode
+import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -33,4 +34,9 @@ interface SettingsRepository {
     suspend fun flightApiKey(): String?
 
     suspend fun setFlightApiKey(key: String?)
+
+    /** ADR-031: how long the app may stay in the background before the UI re-locks. */
+    val lockTiming: Flow<LockTiming>
+
+    suspend fun setLockTiming(timing: LockTiming)
 }

@@ -1,6 +1,8 @@
 package com.itsluminous.cleartravel.core.data.di
 
 import android.content.Context
+import com.itsluminous.cleartravel.core.data.security.DefaultSecureStorageInitializer
+import com.itsluminous.cleartravel.core.data.security.SecureStorageInitializer
 import com.itsluminous.cleartravel.core.data.security.StorageEncryptionMigrator
 import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
 import com.itsluminous.cleartravel.core.security.vault.KeyVault
@@ -26,4 +28,8 @@ object StorageSecurityModule {
         vault: KeyVault,
         fileCipher: LocalFileCipher,
     ): StorageEncryptionMigrator = StorageEncryptionMigrator(context.filesDir, vault, fileCipher)
+
+    @Provides
+    @Singleton
+    fun provideSecureStorageInitializer(impl: DefaultSecureStorageInitializer): SecureStorageInitializer = impl
 }

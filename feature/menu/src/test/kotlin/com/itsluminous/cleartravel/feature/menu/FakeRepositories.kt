@@ -5,6 +5,7 @@ import com.itsluminous.cleartravel.core.data.repository.SettingsRepository
 import com.itsluminous.cleartravel.core.model.ChecklistPreset
 import com.itsluminous.cleartravel.core.model.ChecklistPresetItem
 import com.itsluminous.cleartravel.core.model.ThemeMode
+import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -45,6 +46,13 @@ class FakeSettingsRepository : SettingsRepository {
 
     override suspend fun setFlightApiKey(key: String?) {
         flightKey = key
+    }
+
+    private val timing = MutableStateFlow(LockTiming.DEFAULT)
+    override val lockTiming: Flow<LockTiming> = timing
+
+    override suspend fun setLockTiming(timing: LockTiming) {
+        this.timing.value = timing
     }
 }
 

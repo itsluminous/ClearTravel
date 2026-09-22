@@ -23,6 +23,7 @@ import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTrainRepo
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTravelDocumentRepository
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTripRepository
 import com.itsluminous.cleartravel.core.model.ThemeMode
+import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.components.SingletonComponent
@@ -125,5 +126,12 @@ class FakeSettingsRepository
 
         override suspend fun setFlightApiKey(key: String?) {
             flightKey = key
+        }
+
+        private val timing = MutableStateFlow(LockTiming.DEFAULT)
+        override val lockTiming: Flow<LockTiming> = timing
+
+        override suspend fun setLockTiming(timing: LockTiming) {
+            this.timing.value = timing
         }
     }

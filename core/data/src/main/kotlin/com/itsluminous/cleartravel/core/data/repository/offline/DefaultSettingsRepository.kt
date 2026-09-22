@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.itsluminous.cleartravel.core.data.di.SecurePreferences
 import com.itsluminous.cleartravel.core.data.repository.SettingsRepository
 import com.itsluminous.cleartravel.core.model.ThemeMode
+import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -51,6 +52,12 @@ class DefaultSettingsRepository
             }
         }
 
+        override val lockTiming: Flow<LockTiming> = dataStore.data.map { LockTiming.fromStorage(it[KEY_LOCK_TIMING]) }
+
+        override suspend fun setLockTiming(timing: LockTiming) {
+            dataStore.edit { it[KEY_LOCK_TIMING] = timing.storageValue }
+        }
+
         override suspend fun trainApiKey(): String? = readSecure(SECURE_KEY_TRAIN_API)
 
         override suspend fun setTrainApiKey(key: String?) = writeSecure(SECURE_KEY_TRAIN_API, key)
@@ -74,6 +81,7 @@ class DefaultSettingsRepository
             private val KEY_THEME_MODE = stringPreferencesKey("theme_mode")
             private val KEY_TRAIN_PROVIDER_ID = stringPreferencesKey("train_provider_id")
             private val KEY_FLIGHT_PROVIDER_ID = stringPreferencesKey("flight_provider_id")
+            private val KEY_LOCK_TIMING = stringPreferencesKey("lock_timing")
             private const val SECURE_KEY_TRAIN_API = "train_api_key"
             private const val SECURE_KEY_FLIGHT_API = "flight_api_key"
         }

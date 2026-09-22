@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- feature:applock strings (ADR-031). Prefix: applock_ -->
+<resources>
+    <string name="applock_setup_title">Protect your travel data</string>
+    <string name="applock_setup_body">ClearTravel encrypts everything it stores — journeys, trips, documents and backups — with a password only you know. Create it now; you’ll need it to open the app.</string>
+    <string name="applock_setup_password_label">Password</string>
+    <string name="applock_setup_confirm_label">Confirm password</string>
+    <string name="applock_setup_min_length">At least %1$d characters</string>
+    <string name="applock_setup_warning_title">If you forget this password, your data is lost</string>
+    <string name="applock_setup_warning_body">There is no reset, no recovery e-mail and no way for anyone to unlock your data without it — not even Google Drive backups, which are encrypted with the same password. Save it in a password manager.</string>
+    <string name="applock_setup_action">Create password and continue</string>
+    <string name="applock_error_too_short">Use at least %1$d characters.</string>
+    <string name="applock_error_mismatch">The two passwords don’t match.</string>
+    <string name="applock_strength_too_short">Too short</string>
+    <string name="applock_strength_weak">Weak — longer is stronger</string>
+    <string name="applock_strength_fair">Fair</string>
+    <string name="applock_strength_strong">Strong</string>
+
+    <string name="applock_unlock_title">ClearTravel is locked</string>
+    <string name="applock_unlock_body">Enter your password to open your travel data.</string>
+    <string name="applock_unlock_password_label">Password</string>
+    <string name="applock_unlock_action">Unlock</string>
+    <string name="applock_error_wrong_password">That password is not correct.</string>
+    <string name="applock_biometric_action">Unlock with biometrics</string>
+    <string name="applock_biometric_prompt_title">Unlock ClearTravel</string>
+    <string name="applock_biometric_use_password">Use password</string>
+    <string name="applock_biometric_unavailable">Biometric unlock was turned off because the device’s biometrics changed. Unlock with your password and turn it back on in Settings.</string>
+
+    <string name="applock_preparing_title">Securing your data…</string>
+    <string name="applock_preparing_body">Opening your encrypted storage. The first time after an update this can take a moment while existing data is encrypted.</string>
+    <string name="applock_preparation_failed">Your data could not be opened. Free up some storage space and try again.</string>
+    <string name="applock_preparation_retry">Try again</string>
+</resources>

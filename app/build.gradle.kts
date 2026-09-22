@@ -134,12 +134,15 @@ dependencies {
     implementation(project(":feature:checklist"))
     implementation(project(":feature:documents"))
     implementation(project(":feature:menu"))
+    implementation(project(":feature:applock"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
+    // ADR-031: BiometricPrompt needs a FragmentActivity host.
+    implementation(libs.androidx.fragment.ktx)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -168,6 +171,9 @@ dependencies {
     // Espresso.pressBack() drives the real system-back path (window key dispatch).
     androidTestImplementation(libs.androidx.test.espresso.core)
     androidTestImplementation(libs.truth)
+    // ADR-031: the hermetic TestSecurityModule builds an in-memory, pre-unlocked vault.
+    androidTestImplementation(project(":core:security"))
+    androidTestImplementation(libs.kotlinx.coroutines.core)
     // Hilt in tests: HiltTestApplication + @TestInstallIn module replacement
     // (TestDatabaseModule swaps the on-disk Room DB for an in-memory one).
     androidTestImplementation(libs.hilt.android.testing)
