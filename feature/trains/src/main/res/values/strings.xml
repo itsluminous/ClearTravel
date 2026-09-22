@@ -140,7 +140,7 @@
     <string name="trains_card_check_status">Check PNR status</string>
     <string name="trains_card_view_route">Train route</string>
 
-    <string name="trains_shared_text_title">Ticket shared with ClearTravel</string>
+    <string name="trains_shared_text_title">Ticket shared with Clear Travel</string>
 
     <!-- Seat map screen (ADR-022) -->
     <string name="trains_seatmap_title">%1$s · %2$s</string>

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Text pushed into the user's Google Calendar (dedicated ClearTravel calendar). -->
-    <string name="google_calendar_name" translatable="false">ClearTravel</string>
-    <string name="google_drive_folder_name" translatable="false">ClearTravel</string>
+    <!-- Text pushed into the user's Google Calendar (dedicated Clear Travel calendar). -->
+    <string name="google_calendar_name" translatable="false">Clear Travel</string>
+    <string name="google_drive_folder_name" translatable="false">Clear Travel</string>
     <string name="google_event_train_summary">Train %1$s: %2$s → %3$s</string>
     <string name="google_event_flight_summary">Flight %1$s: %2$s → %3$s</string>
     <string name="google_event_commute_summary">%1$s → %2$s</string>

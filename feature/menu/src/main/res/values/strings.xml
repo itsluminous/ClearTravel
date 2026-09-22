@@ -48,7 +48,7 @@
     <string name="menu_backup_restore_subtitle">Export or import your data</string>
     <string name="menu_backup_title">Backup &amp; Restore</string>
     <string name="menu_backup_export_title">Backup</string>
-    <string name="menu_backup_export_description">Save all trips, journeys, checklists, documents and attachments into a single backup file, encrypted with your ClearTravel password. A copy of the latest backup is also kept inside the app.</string>
+    <string name="menu_backup_export_description">Save all trips, journeys, checklists, documents and attachments into a single backup file, encrypted with your Clear Travel password. A copy of the latest backup is also kept inside the app.</string>
     <string name="menu_backup_export_action">Export backup</string>
     <string name="menu_backup_export_done">Backup saved (%1$d records)</string>
     <string name="menu_backup_last_backup">Last backup: %1$s (%2$s)</string>
@@ -61,17 +61,17 @@
     <string name="menu_backup_import_confirm_counts">Trips: %1$d · Journeys: %2$d · Checklists: %3$d · Documents: %4$d · Attachments: %5$d</string>
     <string name="menu_backup_import_confirm">Import</string>
     <string name="menu_backup_import_done">Import finished: %1$d added, %2$d updated, %3$d unchanged</string>
-    <string name="menu_backup_error_version">This backup was made by a newer app version. Update ClearTravel to import it.</string>
-    <string name="menu_backup_error_unreadable">This file isn’t a readable ClearTravel backup.</string>
+    <string name="menu_backup_error_version">This backup was made by a newer app version. Update Clear Travel to import it.</string>
+    <string name="menu_backup_error_unreadable">This file isn’t a readable Clear Travel backup.</string>
     <string name="menu_backup_error_io">Couldn’t read or write the backup file. Try again.</string>
     <string name="menu_backup_in_progress">Working…</string>
     <!-- ADR-031: encrypted backups -->
     <string name="menu_backup_password_title">Backup password needed</string>
-    <string name="menu_backup_password_message">This backup was created with a different password, on another device, or before your password was changed. Enter the ClearTravel password it was created with.</string>
+    <string name="menu_backup_password_message">This backup was created with a different password, on another device, or before your password was changed. Enter the Clear Travel password it was created with.</string>
     <string name="menu_backup_password_label">Backup password</string>
     <string name="menu_backup_password_confirm">Unlock backup</string>
     <string name="menu_backup_error_wrong_password">That password doesn’t open this backup.</string>
-    <string name="menu_backup_error_locked">Unlock ClearTravel first.</string>
+    <string name="menu_backup_error_locked">Unlock Clear Travel first.</string>
 
     <string name="menu_google_section">Google account</string>
     <string name="menu_google_not_configured">Google features are not set up in this build. A Google Cloud OAuth web client id is required - see docs/google-setup.md in the project repository.</string>
@@ -80,13 +80,13 @@
     <string name="menu_google_linked_as">Connected as %1$s</string>
     <string name="menu_google_disconnect_action">Disconnect</string>
     <string name="menu_google_disconnect_title">Disconnect Google account?</string>
-    <string name="menu_google_disconnect_message">Syncing stops and the saved link is removed from this device. You can also delete the ClearTravel calendar from your Google account - your local data is never touched.</string>
+    <string name="menu_google_disconnect_message">Syncing stops and the saved link is removed from this device. You can also delete the Clear Travel calendar from your Google account - your local data is never touched.</string>
     <string name="menu_google_disconnect_keep">Disconnect</string>
     <string name="menu_google_disconnect_delete">Also delete calendar</string>
     <string name="menu_google_calendar_sync">Calendar sync</string>
-    <string name="menu_google_calendar_sync_subtitle">Keep trips and journeys in a dedicated “ClearTravel” Google Calendar</string>
+    <string name="menu_google_calendar_sync_subtitle">Keep trips and journeys in a dedicated “Clear Travel” Google Calendar</string>
     <string name="menu_google_drive_uploads">Drive uploads</string>
-    <string name="menu_google_drive_uploads_subtitle">Copy boarding passes and ticket attachments to a “ClearTravel” Drive folder</string>
+    <string name="menu_google_drive_uploads_subtitle">Copy boarding passes and ticket attachments to a “Clear Travel” Drive folder</string>
     <string name="menu_google_drive_backup">Backup to Drive</string>
     <string name="menu_google_drive_backup_subtitle">Upload every backup to Drive and keep the last five</string>
     <string name="menu_google_linked_snackbar">Connected as %1$s</string>
@@ -100,23 +100,23 @@
     <string name="menu_backup_drive_none">No backups in Drive yet</string>
     <string name="menu_backup_drive_restore_action">Restore from Drive</string>
     <string name="menu_backup_drive_list_title">Drive backups</string>
-    <string name="menu_backup_drive_list_empty">No ClearTravel backups were found in your Drive.</string>
+    <string name="menu_backup_drive_list_empty">No Clear Travel backups were found in your Drive.</string>
     <string name="menu_backup_drive_download_failed">Couldn’t download the backup from Drive. Try again.</string>
     <string name="menu_backup_fresh_restore_title">Restore your data from Drive?</string>
-    <string name="menu_backup_fresh_restore_message">A ClearTravel backup from %1$s (%2$s) was found in your Google Drive. Import it to bring your trips, journeys and checklists onto this device - or start fresh.</string>
+    <string name="menu_backup_fresh_restore_message">A Clear Travel backup from %1$s (%2$s) was found in your Google Drive. Import it to bring your trips, journeys and checklists onto this device - or start fresh.</string>
     <string name="menu_backup_fresh_restore_confirm">Import</string>
     <string name="menu_backup_fresh_restore_decline">Start fresh</string>
 
     <string name="menu_about_title">About</string>
-    <string name="menu_about_app_name">ClearTravel</string>
+    <string name="menu_about_app_name">Clear Travel</string>
     <string name="menu_about_version">Version %1$s</string>
-    <string name="menu_about_description">ClearTravel is an offline-first travel companion: train and flight journeys, trip itineraries on a map, and packing checklists - all stored on your device.</string>
+    <string name="menu_about_description">Clear Travel is an offline-first travel companion: train and flight journeys, trip itineraries on a map, and packing checklists - all stored on your device.</string>
     <string name="menu_about_source">Source code</string>
-    <string name="menu_about_source_url" translatable="false">https://github.com/itsluminous/ClearTravel</string>
+    <string name="menu_about_source_url" translatable="false">https://github.com/itsluminous/Clear Travel</string>
 
     <!-- ADR-031: Settings → Security -->
     <string name="menu_security_title">Security</string>
-    <string name="menu_security_description">Everything ClearTravel stores is encrypted with your password. Changing the password re-locks your data with the new one instantly; forgetting it means losing the data.</string>
+    <string name="menu_security_description">Everything Clear Travel stores is encrypted with your password. Changing the password re-locks your data with the new one instantly; forgetting it means losing the data.</string>
     <string name="menu_security_change_password">Change password</string>
     <string name="menu_security_change_password_body">Backups made before the change will ask for the old password when restored.</string>
     <string name="menu_security_current_password">Current password</string>
