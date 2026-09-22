@@ -41,10 +41,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.itsluminous.cleartravel.core.designsystem.component.ChipRow
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
@@ -95,16 +95,24 @@ internal fun TripsScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            ChipRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
-                FilterChip(
+            // Two equal-width segments spanning the row (user steering): the same
+            // 32dp FilterChips, stretched with weight(1f) so the row reads as one
+            // full-width control without growing taller.
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FullWidthFilterChip(
                     selected = !showArchived,
                     onClick = { showArchived = false },
-                    label = { Text(stringResource(R.string.itinerary_filter_active)) },
+                    label = stringResource(R.string.itinerary_filter_active),
+                    modifier = Modifier.weight(1f),
                 )
-                FilterChip(
+                FullWidthFilterChip(
                     selected = showArchived,
                     onClick = { showArchived = true },
-                    label = { Text(stringResource(R.string.itinerary_filter_archived)) },
+                    label = stringResource(R.string.itinerary_filter_archived),
+                    modifier = Modifier.weight(1f),
                 )
             }
             val trips = if (showArchived) archivedTrips else activeTrips
@@ -246,4 +254,20 @@ private fun tripDateRangeText(trip: Trip): String? {
         start != null -> start.formatMedium()
         else -> null
     }
+}
+
+/** A [FilterChip] that stretches to its [modifier] width with a centered label (full-width filter rows). */
+@Composable
+private fun FullWidthFilterChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(text = label, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        modifier = modifier,
+    )
 }

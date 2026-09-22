@@ -1,5 +1,6 @@
 package com.itsluminous.cleartravel.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraphBuilder
@@ -34,6 +36,9 @@ import com.itsluminous.cleartravel.feature.trains.TrainsLandingAction
 
 /** Route of the Journeys tab root (trains + flights, segmented). */
 const val JOURNEYS_ROUTE = "journeys"
+
+/** Test tag on the Trains|Flights segmented control (e2e asserts it is docked at the bottom). */
+const val JOURNEYS_SEGMENT_TEST_TAG = "journeys_segment"
 
 /**
  * Journeys tab graph. This screen lives in the app module because it is the ONE place
@@ -99,12 +104,54 @@ private fun JourneysScreen(
         }
     }
 
+    // The segmented control sits at the BOTTOM of the tab, directly above the app's
+    // NavigationBar, so the Trains|Flights switch is in thumb reach next to the tab
+    // bar (user steering); the segment content takes the rest of the height.
     Column(modifier = modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            when (segment) {
+                JourneysSegment.TRAINS -> {
+                    val landing = landings.trains
+                    TrainsContent(
+                        initialTicketId = landing?.entityId,
+                        initialAction = landing?.action ?: TrainsLandingAction.OPEN_DETAIL,
+                        landingNonce = landing?.nonce,
+                        onLandingConsumed = { nonce -> landings.consumeTrains(nonce) },
+                        addRequest = addRequest?.takeIf { it.type == JourneyType.TRAIN }?.let { TrainsAddRequest(nonce = it.nonce) },
+                        onAddRequestDone = { result ->
+                            addRequest?.let { request ->
+                                addRequest = null
+                                onJourneyAddDone(JourneyPickRouting.resultFor(request, result))
+                            }
+                        },
+                        onOpenTrip = onOpenTrip,
+                    )
+                }
+                JourneysSegment.FLIGHTS -> {
+                    val landing = landings.flights
+                    FlightsContent(
+                        initialFlightId = landing?.entityId,
+                        initialAction = landing?.action ?: FlightsLandingAction.OPEN_DETAIL,
+                        landingNonce = landing?.nonce,
+                        onLandingConsumed = { nonce -> landings.consumeFlights(nonce) },
+                        addRequest = addRequest?.takeIf { it.type == JourneyType.FLIGHT }?.let { FlightsAddRequest(nonce = it.nonce) },
+                        onAddRequestDone = { result ->
+                            addRequest?.let { request ->
+                                addRequest = null
+                                onJourneyAddDone(JourneyPickRouting.resultFor(request, result))
+                            }
+                        },
+                        onOpenTrip = onOpenTrip,
+                    )
+                }
+            }
+        }
         SingleChoiceSegmentedButtonRow(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                    .testTag(JOURNEYS_SEGMENT_TEST_TAG),
         ) {
             JourneysSegment.entries.forEachIndexed { index, entry ->
                 SegmentedButton(
@@ -126,42 +173,6 @@ private fun JourneysScreen(
                             ),
                     )
                 }
-            }
-        }
-        when (segment) {
-            JourneysSegment.TRAINS -> {
-                val landing = landings.trains
-                TrainsContent(
-                    initialTicketId = landing?.entityId,
-                    initialAction = landing?.action ?: TrainsLandingAction.OPEN_DETAIL,
-                    landingNonce = landing?.nonce,
-                    onLandingConsumed = { nonce -> landings.consumeTrains(nonce) },
-                    addRequest = addRequest?.takeIf { it.type == JourneyType.TRAIN }?.let { TrainsAddRequest(nonce = it.nonce) },
-                    onAddRequestDone = { result ->
-                        addRequest?.let { request ->
-                            addRequest = null
-                            onJourneyAddDone(JourneyPickRouting.resultFor(request, result))
-                        }
-                    },
-                    onOpenTrip = onOpenTrip,
-                )
-            }
-            JourneysSegment.FLIGHTS -> {
-                val landing = landings.flights
-                FlightsContent(
-                    initialFlightId = landing?.entityId,
-                    initialAction = landing?.action ?: FlightsLandingAction.OPEN_DETAIL,
-                    landingNonce = landing?.nonce,
-                    onLandingConsumed = { nonce -> landings.consumeFlights(nonce) },
-                    addRequest = addRequest?.takeIf { it.type == JourneyType.FLIGHT }?.let { FlightsAddRequest(nonce = it.nonce) },
-                    onAddRequestDone = { result ->
-                        addRequest?.let { request ->
-                            addRequest = null
-                            onJourneyAddDone(JourneyPickRouting.resultFor(request, result))
-                        }
-                    },
-                    onOpenTrip = onOpenTrip,
-                )
             }
         }
     }

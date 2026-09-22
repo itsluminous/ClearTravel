@@ -2,9 +2,15 @@ package com.itsluminous.cleartravel
 
 import android.os.Build
 import androidx.annotation.StringRes
+import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
+import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.notifications.NotificationPermissions
 
 /** Shared plumbing for the e2e suite. */
@@ -42,4 +48,40 @@ fun AndroidComposeTestRule<*, MainActivity>.waitForText(
             .fetchSemanticsNodes()
             .isNotEmpty()
     }
+}
+
+/**
+ * Asserts the Active|Archived quick filter is ONE full-width control: two chips of
+ * equal width on the same line that together span (almost) the whole root width, and
+ * no taller than a Material 3 FilterChip's 48dp minimum interactive size — the row
+ * must not have grown into a taller control.
+ */
+fun AndroidComposeTestRule<*, MainActivity>.assertFullWidthFilterRow(
+    activeText: String,
+    archivedText: String,
+) {
+    val root = onRoot().getBoundsInRoot()
+    val active = onNodeWithText(activeText).getBoundsInRoot()
+    val archived = onNodeWithText(archivedText).getBoundsInRoot()
+    val rootWidth = root.right - root.left
+    val activeWidth = active.right - active.left
+    val archivedWidth = archived.right - archived.left
+    assertThat((activeWidth - archivedWidth).value).isWithin(1f).of(0f)
+    assertThat((active.top - archived.top).value).isWithin(1f).of(0f)
+    // 16dp edge padding on each side + 8dp gap = 40dp of the row is not chip.
+    assertThat((activeWidth + archivedWidth).value).isAtLeast((rootWidth - 41.dp).value)
+    assertThat((active.bottom - active.top).value).isAtMost(48.5f)
+}
+
+/**
+ * Asserts the node with [tag] is docked at the BOTTOM of the tab content: nothing but
+ * the app's NavigationBar (found by its Journeys label) sits below it.
+ */
+fun AndroidComposeTestRule<*, MainActivity>.assertDockedAboveNavBar(tag: String) {
+    val docked = onNodeWithTag(tag).getBoundsInRoot()
+    val navLabel = onNodeWithText(string(R.string.nav_journeys)).getBoundsInRoot()
+    val root = onRoot().getBoundsInRoot()
+    // Below the vertical middle of the screen and above the nav bar's label.
+    assertThat(docked.top.value).isGreaterThan(((root.bottom - root.top) / 2).value)
+    assertThat(docked.bottom.value).isAtMost(navLabel.top.value)
 }

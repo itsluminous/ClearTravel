@@ -43,10 +43,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.itsluminous.cleartravel.core.designsystem.component.ChipRow
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
@@ -193,20 +193,24 @@ fun FlightListScreen(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            ChipRow(
-                contentPadding =
-                    androidx.compose.foundation.layout
-                        .PaddingValues(horizontal = 16.dp),
+            // Two equal-width segments spanning the row (user steering): the same
+            // 32dp FilterChips, stretched with weight(1f) so the row reads as one
+            // full-width control without growing taller.
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                FilterChip(
+                FullWidthFilterChip(
                     selected = uiState.filter == FlightListFilter.ACTIVE,
                     onClick = { viewModel.setFilter(FlightListFilter.ACTIVE) },
-                    label = { Text(stringResource(R.string.flights_filter_active)) },
+                    label = stringResource(R.string.flights_filter_active),
+                    modifier = Modifier.weight(1f),
                 )
-                FilterChip(
+                FullWidthFilterChip(
                     selected = uiState.filter == FlightListFilter.ARCHIVED,
                     onClick = { viewModel.setFilter(FlightListFilter.ARCHIVED) },
-                    label = { Text(stringResource(R.string.flights_filter_archived)) },
+                    label = stringResource(R.string.flights_filter_archived),
+                    modifier = Modifier.weight(1f),
                 )
             }
 
@@ -413,4 +417,20 @@ private fun FlightCard(
             modifier = Modifier.padding(top = 8.dp),
         )
     }
+}
+
+/** A [FilterChip] that stretches to its [modifier] width with a centered label (full-width filter rows). */
+@Composable
+private fun FullWidthFilterChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(text = label, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        modifier = modifier,
+    )
 }

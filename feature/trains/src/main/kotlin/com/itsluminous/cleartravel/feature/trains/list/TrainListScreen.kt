@@ -50,8 +50,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.itsluminous.cleartravel.core.designsystem.component.ChipRow
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
@@ -110,16 +110,24 @@ internal fun TrainListScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            ChipRow(contentPadding = PaddingValues(horizontal = 16.dp)) {
-                FilterChip(
+            // Two equal-width segments spanning the row (user steering): the same
+            // 32dp FilterChips, stretched with weight(1f) so the row reads as one
+            // full-width control without growing taller.
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                FullWidthFilterChip(
                     selected = state.filter == TrainListFilter.ACTIVE,
                     onClick = { onFilterChange(TrainListFilter.ACTIVE) },
-                    label = { Text(stringResource(R.string.trains_filter_active)) },
+                    label = stringResource(R.string.trains_filter_active),
+                    modifier = Modifier.weight(1f),
                 )
-                FilterChip(
+                FullWidthFilterChip(
                     selected = state.filter == TrainListFilter.ARCHIVED,
                     onClick = { onFilterChange(TrainListFilter.ARCHIVED) },
-                    label = { Text(stringResource(R.string.trains_filter_archived)) },
+                    label = stringResource(R.string.trains_filter_archived),
+                    modifier = Modifier.weight(1f),
                 )
             }
             if (state.isEmpty) {
@@ -372,3 +380,19 @@ internal fun lastFetchedText(ticket: TrainTicket): String {
 }
 
 internal fun formatDate(date: LocalDate): String = DATE_FORMAT.format(date)
+
+/** A [FilterChip] that stretches to its [modifier] width with a centered label (full-width filter rows). */
+@Composable
+private fun FullWidthFilterChip(
+    selected: Boolean,
+    onClick: () -> Unit,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(text = label, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
+        modifier = modifier,
+    )
+}
