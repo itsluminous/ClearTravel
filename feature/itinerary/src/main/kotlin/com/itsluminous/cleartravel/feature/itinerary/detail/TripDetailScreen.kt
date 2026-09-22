@@ -130,16 +130,20 @@ internal fun TripDetailScreen(
             )
         },
         floatingActionButton = {
-            trip?.let { current ->
-                ClearTravelFab(
-                    onClick = {
-                        onAddItem(current.id, days.lastOrNull()?.dayIndex ?: 0)
-                    },
-                ) {
-                    Icon(
-                        imageVector = Icons.Filled.Add,
-                        contentDescription = stringResource(R.string.itinerary_add_item),
-                    )
+            // Hidden in map view — the FAB sat on top of the map's zoom controls
+            // (user request 2026-09-22); items are added from the timeline.
+            if (selectedView == VIEW_TIMELINE) {
+                trip?.let { current ->
+                    ClearTravelFab(
+                        onClick = {
+                            onAddItem(current.id, days.lastOrNull()?.dayIndex ?: 0)
+                        },
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = stringResource(R.string.itinerary_add_item),
+                        )
+                    }
                 }
             }
         },
