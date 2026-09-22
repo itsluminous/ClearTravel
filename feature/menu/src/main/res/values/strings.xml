@@ -53,6 +53,12 @@
     <string name="menu_backup_export_done">Backup saved (%1$d records)</string>
     <string name="menu_backup_last_backup">Last backup: %1$s (%2$s)</string>
     <string name="menu_backup_last_backup_never">No backup yet</string>
+    <string name="menu_backup_schedule_title">Automatic backup</string>
+    <string name="menu_backup_schedule_description">Back up on a schedule. Each run saves the encrypted copy kept inside the app; when Google Drive backups are turned on, the same run uploads it to Drive right after.</string>
+    <string name="menu_backup_schedule_off">Off</string>
+    <string name="menu_backup_schedule_daily">Daily</string>
+    <string name="menu_backup_schedule_weekly">Weekly</string>
+    <string name="menu_backup_schedule_monthly">Monthly</string>
     <string name="menu_backup_import_title">Restore</string>
     <string name="menu_backup_import_description">Import a backup file. Your current data is kept - the backup is merged in, and for entries that exist in both, the newer version wins.</string>
     <string name="menu_backup_import_action">Import backup</string>

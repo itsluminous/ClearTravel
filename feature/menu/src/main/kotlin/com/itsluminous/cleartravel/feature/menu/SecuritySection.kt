@@ -135,7 +135,7 @@ internal fun SecuritySection(
                 modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
             )
             for (timing in LockTiming.entries) {
-                LockTimingRow(
+                RadioOptionRow(
                     labelRes = timing.labelRes(),
                     selected = state.lockTiming == timing,
                     onSelect = { viewModel.setLockTiming(timing) },
@@ -155,8 +155,9 @@ internal fun SecuritySection(
     }
 }
 
+/** One radio option of an exclusive-choice list (lock timing, backup schedule). */
 @Composable
-private fun LockTimingRow(
+internal fun RadioOptionRow(
     @StringRes labelRes: Int,
     selected: Boolean,
     onSelect: () -> Unit,

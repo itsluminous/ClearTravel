@@ -44,7 +44,9 @@ optional Google account link for Calendar/Drive sync.
   in backups.
 - **Backup & restore** — versioned local export/import with tombstone-aware merge
   (see `docs/backup-format.md`), plus optional Google Drive backups with a restore
-  ladder on fresh installs.
+  ladder on fresh installs. An optional **automatic backup** schedule (daily /
+  weekly / monthly, off by default) writes the encrypted in-app copy on its own and,
+  when Drive backups are on, uploads it to Drive right after.
 - **Google sync (optional)** — link a Google account (Credential Manager) to sync
   journeys/trips into a dedicated "ClearTravel" calendar and keep Drive backups.
   Fully optional; everything works without it.

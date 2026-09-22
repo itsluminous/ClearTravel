@@ -44,6 +44,7 @@ import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordField
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordFieldRole
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupInfo
+import com.itsluminous.cleartravel.core.model.BackupSchedule
 
 private const val BACKUP_MIME_TYPE = "application/zip"
 
@@ -139,6 +140,27 @@ internal fun BackupRestoreScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+            }
+
+            // ADR-037: automatic backup cadence — local always, Drive follows when enabled.
+            ClearTravelCard {
+                Text(
+                    text = stringResource(R.string.menu_backup_schedule_title),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = stringResource(R.string.menu_backup_schedule_description),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+                )
+                for (schedule in BackupSchedule.entries) {
+                    RadioOptionRow(
+                        labelRes = schedule.labelRes(),
+                        selected = uiState.schedule == schedule,
+                        onSelect = { viewModel.setBackupSchedule(schedule) },
+                    )
+                }
             }
 
             ClearTravelCard {
@@ -288,6 +310,14 @@ internal fun BackupRestoreScreen(
         )
     }
 }
+
+private fun BackupSchedule.labelRes(): Int =
+    when (this) {
+        BackupSchedule.OFF -> R.string.menu_backup_schedule_off
+        BackupSchedule.DAILY -> R.string.menu_backup_schedule_daily
+        BackupSchedule.WEEKLY -> R.string.menu_backup_schedule_weekly
+        BackupSchedule.MONTHLY -> R.string.menu_backup_schedule_monthly
+    }
 
 /** Picker over the ClearTravel backups found in Drive (newest first). */
 @Composable

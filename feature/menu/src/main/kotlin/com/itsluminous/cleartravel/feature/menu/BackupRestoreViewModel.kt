@@ -9,12 +9,15 @@ import com.itsluminous.cleartravel.core.data.backup.BackupManager
 import com.itsluminous.cleartravel.core.data.backup.ImportPreview
 import com.itsluminous.cleartravel.core.data.backup.LocalBackupInfo
 import com.itsluminous.cleartravel.core.data.backup.MergeSummary
+import com.itsluminous.cleartravel.core.data.repository.SettingsRepository
 import com.itsluminous.cleartravel.core.google.auth.GoogleAccountManager
 import com.itsluminous.cleartravel.core.google.auth.GoogleLinkState
 import com.itsluminous.cleartravel.core.google.auth.GoogleSyncScheduler
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupInfo
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupService
 import com.itsluminous.cleartravel.core.google.backup.FreshInstallDetector
+import com.itsluminous.cleartravel.core.google.work.ScheduledBackupScheduler
+import com.itsluminous.cleartravel.core.model.BackupSchedule
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.Channel
@@ -75,6 +78,10 @@ sealed interface BackupRestoreEvent {
  * fresh install, a changed password) raises `PasswordRequired`; the screen then asks
  * for the SOURCE password ([UiState.passwordPrompt]) and the step is retried with it
  * through [submitSourcePassword]. A wrong password is a snackbar and the prompt stays.
+ *
+ * ADR-037: the automatic-backup cadence ([UiState.schedule]) is persisted through
+ * [SettingsRepository] and applied to WorkManager at once via [ScheduledBackupScheduler]
+ * (the app shell re-affirms it on every open).
  */
 @HiltViewModel
 class BackupRestoreViewModel
@@ -86,6 +93,8 @@ class BackupRestoreViewModel
         private val driveBackupService: DriveBackupService,
         private val freshInstallDetector: FreshInstallDetector,
         private val googleSyncScheduler: GoogleSyncScheduler,
+        private val settingsRepository: SettingsRepository,
+        private val scheduledBackupScheduler: ScheduledBackupScheduler,
     ) : ViewModel() {
         /** An import awaiting user confirmation (dialog with date + counts). */
         data class PendingImport(
@@ -118,6 +127,8 @@ class BackupRestoreViewModel
             val showDriveList: Boolean = false,
             /** Non-null: offer the fresh-install restore of this backup (date + size). */
             val freshRestorePrompt: DriveBackupInfo? = null,
+            /** ADR-037: cadence of the automatic backup. */
+            val schedule: BackupSchedule = BackupSchedule.DEFAULT,
         )
 
         private val _uiState = MutableStateFlow(UiState())
@@ -132,11 +143,22 @@ class BackupRestoreViewModel
         init {
             refreshLastBackup()
             viewModelScope.launch {
+                settingsRepository.backupSchedule.collect { schedule -> _uiState.update { it.copy(schedule = schedule) } }
+            }
+            viewModelScope.launch {
                 accountManager.linkState.collect { state ->
                     val linked = state is GoogleLinkState.Linked
                     _uiState.update { it.copy(driveLinked = linked) }
                     if (linked) refreshDriveBackups() else _uiState.update { it.copy(driveBackups = emptyList()) }
                 }
+            }
+        }
+
+        /** ADR-037: persists the cadence and (re)schedules or cancels the periodic job right away. */
+        fun setBackupSchedule(schedule: BackupSchedule) {
+            viewModelScope.launch {
+                settingsRepository.setBackupSchedule(schedule)
+                scheduledBackupScheduler.apply(schedule)
             }
         }
 

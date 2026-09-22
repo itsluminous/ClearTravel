@@ -15,8 +15,11 @@ import com.itsluminous.cleartravel.core.google.backup.DriveBackupInfo
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupService
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupUploadResult
 import com.itsluminous.cleartravel.core.google.backup.FreshInstallDetector
+import com.itsluminous.cleartravel.core.google.work.ScheduledBackupScheduler
+import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.core.testing.MainDispatcherRule
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -127,6 +130,15 @@ private class RecordingSyncScheduler : GoogleSyncScheduler {
     override fun scheduleDisconnectCleanup(calendarId: String) = Unit
 }
 
+/** Recording [ScheduledBackupScheduler] — the ADR-037 apply-on-change hook. */
+private class RecordingScheduledBackupScheduler : ScheduledBackupScheduler {
+    val applied = mutableListOf<BackupSchedule>()
+
+    override fun apply(schedule: BackupSchedule) {
+        applied += schedule
+    }
+}
+
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class BackupRestoreViewModelTest {
@@ -139,8 +151,20 @@ class BackupRestoreViewModelTest {
     private val driveService = FakeDriveBackupService()
     private val detector = FakeFreshInstallDetector()
     private val scheduler = RecordingSyncScheduler()
+    private val settings = FakeSettingsRepository()
+    private val backupScheduler = RecordingScheduledBackupScheduler()
 
-    private fun viewModel() = BackupRestoreViewModel(backupManager, clock, googleManager, driveService, detector, scheduler)
+    private fun viewModel() =
+        BackupRestoreViewModel(
+            backupManager,
+            clock,
+            googleManager,
+            driveService,
+            detector,
+            scheduler,
+            settings,
+            backupScheduler,
+        )
 
     private val uri: Uri = Uri.parse("content://test/backup.zip")
 
@@ -454,5 +478,29 @@ class BackupRestoreViewModelTest {
                 assertThat(awaitItem()).isEqualTo(BackupRestoreEvent.ImportDone(backupManager.mergeSummary))
             }
             assertThat(backupManager.appliedFrom).hasSize(1)
+        }
+
+    @Test
+    fun `backup schedule defaults to off and mirrors the persisted setting`() =
+        runTest {
+            assertThat(viewModel().uiState.value.schedule).isEqualTo(BackupSchedule.OFF)
+
+            settings.setBackupSchedule(BackupSchedule.WEEKLY)
+
+            assertThat(viewModel().uiState.value.schedule).isEqualTo(BackupSchedule.WEEKLY)
+        }
+
+    @Test
+    fun `picking a cadence persists it and applies the periodic job, off cancels`() =
+        runTest {
+            val viewModel = viewModel()
+
+            viewModel.setBackupSchedule(BackupSchedule.DAILY)
+            assertThat(settings.backupSchedule.first()).isEqualTo(BackupSchedule.DAILY)
+            assertThat(viewModel.uiState.value.schedule).isEqualTo(BackupSchedule.DAILY)
+
+            viewModel.setBackupSchedule(BackupSchedule.OFF)
+            assertThat(settings.backupSchedule.first()).isEqualTo(BackupSchedule.OFF)
+            assertThat(backupScheduler.applied).containsExactly(BackupSchedule.DAILY, BackupSchedule.OFF).inOrder()
         }
 }
