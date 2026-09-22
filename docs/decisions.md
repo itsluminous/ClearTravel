@@ -324,7 +324,13 @@ logic grows one branch.
    its own newer Compose BOM. Both are excluded on the dependency edge in
    `feature/itinerary/build.gradle.kts` so the version-catalog pins keep winning
    across every consumer, without touching the frozen catalog. Revisit when AGP is
-   upgraded.
+   upgraded. *Update (7d3d356 + cleanup 2026-09-22):* maps-compose is now PINNED to
+   **6.7.0** — 6.12.x is compiled against Compose 1.9 and crashes at runtime
+   (`NoSuchMethodError: rememberSaveable`) on the project's BOM 2025.06; bump the two
+   together. At 6.7.0 the `androidx.core` exclusions are still live (it declares
+   core-ktx 1.16.0, which would override the catalog's 1.15.0), while its compose-bom
+   import (2025.04.00) is older than ours and the `compose-bom` exclusion was dropped
+   as dead.
 
 Commute legs store only `linkedJourneyId`/`linkedJourneyType` (ADR-004); the journey
 picker lists candidates by injecting `TrainRepository`/`FlightRepository` read-only —

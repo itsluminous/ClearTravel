@@ -66,13 +66,17 @@ dependencies {
     ksp(libs.hilt.compiler)
 
     // Trip map view + location picker (empty-key safe; see MapUnavailableReason).
-    // maps-compose is PINNED to 6.7.0: 6.12.x is built against Compose BOM 2025.09
-    // and crashes at runtime (NoSuchMethodError: rememberSaveable) on our BOM 2025.06;
-    // 6.7.0 matches. Exclusions keep the catalog pins winning (ADR-012).
+    // maps-compose is PINNED to 6.7.0 (ADR-012 + 7d3d356): 6.12.x is compiled against
+    // Compose BOM 2025.09 / Compose 1.9 and crashes at runtime on our BOM 2025.06
+    // (NoSuchMethodError: rememberSaveable); bump it ONLY together with the Compose BOM.
+    // Exclusions, re-verified at 6.7.0 (cleanup pass 2026-09-22): 6.7.0 declares
+    // androidx.core:core-ktx 1.16.0, which would otherwise override the catalog's 1.15.0
+    // for EVERY consumer, so the two core exclusions stay. Its own compose-bom import
+    // (2025.04.00) is older than ours and loses resolution anyway, so that exclusion
+    // was dropped as dead.
     implementation(libs.maps.compose) {
         exclude(group = "androidx.core", module = "core")
         exclude(group = "androidx.core", module = "core-ktx")
-        exclude(group = "androidx.compose", module = "compose-bom")
     }
     implementation(libs.play.services.maps)
 
