@@ -31,7 +31,8 @@ RuleExtractor.extract(rule, html)  ← PURE jsoup fn = the fixture-tested code p
   `prefillJavaScript()`, `submitJavaScript()`, `readySignalJavaScript()`,
   `dumpHtmlJavaScript()`, callbacks `onPageReady()` / `onHtmlDumped(html)`.
 - `ScrapeEvent` — `PageReady`, `NeedsUserAction(reason)` (captcha / manual submit),
-  `Extracted(data: ScrapedData)`, `ParseFailed(reason, rawHtml)`.
+  `Extracted(data: ScrapedData, rawHtml)` (the dump the rule ran on, for feature-side
+  post-processing — ADR-026), `ParseFailed(reason, rawHtml)`.
 - `ScrapeWebViewController(webView, session)` — `start()` / `stop()`; caller's
   composable owns the WebView lifecycle. Deliberately thin, instrumented-tested later.
 - `RuleExtractor.extract(rule, html): ExtractionResult` — pure, never throws.
@@ -45,7 +46,7 @@ RuleExtractor.extract(rule, html)  ← PURE jsoup fn = the fixture-tested code p
 | `version` | Bump whenever selectors change |
 | `kind` | `train` or `flight` |
 | `iataCodes` | Airline IATA codes served (flight rules only), e.g. `["6E"]` |
-| `urlTemplate` | Page URL; placeholders `{pnr}` `{flightNumber}` `{date}` `{trainNumber}` |
+| `urlTemplate` | Page URL; placeholders `{pnr}` `{flightNumber}` `{date}` `{trainNumber}` `{airlineIata}` |
 | `prefill` | `[{selector, valueTemplate}]` — form fields injected via JS after load |
 | `submitSelector` | CSS selector auto-clicked after prefill; **`null` when unsafe (captcha)** → user submits manually |
 | `readySignal` | `{selector}` (exists + visible) or `{jsCondition}` (JS expr) marking the result rendered |
@@ -84,3 +85,16 @@ extracted at all ⇒ `ExtractionResult.Failure(reason, rawHtml)`.
   departure cells hold the literals `First`/`Last` (normalized by `feature:trains`'
   `RouteMapper`, not by the rule). Selectors + fixture from the real captured DOM of
   train 22346 (recon 2026-09-21).
+- `google-flights` v1 — https://www.google.com/search?q={airlineIata}+{flightNumber}+flight+status&hl=en
+  (ADR-026). Airline-AGNOSTIC fallback: `iataCodes` is empty so `flightRuleFor` never
+  selects it; `feature:flights` looks it up by id when no airline rule exists (or one
+  failed). Direct GET, defensive consent `dismissSelectors`, ready when the results
+  container (or a bot-wall captcha form) rendered. Extraction is class-free — the
+  visible `h2` "Flight status" is a `required` sentinel (absent = Google shows no card
+  = clean failure), plus ARIA/text anchors for the flight label, selected date tab,
+  header status, data source and freshness. Per-card details are parsed from the same
+  dump by the pure `GoogleFlightsExtractor` in `feature:flights` (label/value sibling
+  pairing the schema cannot express). Fixtures: `page.html` = REAL recon capture
+  (AI 101), `no-panel.html` = no-card page, `live-landed-6e2001.html` = REAL WebView
+  dump from the emulator whose DOM differs from the recon (empty tabpanels, card in an
+  async sibling, no `data-maindata` status blob — hence that blob is optional).

@@ -1,0 +1,15 @@
+{
+  "fields": {
+    "heading": "Flight status",
+    "flightLabel": "Air India AI 101",
+    "selectedDate": "Tue, 22 Sept",
+    "headerText": "10:55 pm AI 101 to Rome FCO Scheduled",
+    "headerStatus": "Scheduled",
+    "source": "OAG",
+    "updated": "Updated 3h 1m ago",
+    "mainStatuses": "ARRIVED, SCHEDULED_STATUS, SCHEDULED_STATUS, SCHEDULED_STATUS, SCHEDULED_STATUS, SCHEDULED_STATUS",
+    "mainDepDelays": "-11, 0, 0, 0, 0, 0"
+  },
+  "rows": [],
+  "extraRows": {}
+}

@@ -17,9 +17,17 @@ sealed interface ScrapeEvent {
         val reason: UserActionReason,
     ) : ScrapeEvent
 
-    /** The ready signal fired and the dumped HTML parsed successfully. */
+    /**
+     * The ready signal fired and the dumped HTML parsed successfully. [rawHtml] is
+     * the same dump the extraction ran on (ADR-026, additive): a feature-side mapper
+     * that needs structure the declarative rule schema cannot express (ARIA
+     * tab→panel references, label/value sibling pairing, `<del>` adjacency) can
+     * post-process it — the rule still owns the URL/ready/sentinel contract and its
+     * fixture still pins what it extracts.
+     */
     data class Extracted(
         val data: ScrapedData,
+        val rawHtml: String = "",
     ) : ScrapeEvent
 
     /**
@@ -120,7 +128,7 @@ class RuleDrivenScrapeSession(
     /** Host callback: ready signal fired and the DOM was dumped. Runs extraction. */
     fun onHtmlDumped(html: String) {
         when (val result = RuleExtractor.extract(rule, html)) {
-            is ExtractionResult.Success -> eventsFlow.tryEmit(ScrapeEvent.Extracted(result.data))
+            is ExtractionResult.Success -> eventsFlow.tryEmit(ScrapeEvent.Extracted(result.data, rawHtml = html))
             is ExtractionResult.Failure ->
                 eventsFlow.tryEmit(
                     ScrapeEvent.ParseFailed(reason = result.reason, rawHtml = result.rawHtml),
