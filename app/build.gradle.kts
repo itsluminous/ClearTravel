@@ -123,6 +123,7 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:database"))
     implementation(project(":core:data"))
+    implementation(project(":core:security"))
     implementation(project(":core:notifications"))
     implementation(project(":core:google"))
     // Share-sheet file intake auto-detect runs the public OCR prefill API.

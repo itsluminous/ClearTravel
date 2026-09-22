@@ -58,6 +58,7 @@ import com.itsluminous.cleartravel.core.designsystem.R
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Shared offline document viewer (ADR-017 → hoisted in ADR-027 → upgraded in ADR-030)
@@ -82,15 +83,35 @@ fun DocumentViewerScreen(
     viewerState: DocumentViewerState = rememberDocumentViewerState(path),
 ) {
     val context = LocalContext.current
+    val reader = LocalDocumentFileReader.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
     FullBrightness(context)
 
+    // ADR-031: PDFs are rendered from a plaintext copy in cache (PdfRenderer needs a
+    // seekable file) — materialised once per document and removed on dispose.
+    var pdfFile by remember(path) { mutableStateOf<File?>(null) }
+    var pdfReady by remember(path) { mutableStateOf(!DocumentFiles.isPdf(path)) }
+    if (DocumentFiles.isPdf(path)) {
+        DisposableEffect(path) {
+            val job =
+                scope.launch {
+                    pdfFile = withContext(Dispatchers.IO) { reader.materialize(path, viewerPdfCacheDir(context)) }
+                    pdfReady = true
+                }
+            onDispose {
+                job.cancel()
+                pdfFile?.delete()
+            }
+        }
+    }
+
     var page by remember(path) { mutableStateOf<DocumentPage?>(null) }
     var loadFailed by remember(path) { mutableStateOf(false) }
-    LaunchedEffect(path, viewerState.pageIndex) {
-        val loaded = withContext(Dispatchers.IO) { loadDocumentPage(path, viewerState.pageIndex) }
+    LaunchedEffect(path, viewerState.pageIndex, pdfReady, pdfFile) {
+        if (!pdfReady) return@LaunchedEffect
+        val loaded = withContext(Dispatchers.IO) { loadDocumentPage(reader, path, viewerState.pageIndex, pdfFile) }
         page = loaded
         loadFailed = loaded == null
         loaded?.let { viewerState.updatePageCount(it.pageCount) }
@@ -103,7 +124,7 @@ fun DocumentViewerScreen(
         rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument(DocumentFiles.mimeTypeFor(path))) { uri ->
             if (uri == null) return@rememberLauncherForActivityResult
             scope.launch {
-                val ok = withContext(Dispatchers.IO) { copyDocumentTo(context, path, uri) }
+                val ok = withContext(Dispatchers.IO) { copyDocumentTo(context, reader, path, uri) }
                 snackbarHostState.showSnackbar(if (ok) saveDone else saveFailed)
             }
         }
@@ -132,8 +153,9 @@ fun DocumentViewerScreen(
                         icon = Icons.Filled.Share,
                         explanationRes = R.string.designsystem_viewer_share,
                         onClick = {
-                            if (!shareDocumentFile(context, path, chooserTitle)) {
-                                scope.launch { snackbarHostState.showSnackbar(shareFailed) }
+                            scope.launch {
+                                val ok = withContext(Dispatchers.IO) { shareDocumentFile(context, reader, path, chooserTitle) }
+                                if (!ok) snackbarHostState.showSnackbar(shareFailed)
                             }
                         },
                     )
@@ -282,3 +304,6 @@ private tailrec fun Context.findActivity(): Activity? =
         is ContextWrapper -> baseContext.findActivity()
         else -> null
     }
+
+/** Scratch directory for decrypted PDF copies the viewer renders from (`cache/viewer-pdf`). */
+private fun viewerPdfCacheDir(context: android.content.Context): File = File(context.cacheDir, "viewer-pdf")

@@ -101,19 +101,22 @@ class DocumentPage(
 )
 
 /**
- * Decodes [pageIndex] of the document at [path]: images decode down-sampled to
- * [DocumentFiles.MAX_IMAGE_DIMENSION_PX]; PDF pages render white-backed at
- * [DocumentFiles.pdfRenderSize]. `null` when the file is missing or unreadable.
- * Blocking — call on an IO dispatcher.
+ * Decodes [pageIndex] of the document at [path] through [reader] (ADR-031: the bytes
+ * on disk may be encrypted): images decode down-sampled to
+ * [DocumentFiles.MAX_IMAGE_DIMENSION_PX] straight from the plaintext stream; PDF pages
+ * render white-backed at [DocumentFiles.pdfRenderSize] from a plaintext copy the
+ * caller materialised into cache ([pdfFile]) — `PdfRenderer` needs a seekable file.
+ * `null` when the file is missing or unreadable. Blocking — call on an IO dispatcher.
  */
 fun loadDocumentPage(
+    reader: DocumentFileReader,
     path: String,
     pageIndex: Int,
+    pdfFile: File?,
 ): DocumentPage? =
     runCatching {
-        val file = File(path)
-        if (!file.exists()) return null
         if (DocumentFiles.isPdf(path)) {
+            val file = pdfFile?.takeIf(File::isFile) ?: return null
             ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { descriptor ->
                 PdfRenderer(descriptor).use { renderer ->
                     if (renderer.pageCount == 0) return null
@@ -129,32 +132,49 @@ fun loadDocumentPage(
             }
         } else {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            BitmapFactory.decodeFile(path, bounds)
+            reader.open(path)?.use { BitmapFactory.decodeStream(it, null, bounds) } ?: return null
             val options =
                 BitmapFactory.Options().apply {
                     inSampleSize = DocumentFiles.sampleSizeFor(bounds.outWidth, bounds.outHeight)
                 }
-            BitmapFactory.decodeFile(path, options)?.let { DocumentPage(it, 1) }
+            reader.open(path)?.use { BitmapFactory.decodeStream(it, null, options) }?.let { DocumentPage(it, 1) }
         }
     }.getOrNull()
+
+/** Plain-file page loader (ADR-027/030 callers and tests). */
+fun loadDocumentPage(
+    path: String,
+    pageIndex: Int,
+): DocumentPage? {
+    val reader = DocumentFileReader.Plain
+    return loadDocumentPage(reader, path, pageIndex, pdfFile = File(path))
+}
 
 /** Backwards-compatible first-page loader (ADR-027 callers). */
 fun loadDocumentBitmap(path: String): Bitmap? = loadDocumentPage(path, 0)?.bitmap
 
+/** Where the viewer keeps plaintext copies it hands to other apps (`cache/share/viewer`). */
+fun viewerShareDir(context: Context): File = File(File(context.cacheDir, "share"), "viewer")
+
 /**
- * `ACTION_SEND` of the stored file through the app's `FileProvider` (authority
- * `<applicationId>.fileprovider`, roots in the app's `file_paths.xml`). Returns `false`
- * when the file is missing, outside a provider root, or no app can receive it.
+ * `ACTION_SEND` of a PLAINTEXT copy of the stored file, materialised through [reader]
+ * into [viewerShareDir] and exposed via the app's `FileProvider` (authority
+ * `<applicationId>.fileprovider`, root `cache/share` in `file_paths.xml`). Sharing is
+ * an explicit user export, so the copy is plaintext by intent; previous share copies
+ * are removed first so at most one lingers in cache. Returns `false` when the file is
+ * missing or no app can receive it.
  */
 fun shareDocumentFile(
     context: Context,
+    reader: DocumentFileReader,
     path: String,
     chooserTitle: String,
 ): Boolean =
     runCatching {
-        val file = File(path)
-        if (!file.exists()) return false
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}$FILE_PROVIDER_SUFFIX", file)
+        val shareDir = viewerShareDir(context)
+        shareDir.listFiles()?.forEach { it.delete() }
+        val copy = reader.materialize(path, shareDir) ?: return false
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}$FILE_PROVIDER_SUFFIX", copy)
         val send =
             Intent(Intent.ACTION_SEND).apply {
                 type = DocumentFiles.mimeTypeFor(path)
@@ -167,19 +187,20 @@ fun shareDocumentFile(
     }.getOrDefault(false)
 
 /**
- * Copies the stored file's bytes to a SAF [target] the user picked via
- * `CreateDocument`. Returns `false` on any I/O failure. Blocking — IO dispatcher.
+ * Copies the PLAINTEXT of the stored file to a SAF [target] the user picked via
+ * `CreateDocument` (an explicit export). Returns `false` on any I/O failure.
+ * Blocking — IO dispatcher.
  */
 fun copyDocumentTo(
     context: Context,
+    reader: DocumentFileReader,
     path: String,
     target: Uri,
 ): Boolean =
     runCatching {
-        val file = File(path)
-        if (!file.exists()) return false
+        val source = reader.open(path) ?: return false
         val out = context.contentResolver.openOutputStream(target, "wt") ?: return false
-        out.use { sink -> file.inputStream().use { source -> source.copyTo(sink) } }
+        out.use { sink -> source.use { it.copyTo(sink) } }
         true
     }.getOrDefault(false)
 

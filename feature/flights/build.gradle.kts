@@ -44,6 +44,7 @@ dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":core:model"))
     implementation(project(":core:data"))
+    implementation(project(":core:security"))
     implementation(project(":core:scrape"))
     implementation(project(":core:ocr"))
     implementation(project(":core:notifications"))

@@ -5,6 +5,8 @@ import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.data.repository.TravelDocumentStorage
+import com.itsluminous.cleartravel.core.security.crypto.CryptoPrimitives
+import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Test
@@ -17,7 +19,8 @@ import java.io.File
 @Config(sdk = [34])
 class LocalDocumentFileStoreTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
-    private val store = LocalDocumentFileStore(context)
+    private val cipher = LocalFileCipher(key = CryptoPrimitives.randomKey().let { key -> { key } })
+    private val store = LocalDocumentFileStore(context, cipher)
 
     @After
     fun tearDown() {
@@ -25,7 +28,7 @@ class LocalDocumentFileStoreTest {
     }
 
     @Test
-    fun `store copies the picked bytes into filesDir documents named by id and extension`() =
+    fun `store encrypts the picked bytes into filesDir documents named by id and extension`() =
         runTest {
             val source = File(context.cacheDir, "visa-scan.pdf").apply { writeBytes(byteArrayOf(1, 2, 3)) }
 
@@ -35,7 +38,10 @@ class LocalDocumentFileStoreTest {
             val file = File(stored!!.path)
             assertThat(file.parentFile).isEqualTo(TravelDocumentStorage.directory(context.filesDir))
             assertThat(file.name).isEqualTo("doc-1.pdf")
-            assertThat(file.readBytes()).isEqualTo(byteArrayOf(1, 2, 3))
+            // ADR-031: at rest the file is CTEF-encrypted; the cipher yields the original bytes.
+            assertThat(cipher.isEncrypted(file)).isTrue()
+            assertThat(file.readBytes()).isNotEqualTo(byteArrayOf(1, 2, 3))
+            assertThat(cipher.openDecrypted(file).use { it.readBytes() }).isEqualTo(byteArrayOf(1, 2, 3))
         }
 
     @Test

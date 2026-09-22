@@ -43,6 +43,7 @@ dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":core:model"))
     implementation(project(":core:data"))
+    implementation(project(":core:security"))
     implementation(project(":core:google"))
 
     implementation(libs.androidx.core.ktx)

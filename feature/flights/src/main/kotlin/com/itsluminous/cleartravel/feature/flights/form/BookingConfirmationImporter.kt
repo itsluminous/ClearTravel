@@ -3,11 +3,13 @@ package com.itsluminous.cleartravel.feature.flights.form
 import android.content.Context
 import android.net.Uri
 import com.itsluminous.cleartravel.core.data.repository.AttachmentRepository
+import com.itsluminous.cleartravel.core.data.security.AppFileLayout
 import com.itsluminous.cleartravel.core.model.Attachment
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.model.EntityIds
 import com.itsluminous.cleartravel.core.ocr.OcrPrefillService
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
+import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -40,7 +42,7 @@ interface BookingConfirmationImporter {
     ): Attachment?
 }
 
-/** Production importer: `OcrPrefillService` + a copy into `filesDir/attachments/`. */
+/** Production importer: `OcrPrefillService` + an ENCRYPTED copy into `filesDir/attachments/` (ADR-031). */
 @Singleton
 class OcrBookingConfirmationImporter
     @Inject
@@ -48,6 +50,7 @@ class OcrBookingConfirmationImporter
         @ApplicationContext private val context: Context,
         private val ocrPrefillService: OcrPrefillService,
         private val attachmentRepository: AttachmentRepository,
+        private val fileCipher: LocalFileCipher,
     ) : BookingConfirmationImporter {
         override suspend fun prefill(uriString: String): BookingConfirmationExtraction =
             runCatching { ocrPrefillService.prefillBookingConfirmation(Uri.parse(uriString)) }
@@ -64,10 +67,10 @@ class OcrBookingConfirmationImporter
                     val mime = mimeOf(uri)
                     // Same directory the backup/Drive restore ladder re-points into
                     // (`filesDir/attachments/<id>` — ADR-015/ADR-016).
-                    val dir = File(context.filesDir, ATTACHMENTS_DIR).apply { mkdirs() }
+                    val dir = AppFileLayout.attachments(context.filesDir).apply { mkdirs() }
                     val target = File(dir, "$attachmentId.${extensionOf(mime, uri)}")
                     context.contentResolver.openInputStream(uri)?.use { input ->
-                        target.outputStream().use { output -> input.copyTo(output) }
+                        fileCipher.encryptTo(input, target)
                     } ?: return@runCatching null
                     attachmentRepository.save(
                         Attachment(
@@ -94,8 +97,4 @@ class OcrBookingConfirmationImporter
                 mime == "image/png" -> "png"
                 else -> "jpg"
             }
-
-        private companion object {
-            const val ATTACHMENTS_DIR = "attachments"
-        }
     }

@@ -13,6 +13,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -22,6 +23,7 @@ import androidx.core.content.IntentCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
+import com.itsluminous.cleartravel.core.designsystem.component.LocalDocumentFileReader
 import com.itsluminous.cleartravel.core.designsystem.theme.ClearTravelTheme
 import com.itsluminous.cleartravel.core.model.ThemeMode
 import com.itsluminous.cleartravel.core.notifications.NotificationChannelRegistrar
@@ -43,6 +45,7 @@ import com.itsluminous.cleartravel.ui.intake.SharedFileIntakeDialog
 import com.itsluminous.cleartravel.ui.intake.SharedFileIntakeViewModel
 import com.itsluminous.cleartravel.ui.intake.SharedTextRoute
 import com.itsluminous.cleartravel.ui.intake.routeSharedText
+import com.itsluminous.cleartravel.ui.security.EncryptedDocumentFileReader
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -59,6 +62,10 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var startupTasks: AppStartupTasks
+
+    /** ADR-031: every document viewer in the app decrypts through this reader. */
+    @Inject
+    lateinit var documentFileReader: EncryptedDocumentFileReader
 
     /** Pending notification deep link (ADR-013 contract); cleared once consumed. */
     private val pendingDeepLink = mutableStateOf<JourneysDeepLink?>(null)
@@ -109,73 +116,85 @@ class MainActivity : ComponentActivity() {
                 pickCoordinator.takeLanding(pickRequest)?.let { pendingDeepLink.value = JourneysDeepLink.forJourneyAdd(it) }
             }
             ClearTravelTheme(darkTheme = themeMode.resolveDarkTheme()) {
-                when (val entry = pendingEntry.value) {
-                    // External entry: a feature's add form rendered over the shell
-                    // until saved/cancelled; keyed by nonce so a repeated request
-                    // re-creates (and re-prefills) the form.
-                    // When the hosted form finishes, the shell lands on Journeys with
-                    // the matching segment — showing what was just added (ADR-024)
-                    // instead of the default Trips tab.
-                    is ExternalEntry.Trains ->
-                        key(entry.nonce) {
-                            Surface {
-                                TrainsExternalEntry(
-                                    request = entry.request,
-                                    onDone = { result ->
-                                        pendingDeepLink.value = JourneysDeepLink.forTrainsEntry(result)
-                                        pendingEntry.value = null
-                                    },
-                                )
-                            }
-                        }
-                    is ExternalEntry.Flights ->
-                        key(entry.nonce) {
-                            Surface {
-                                FlightsExternalEntry(
-                                    request = entry.request,
-                                    onDone = { result ->
-                                        pendingDeepLink.value = JourneysDeepLink.forFlightsEntry(result)
-                                        pendingEntry.value = null
-                                    },
-                                )
-                            }
-                        }
-                    null ->
-                        ClearTravelApp(
-                            journeysDeepLink = pendingDeepLink.value,
-                            onJourneysDeepLinkConsumed = { pendingDeepLink.value = null },
-                            tripsLanding = pendingTripsLanding.value,
-                            onTripsLandingConsumed = { pendingTripsLanding.value = null },
-                            onOpenJourney = { type, id -> pendingDeepLink.value = JourneysDeepLink.forJourney(type, id) },
-                            onOpenTrip = { tripId -> pendingTripsLanding.value = TripsLanding(tripId = tripId) },
-                            onJourneyAddDone = { result ->
-                                // Answer the bus FIRST so the restored itinerary form
-                                // already holds the linked journey, then go back.
-                                pickCoordinator.complete(result)
-                                pendingTripsLanding.value = TripsLanding(tripId = null)
-                            },
-                        )
+                CompositionLocalProvider(LocalDocumentFileReader provides documentFileReader) {
+                    ShellContent(themeViewModel, intakeViewModel, pickCoordinator)
                 }
-                SharedFileIntakeHost(
-                    viewModel = intakeViewModel,
-                    sharedFile = pendingSharedFile.value,
-                    onRouted = { route ->
-                        pendingSharedFile.value = null
-                        pendingEntry.value = route.toExternalEntry()
-                    },
-                    onCancelled = { pendingSharedFile.value = null },
-                )
-                // ADR-029 part D: the added place's trip is shown in the Trips tab.
-                MapsLinkIntakeHost(
-                    sharedText = pendingMapsLink.value,
-                    onDone = { tripId ->
-                        pendingMapsLink.value = null
-                        pendingTripsLanding.value = TripsLanding(tripId = tripId)
-                    },
-                    onCancelled = { pendingMapsLink.value = null },
-                )
             }
         }
+    }
+
+    /** The shell's content tree (external entry forms, the tabbed app, intake hosts). */
+    @Composable
+    private fun ShellContent(
+        themeViewModel: ThemeViewModel,
+        intakeViewModel: SharedFileIntakeViewModel,
+        pickCoordinator: JourneyPickCoordinator,
+    ) {
+        when (val entry = pendingEntry.value) {
+            // External entry: a feature's add form rendered over the shell
+            // until saved/cancelled; keyed by nonce so a repeated request
+            // re-creates (and re-prefills) the form.
+            // When the hosted form finishes, the shell lands on Journeys with
+            // the matching segment — showing what was just added (ADR-024)
+            // instead of the default Trips tab.
+            is ExternalEntry.Trains ->
+                key(entry.nonce) {
+                    Surface {
+                        TrainsExternalEntry(
+                            request = entry.request,
+                            onDone = { result ->
+                                pendingDeepLink.value = JourneysDeepLink.forTrainsEntry(result)
+                                pendingEntry.value = null
+                            },
+                        )
+                    }
+                }
+            is ExternalEntry.Flights ->
+                key(entry.nonce) {
+                    Surface {
+                        FlightsExternalEntry(
+                            request = entry.request,
+                            onDone = { result ->
+                                pendingDeepLink.value = JourneysDeepLink.forFlightsEntry(result)
+                                pendingEntry.value = null
+                            },
+                        )
+                    }
+                }
+            null ->
+                ClearTravelApp(
+                    journeysDeepLink = pendingDeepLink.value,
+                    onJourneysDeepLinkConsumed = { pendingDeepLink.value = null },
+                    tripsLanding = pendingTripsLanding.value,
+                    onTripsLandingConsumed = { pendingTripsLanding.value = null },
+                    onOpenJourney = { type, id -> pendingDeepLink.value = JourneysDeepLink.forJourney(type, id) },
+                    onOpenTrip = { tripId -> pendingTripsLanding.value = TripsLanding(tripId = tripId) },
+                    onJourneyAddDone = { result ->
+                        // Answer the bus FIRST so the restored itinerary form
+                        // already holds the linked journey, then go back.
+                        pickCoordinator.complete(result)
+                        pendingTripsLanding.value = TripsLanding(tripId = null)
+                    },
+                )
+        }
+        SharedFileIntakeHost(
+            viewModel = intakeViewModel,
+            sharedFile = pendingSharedFile.value,
+            onRouted = { route ->
+                pendingSharedFile.value = null
+                pendingEntry.value = route.toExternalEntry()
+            },
+            onCancelled = { pendingSharedFile.value = null },
+        )
+        // ADR-029 part D: the added place's trip is shown in the Trips tab.
+        MapsLinkIntakeHost(
+            sharedText = pendingMapsLink.value,
+            onDone = { tripId ->
+                pendingMapsLink.value = null
+                pendingTripsLanding.value = TripsLanding(tripId = tripId)
+            },
+            onCancelled = { pendingMapsLink.value = null },
+        )
     }
 
     override fun onNewIntent(intent: Intent) {

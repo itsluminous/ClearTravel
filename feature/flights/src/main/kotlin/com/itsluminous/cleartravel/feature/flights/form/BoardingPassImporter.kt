@@ -2,8 +2,10 @@ package com.itsluminous.cleartravel.feature.flights.form
 
 import android.content.Context
 import android.net.Uri
+import com.itsluminous.cleartravel.core.data.security.AppFileLayout
 import com.itsluminous.cleartravel.core.ocr.OcrPrefillService
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassExtraction
+import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -29,13 +31,18 @@ interface BoardingPassImporter {
     ): String?
 }
 
-/** Production importer: `OcrPrefillService` + a copy into `filesDir/boarding_passes/`. */
+/**
+ * Production importer: `OcrPrefillService` + an ENCRYPTED copy into
+ * `filesDir/boarding_passes/` (ADR-031 — the OCR runs on the picked URI, never on
+ * the stored file).
+ */
 @Singleton
 class OcrBoardingPassImporter
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
         private val ocrPrefillService: OcrPrefillService,
+        private val fileCipher: LocalFileCipher,
     ) : BoardingPassImporter {
         override suspend fun prefill(uriString: String): BoardingPassExtraction =
             runCatching { ocrPrefillService.prefillBoardingPass(Uri.parse(uriString)) }
@@ -48,10 +55,10 @@ class OcrBoardingPassImporter
             withContext(Dispatchers.IO) {
                 runCatching {
                     val uri = Uri.parse(uriString)
-                    val dir = File(context.filesDir, PASS_DIR).apply { mkdirs() }
+                    val dir = AppFileLayout.boardingPasses(context.filesDir).apply { mkdirs() }
                     val target = File(dir, "$flightId.${extensionOf(uri)}")
                     context.contentResolver.openInputStream(uri)?.use { input ->
-                        target.outputStream().use { output -> input.copyTo(output) }
+                        fileCipher.encryptTo(input, target)
                     } ?: return@runCatching null
                     target.absolutePath
                 }.getOrNull()
@@ -64,9 +71,5 @@ class OcrBoardingPassImporter
                 mime == "image/png" -> "png"
                 else -> "jpg"
             }
-        }
-
-        private companion object {
-            const val PASS_DIR = "boarding_passes"
         }
     }

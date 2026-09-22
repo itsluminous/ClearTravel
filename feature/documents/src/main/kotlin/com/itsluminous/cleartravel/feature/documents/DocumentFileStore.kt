@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.webkit.MimeTypeMap
 import com.itsluminous.cleartravel.core.data.repository.TravelDocumentStorage
+import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -40,12 +41,16 @@ interface DocumentFileStore {
     suspend fun delete(path: String)
 }
 
-/** Production store: `ContentResolver` copy into [TravelDocumentStorage.directory]. */
+/**
+ * Production store: `ContentResolver` copy into [TravelDocumentStorage.directory],
+ * written ENCRYPTED through the vault-keyed [LocalFileCipher] (ADR-031).
+ */
 @Singleton
 class LocalDocumentFileStore
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
+        private val fileCipher: LocalFileCipher,
     ) : DocumentFileStore {
         override suspend fun store(
             uriString: String,
@@ -59,9 +64,10 @@ class LocalDocumentFileStore
                     val target = File(dir, TravelDocumentStorage.fileName(documentId, extensionFor(uri, mimeType)))
                     val input = context.contentResolver.openInputStream(uri) ?: return@runCatching null
                     try {
-                        input.use { source -> target.outputStream().use { output -> source.copyTo(output) } }
+                        // encryptTo writes to a temp file and swaps, so a failure never
+                        // leaves a half-written file behind an unsaved row.
+                        input.use { source -> fileCipher.encryptTo(source, target) }
                     } catch (e: Exception) {
-                        // Never leave a half-written file behind an unsaved row.
                         target.delete()
                         throw e
                     }

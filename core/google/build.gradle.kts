@@ -57,6 +57,7 @@ android {
 dependencies {
     api(project(":core:model"))
     api(project(":core:data"))
+    implementation(project(":core:security"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.core)
