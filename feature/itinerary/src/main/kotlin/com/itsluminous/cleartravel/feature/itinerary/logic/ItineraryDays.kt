@@ -87,3 +87,19 @@ fun dateForDay(
     trip: Trip?,
     dayIndex: Int,
 ): LocalDate? = trip?.startDate?.plusDays(dayIndex.toLong())
+
+/**
+ * The 0-based day slot of [date] within the trip — when the trip has a start date and
+ * the day lies within the first [dayCount] slots — else null. Used to drop a linked
+ * journey onto its own day (ADR-028) without ever creating slots the form does not offer.
+ */
+fun dayIndexFor(
+    trip: Trip?,
+    date: LocalDate?,
+    dayCount: Int,
+): Int? {
+    val start = trip?.startDate ?: return null
+    date ?: return null
+    val index = ChronoUnit.DAYS.between(start, date)
+    return index.toInt().takeIf { index >= 0 && index < dayCount }
+}

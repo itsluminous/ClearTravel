@@ -1,6 +1,7 @@
 package com.itsluminous.cleartravel.feature.itinerary.form
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,14 +11,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Train
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -93,6 +98,10 @@ internal fun ItineraryItemFormScreen(
     LaunchedEffect(saved) {
         if (saved) onDone()
     }
+    // ADR-028: runs when the form (re)appears. After a completed journey-add the
+    // request is already answered (no-op); after a manual tab tap it is still
+    // pending and gets cancelled so nothing is linked here by surprise later.
+    LaunchedEffect(Unit) { viewModel.cancelStaleJourneyAdd() }
     // Reflect externally-set coordinates (edit load, map picker) into the text field
     // without clobbering in-progress typing: invalid text clears the coordinates, so
     // the only mismatch left is an external set.
@@ -239,6 +248,13 @@ internal fun ItineraryItemFormScreen(
             },
             onPickFlight = { flight ->
                 viewModel.linkFlight(flight)
+                showJourneyPicker = false
+            },
+            onAddNew = { type ->
+                // The app shell observes the bus and takes the user to the Journeys
+                // tab's add flow; this form stays on the Trips back stack and is
+                // restored — with the new journey linked — when they are done.
+                viewModel.requestJourneyAdd(type)
                 showJourneyPicker = false
             },
         )
@@ -472,6 +488,10 @@ private fun PlannedTimePickerDialog(
     )
 }
 
+/**
+ * Link-a-journey sheet: "add a new train/flight" actions (ADR-028, hand-off to the
+ * Journeys tab) above the existing journeys to pick from.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun JourneyPickerSheet(
@@ -479,6 +499,7 @@ private fun JourneyPickerSheet(
     onDismiss: () -> Unit,
     onPickTrain: (com.itsluminous.cleartravel.core.model.TrainTicket) -> Unit,
     onPickFlight: (com.itsluminous.cleartravel.core.model.FlightJourney) -> Unit,
+    onAddNew: (JourneyType) -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp)) {
@@ -486,6 +507,19 @@ private fun JourneyPickerSheet(
                 text = stringResource(R.string.itinerary_journey_picker_title),
                 style = MaterialTheme.typography.titleLarge,
             )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.itinerary_add_new_train)) },
+                supportingContent = { Text(stringResource(R.string.itinerary_add_new_journey_hint)) },
+                leadingContent = { Icon(Icons.Filled.Train, contentDescription = null) },
+                modifier = Modifier.clickable { onAddNew(JourneyType.TRAIN) },
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.itinerary_add_new_flight)) },
+                supportingContent = { Text(stringResource(R.string.itinerary_add_new_journey_hint)) },
+                leadingContent = { Icon(Icons.Filled.Flight, contentDescription = null) },
+                modifier = Modifier.clickable { onAddNew(JourneyType.FLIGHT) },
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
             if (candidates.isEmpty) {
                 Text(
                     text = stringResource(R.string.itinerary_journey_picker_empty),

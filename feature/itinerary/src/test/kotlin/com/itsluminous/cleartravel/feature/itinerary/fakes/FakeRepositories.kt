@@ -60,6 +60,13 @@ class FakeItineraryRepository : ItineraryRepository {
                 .sortedWith(compareBy({ it.dayIndex }, { it.orderInDay }))
         }
 
+    override fun observeItemsLinkedToJourney(journeyId: String): Flow<List<ItineraryItem>> =
+        items.map { list ->
+            list
+                .filter { it.linkedJourneyId == journeyId }
+                .sortedWith(compareBy({ it.dayIndex }, { it.orderInDay }))
+        }
+
     override suspend fun getItem(id: String): ItineraryItem? = items.value.firstOrNull { it.id == id }
 
     override suspend fun save(item: ItineraryItem): ItineraryItem {

@@ -1,12 +1,14 @@
 package com.itsluminous.cleartravel.feature.itinerary
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.feature.itinerary.detail.TripDetailScreen
 import com.itsluminous.cleartravel.feature.itinerary.form.ItineraryItemFormScreen
 import com.itsluminous.cleartravel.feature.itinerary.trips.TripsScreen
@@ -32,19 +34,41 @@ private fun itemFormRoute(
 ) = "item_form/$tripId?$ITEM_ID_ARG=${itemId.orEmpty()}&$DAY_INDEX_ARG=$dayIndex"
 
 /**
+ * Integration hook for the app shell (ADR-028, mirrors the Journeys deep-link hook):
+ * land the Trips tab on [tripId]'s detail screen — or, when [tripId] is null, just on
+ * the tab with its saved state restored (how the journey-add hand-off returns to the
+ * itinerary form). [nonce] makes repeat landings on the same trip distinct.
+ */
+data class TripsLanding(
+    val tripId: String?,
+    val nonce: Long = System.nanoTime(),
+)
+
+/**
  * Trips tab graph. The tab holds a NESTED NavHost so trip detail and item form
  * destinations stay inside the feature module — the app shell's `tripsGraph()` call
- * site and [TRIPS_ROUTE] are unchanged from the skeleton.
+ * site and [TRIPS_ROUTE] are unchanged from the skeleton. [landing] is consumed via
+ * [onLandingConsumed]; [onOpenJourney] reports a linked journey tapped in an item
+ * sheet so the shell can show it in the Journeys tab. All defaulted.
  */
-fun NavGraphBuilder.tripsGraph() {
+fun NavGraphBuilder.tripsGraph(
+    landing: TripsLanding? = null,
+    onLandingConsumed: () -> Unit = {},
+    onOpenJourney: (JourneyType, String) -> Unit = { _, _ -> },
+) {
     composable(TRIPS_ROUTE) {
-        ItineraryNavHost()
+        ItineraryNavHost(landing = landing, onLandingConsumed = onLandingConsumed, onOpenJourney = onOpenJourney)
     }
 }
 
 @Composable
-private fun ItineraryNavHost() {
+private fun ItineraryNavHost(
+    landing: TripsLanding?,
+    onLandingConsumed: () -> Unit,
+    onOpenJourney: (JourneyType, String) -> Unit,
+) {
     val navController = rememberNavController()
+
     NavHost(navController = navController, startDestination = TRIP_LIST_ROUTE) {
         composable(TRIP_LIST_ROUTE) {
             TripsScreen(
@@ -63,6 +87,7 @@ private fun ItineraryNavHost() {
                 onEditItem = { tripId, itemId ->
                     navController.navigate(itemFormRoute(tripId, itemId = itemId))
                 },
+                onOpenJourney = onOpenJourney,
             )
         }
         composable(
@@ -83,6 +108,21 @@ private fun ItineraryNavHost() {
             ItineraryItemFormScreen(
                 onDone = { navController.popBackStack() },
             )
+        }
+    }
+
+    // Declared after the NavHost so the graph is set before the effect navigates.
+    LaunchedEffect(landing) {
+        if (landing != null) {
+            landing.tripId?.let { tripId ->
+                // Whatever was open (detail of another trip, an item form) is left
+                // behind: the user asked to SEE this trip.
+                navController.navigate(tripDetailRoute(tripId)) {
+                    popUpTo(TRIP_LIST_ROUTE)
+                    launchSingleTop = true
+                }
+            }
+            onLandingConsumed()
         }
     }
 }

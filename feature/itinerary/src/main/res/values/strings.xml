@@ -124,7 +124,11 @@
     <string name="itinerary_journey_picker_title">Link a journey</string>
     <string name="itinerary_journey_picker_trains">Trains</string>
     <string name="itinerary_journey_picker_flights">Flights</string>
-    <string name="itinerary_journey_picker_empty">No journeys yet. Add trains or flights in the Journeys tab first.</string>
+    <string name="itinerary_journey_picker_empty">No existing journeys to pick from yet.</string>
+    <string name="itinerary_add_new_train">Add a new train ticket</string>
+    <string name="itinerary_add_new_flight">Add a new flight</string>
+    <string name="itinerary_add_new_journey_hint">Opens the Journeys tab; the journey is linked here when you are done</string>
+    <string name="itinerary_open_in_journeys">Open in Journeys</string>
 
     <!-- Location picker -->
     <string name="itinerary_location_picker_title">Pick location</string>

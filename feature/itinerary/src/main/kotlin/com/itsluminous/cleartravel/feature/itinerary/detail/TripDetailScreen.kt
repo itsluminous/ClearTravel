@@ -54,6 +54,7 @@ import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.model.ItineraryItem
 import com.itsluminous.cleartravel.core.model.ItineraryItemType
+import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.feature.itinerary.R
 import com.itsluminous.cleartravel.feature.itinerary.formatMedium
 import com.itsluminous.cleartravel.feature.itinerary.icon
@@ -74,6 +75,8 @@ internal fun TripDetailScreen(
     onEditItem: (tripId: String, itemId: String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: TripDetailViewModel = hiltViewModel(),
+    /** ADR-028: a linked journey was tapped in the item sheet — the shell opens it in Journeys. */
+    onOpenJourney: (JourneyType, String) -> Unit = { _, _ -> },
 ) {
     val trip by viewModel.trip.collectAsStateWithLifecycle()
     val days by viewModel.days.collectAsStateWithLifecycle()
@@ -187,6 +190,10 @@ internal fun TripDetailScreen(
             onDelete = {
                 sheetItem = null
                 deleteTarget = item
+            },
+            onOpenLinkedJourney = { type, id ->
+                sheetItem = null
+                onOpenJourney(type, id)
             },
         )
     }

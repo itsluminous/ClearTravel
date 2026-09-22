@@ -113,4 +113,18 @@ class ItineraryDaysTest {
         assertThat(dateForDay(Fixtures.trip(startDate = null), 2)).isNull()
         assertThat(dateForDay(null, 2)).isNull()
     }
+
+    /** ADR-028: a linked journey lands on its own day only when the form offers that slot. */
+    @Test
+    fun `dayIndexFor maps a date inside the offered slots and rejects everything else`() {
+        val trip = Fixtures.trip(startDate = LocalDate.parse("2026-09-20"))
+
+        assertThat(dayIndexFor(trip, LocalDate.parse("2026-09-20"), dayCount = 3)).isEqualTo(0)
+        assertThat(dayIndexFor(trip, LocalDate.parse("2026-09-22"), dayCount = 3)).isEqualTo(2)
+        assertThat(dayIndexFor(trip, LocalDate.parse("2026-09-23"), dayCount = 3)).isNull()
+        assertThat(dayIndexFor(trip, LocalDate.parse("2026-09-19"), dayCount = 3)).isNull()
+        assertThat(dayIndexFor(trip, null, dayCount = 3)).isNull()
+        assertThat(dayIndexFor(Fixtures.trip(startDate = null), LocalDate.parse("2026-09-20"), dayCount = 3)).isNull()
+        assertThat(dayIndexFor(null, LocalDate.parse("2026-09-20"), dayCount = 3)).isNull()
+    }
 }

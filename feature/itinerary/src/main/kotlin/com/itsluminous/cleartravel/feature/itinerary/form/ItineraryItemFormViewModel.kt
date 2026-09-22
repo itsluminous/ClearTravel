@@ -3,6 +3,8 @@ package com.itsluminous.cleartravel.feature.itinerary.form
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itsluminous.cleartravel.core.data.crosstab.JourneyAddRequestBus
+import com.itsluminous.cleartravel.core.data.crosstab.JourneyAddResult
 import com.itsluminous.cleartravel.core.data.repository.FlightRepository
 import com.itsluminous.cleartravel.core.data.repository.ItineraryRepository
 import com.itsluminous.cleartravel.core.data.repository.TrainRepository
@@ -21,6 +23,7 @@ import com.itsluminous.cleartravel.feature.itinerary.ItineraryMessage
 import com.itsluminous.cleartravel.feature.itinerary.TRIP_ID_ARG
 import com.itsluminous.cleartravel.feature.itinerary.logic.dateForDay
 import com.itsluminous.cleartravel.feature.itinerary.logic.dayCount
+import com.itsluminous.cleartravel.feature.itinerary.logic.dayIndexFor
 import com.itsluminous.cleartravel.feature.itinerary.logic.nextOrderInDay
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,8 +31,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 /** Editable state of the itinerary item form (place and commute variants). */
@@ -63,7 +71,10 @@ data class JourneyCandidates(
 /**
  * Add/edit form for one itinerary item. Injects [TrainRepository]/[FlightRepository]
  * READ-ONLY to list linkable journeys for commute legs — the stored contract remains
- * just `linkedJourneyId` + `linkedJourneyType` (ADR-004).
+ * just `linkedJourneyId` + `linkedJourneyType` (ADR-004). "Add a new train/flight"
+ * goes through the cross-tab [JourneyAddRequestBus] (ADR-028): this ViewModel posts
+ * the request and links whatever the Journeys tab reports back; the app shell does
+ * the tab switching.
  */
 @HiltViewModel
 class ItineraryItemFormViewModel
@@ -72,9 +83,13 @@ class ItineraryItemFormViewModel
         savedStateHandle: SavedStateHandle,
         tripRepository: TripRepository,
         private val itineraryRepository: ItineraryRepository,
-        trainRepository: TrainRepository,
-        flightRepository: FlightRepository,
+        private val trainRepository: TrainRepository,
+        private val flightRepository: FlightRepository,
+        private val journeyAddBus: JourneyAddRequestBus,
     ) : ViewModel() {
+        /** Zone used to render a flight's scheduled departure as the leg's planned time (tests pin it). */
+        internal var zone: ZoneId = ZoneId.systemDefault()
+
         private val tripId: String = checkNotNull(savedStateHandle[TRIP_ID_ARG])
         private val itemId: String? = savedStateHandle.get<String>(ITEM_ID_ARG)?.takeIf { it.isNotBlank() }
         private val initialDayIndex: Int = savedStateHandle.get<Int>(DAY_INDEX_ARG) ?: 0
@@ -113,7 +128,18 @@ class ItineraryItemFormViewModel
 
         private var existingItem: ItineraryItem? = null
 
+        /** Nonce of the journey-add this form is waiting for (ADR-028); null = none. */
+        private var pendingJourneyAdd: Long? = null
+
         init {
+            viewModelScope.launch {
+                journeyAddBus.results
+                    .filter { it.nonce == pendingJourneyAdd }
+                    .collect { result ->
+                        pendingJourneyAdd = null
+                        if (result is JourneyAddResult.Added) linkAddedJourney(result)
+                    }
+            }
             if (itemId != null) {
                 viewModelScope.launch {
                     itineraryRepository.getItem(itemId)?.let { item ->
@@ -145,7 +171,10 @@ class ItineraryItemFormViewModel
             _form.value = transform(_form.value)
         }
 
-        /** Links a train ticket to this commute leg; prefills mode and blank endpoints. */
+        /**
+         * Links a train ticket to this commute leg; prefills mode and blank endpoints,
+         * and moves the leg onto the journey's day when that day is within the trip.
+         */
         fun linkTrain(ticket: TrainTicket) {
             _form.value =
                 _form.value.copy(
@@ -154,10 +183,15 @@ class ItineraryItemFormViewModel
                     commuteMode = CommuteMode.TRAIN,
                     fromName = _form.value.fromName.ifBlank { ticket.fromStation },
                     toName = _form.value.toName.ifBlank { ticket.toStation },
+                    dayIndex = dayFor(ticket.journeyDate) ?: _form.value.dayIndex,
                 )
         }
 
-        /** Links a flight journey to this commute leg; prefills mode and blank endpoints. */
+        /**
+         * Links a flight journey to this commute leg; prefills mode, blank endpoints
+         * and (when blank) the planned time from the scheduled departure, and moves
+         * the leg onto the journey's day when that day is within the trip.
+         */
         fun linkFlight(flight: FlightJourney) {
             _form.value =
                 _form.value.copy(
@@ -166,8 +200,46 @@ class ItineraryItemFormViewModel
                     commuteMode = CommuteMode.FLIGHT,
                     fromName = _form.value.fromName.ifBlank { flight.depAirport },
                     toName = _form.value.toName.ifBlank { flight.arrAirport },
+                    plannedTime = _form.value.plannedTime.ifBlank { flight.schedDep?.let(::localTime).orEmpty() },
+                    dayIndex = dayFor(flight.date) ?: _form.value.dayIndex,
                 )
         }
+
+        /**
+         * "Add a new train/flight" (ADR-028): posts a request on the cross-tab bus. The
+         * app shell takes the user to the Journeys tab's add flow and brings them back
+         * here; the reported journey is then linked exactly like a picked one.
+         */
+        fun requestJourneyAdd(type: JourneyType) {
+            pendingJourneyAdd = journeyAddBus.request(type).nonce
+        }
+
+        /** True while a journey-add posted by this form has not been answered. */
+        val isAwaitingJourneyAdd: Boolean get() = pendingJourneyAdd != null
+
+        /**
+         * Called whenever the form (re)appears. A request still pending at that point
+         * means the user came back by hand (tab tap) instead of finishing the add —
+         * cancel it so a later add in the Journeys tab is not linked here by surprise.
+         */
+        fun cancelStaleJourneyAdd() {
+            val nonce = pendingJourneyAdd ?: return
+            if (journeyAddBus.pendingRequest.value?.nonce == nonce) {
+                journeyAddBus.complete(JourneyAddResult.Cancelled(nonce))
+            }
+        }
+
+        private suspend fun linkAddedJourney(result: JourneyAddResult.Added) {
+            when (result.type) {
+                JourneyType.TRAIN -> trainRepository.getTicket(result.journeyId)?.let(::linkTrain)
+                JourneyType.FLIGHT -> flightRepository.getFlight(result.journeyId)?.let(::linkFlight)
+            }
+        }
+
+        /** The trip day of [date] when it falls inside the offered day slots; null otherwise. */
+        private fun dayFor(date: LocalDate?): Int? = dayIndexFor(trip.value, date, dayCount(trip.value, itemsForTrip.value))
+
+        private fun localTime(instant: Instant): String = instant.atZone(zone).toLocalTime().format(TIME_FORMAT)
 
         fun clearLinkedJourney() {
             _form.value = _form.value.copy(linkedJourneyId = null, linkedJourneyType = null)
@@ -235,5 +307,9 @@ class ItineraryItemFormViewModel
 
         fun consumeMessage() {
             _message.value = null
+        }
+
+        private companion object {
+            val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
         }
     }

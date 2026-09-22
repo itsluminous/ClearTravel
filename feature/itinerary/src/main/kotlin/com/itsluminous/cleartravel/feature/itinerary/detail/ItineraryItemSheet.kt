@@ -28,8 +28,9 @@ import com.itsluminous.cleartravel.feature.itinerary.logic.formatLatLng
 
 /**
  * Bottom sheet showing EVERYTHING about one itinerary item: note/fun facts, link
- * (opens the browser), category, coordinates, commute route + linked journey.
- * Shared by the timeline cards and the map markers.
+ * (opens the browser), category, coordinates, commute route + linked journey (with
+ * an "Open in Journeys" action, ADR-028). Shared by the timeline cards and the map
+ * markers.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -38,6 +39,7 @@ internal fun ItineraryItemSheet(
     onDismiss: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onOpenLinkedJourney: (JourneyType, String) -> Unit = { _, _ -> },
 ) {
     val context = LocalContext.current
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -63,19 +65,23 @@ internal fun ItineraryItemSheet(
                     labelRes = R.string.itinerary_sheet_route,
                     value = stringResource(R.string.itinerary_commute_route, item.fromName, item.toName),
                 )
-                if (item.linkedJourneyId != null && item.linkedJourneyType != null) {
+                val journeyId = item.linkedJourneyId
+                val journeyType = item.linkedJourneyType
+                if (journeyId != null && journeyType != null) {
                     SheetField(
                         labelRes = R.string.itinerary_sheet_linked_journey,
                         value =
                             stringResource(
-                                when (item.linkedJourneyType) {
+                                when (journeyType) {
                                     JourneyType.TRAIN -> R.string.itinerary_linked_train
                                     JourneyType.FLIGHT -> R.string.itinerary_linked_flight
-                                    else -> R.string.itinerary_linked_train
                                 },
-                                item.linkedJourneyId!!.take(8),
+                                journeyId.take(8),
                             ),
                     )
+                    TextButton(onClick = { onOpenLinkedJourney(journeyType, journeyId) }) {
+                        Text(stringResource(R.string.itinerary_open_in_journeys))
+                    }
                 }
             }
             if (item.plannedTime.isNotBlank()) {
