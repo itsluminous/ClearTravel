@@ -802,3 +802,46 @@ Tests: `GoogleFlightsExtractorTest` 14 → 22, `GoogleFlightsRuleTest` 7 → 8,
 live fixtures (six in `feature:flights`, one mirrored in `core:scrape`). Blind
 screenshots used: 5 of ≤5. Emulator left running with the app installed and the five
 journeys present.
+
+## Security wave — final on-device validation + full regression (2026-09-22 13:15–13:45 IST, emulator Android_16_AOSP_Medium, API 36, ADR-029/030/031)
+
+Fresh install of `d1abc94` (`pm uninstall` → `adb install` of the gate's APK) walked
+through the app lock, the encrypted round trip, the upgraded viewer, the Trips/intake
+fixes, backup v2 and one live Google vector, then the full gate and the connected
+suite. Every observation is a `uiautomator` dump (text only; `/sdcard/ui.xml` removed
+before each dump after a stale file from a previous stage produced a phantom
+screen); the twelve blind captures `78`–`90` (downscaled, never viewed) are references
+only. The one image "look" is a numeric pixel probe of the raw capture, not a viewing.
+Vault password on the emulator for this run: `Validate-Pass-2026`.
+
+| # | Check | Verdict | Evidence |
+|---|---|---|---|
+| 1 | Fresh install: after the POST_NOTIFICATIONS system prompt the FIRST app screen is **"Protect your travel data"** — two password fields, live strength hint (`At least 8 characters` → `Strong`), red card **"If you forget this password, your data is lost"** + "There is no reset, no recovery e-mail … Save it in a password manager.", button disabled until both fields are filled; no tab bar, no content behind it. Create → Trips tab (5 tabs, empty) | PASS | `78-applock-setup-fresh-install.png`, dumps |
+| 1 | Relaunch (`force-stop` → start): **"ClearTravel is locked"** unlock screen; wrong password → inline **"That password is not correct."**, still locked; correct password → Trips. `files/security/vault.json` (880 B) is the only key material on disk | PASS | `79-applock-unlock-screen.png`, dumps |
+| 1 | **Biometrics (device-tested)**: enrolled a fingerprint on the AVD (`locksettings set-pin` → Settings enrolment → `adb emu finger touch 1` ×12 → "Fingerprint added"); Settings → Security → *Unlock with biometrics* → BiometricPrompt "Confirm to enable biometric unlock" → touch → toggle checked. Cold start → BiometricPrompt **"Unlock ClearTravel"** auto-shown → `finger touch 1` → Trips; wrong finger (`touch 2`) leaves the prompt up; **Use password** → password unlock screen with an "Unlock with biometrics" button → password unlocks. **Lock timing** "Immediately" → Home → relaunch → prompt again → finger → app | PASS | `81-applock-biometric-prompt.png`, dumps |
+| 2 | Added train 12951 / PNR 4412998877 (manual) and a document (pushed 178 B `visa-scan.png`, type Visa). **DB is not plaintext SQLite**: `databases/cleartravel.db` header bytes `3c e1 b0 7c 8c 7f 2b fd b0 75 2b 46 a3 63 2f 16` (≠ `SQLite format 3\0`, SQLCipher salt); `strings` over db+WAL (284 288 B) finds **0** hits for `4412998877`/`Rajdhani`/`Asha`/`CREATE TABLE`/`train_tickets`. **Stored document is not the original**: `files/documents/<uuid>.png` = 211 B, header `43 54 45 46 01 00 01 00 …` (`CTEF` v1) vs source `89 50 4E 47 …` (`.PNG`), `cmp` → differ at byte 1 | PASS | `run-as` byte dumps |
+| 2 | Viewer decrypts transparently: Visa → `Stored document` image node 1080×1080; pixel probe of the raw capture at the centre = **(200, 30, 30)** = the PNG's fill colour. **Share** → system sheet "Sharing image" (Clear SMS / ClearTravel / Messaging / Bluetooth / Print). **Save a copy** → SAF `Visa.png` → Downloads; pulled file is **byte-identical to the source** (`cmp` clean, `.PNG` header) | PASS | `82-viewer-encrypted-visa-rendered.png`, dumps, `cmp` |
+| 3 | Viewer toolbar: `Close`, `Rotate 90°`, `Share file`, `Save a copy` `ExplainableIcon`s present; no page bar for an image; rotate tap keeps the same layout node (square source — rotation is screenshot-only evidence). Pinch-zoom not dump-verifiable (unit-covered, `DocumentViewerStateTest`) | PASS | `83-viewer-rotated-90.png`, dumps |
+| 4 | Trips auto-sort: "Louvre 14:00" saved first, then "Cafe de Flore 09:00" → day order **Cafe de Flore 09:00, Louvre 14:00**; each row has a **`Reorder`** drag handle, no *Move up/down* nodes | PASS | `84-trips-auto-sorted-drag-handles.png`, dumps |
+| 4 | Linked leg time: Commute BLR→CDG → *Link a journey* → **Add a new flight** → Journeys add sheet → Enter manually 6E 2001 / 2026-09-22 / dep 08:20 → Save → back on the Trips form **linked "Flight 6E 2001", Planned time prefilled 08:20** → saved leg sorts first (08:20 < 09:00 < 14:00) | PASS | `85-trips-linked-leg-time-from-journey.png` |
+| 4 | Journeys never auto-opens a sheet: Trips ↔ Journeys ×3 → list only; leg sheet → **Open in Journeys** → 6E 2001 sheet opens (deep link) → close → Trips ↔ Journeys ×2 → no sheet; Trains ↔ Flights toggle → no sheet | PASS | dumps |
+| 5 | `ACTION_SEND text/plain https://maps.google.com/?q=48.8584,2.2945` → **"Add place from Google Maps"** dialog: "Shared place · 48.85840, 2.29450", *Create new trip* / *Add to existing trip* (Paris Weekend preselected) → **existing** → item "Shared place" on Day 1, sheet: Coordinates 48.85840, 2.29450, Link = the URL. `/maps/place/Eiffel+Tower/@48.8583701,2.2922926,…!3d48.8583701!4d2.2944813` → dialog **"Eiffel Tower · 48.85837, 2.29448"** (pin coords, not the viewport) → **Create new trip** (name left blank) → new trip **"Eiffel Tower"** with the "Eiffel Tower" place item, coords + full link on the sheet | PASS | `86-maps-link-intake-dialog.png`, `87-maps-place-eiffel-new-trip-sheet.png` |
+| 6 | Export → SAF `cleartravel-backup-20260922-1334.zip` → "Last backup: Sep 22, 2026, 1:34 PM (6.4 kB)". Pulled file (6 352 B): header `43 54 45 42 01 00 03 34 50 …` (`CTEB` v1, 210 000 iterations), `unzip -l` → "End-of-central-directory signature not found", `zipfile.is_zipfile` → False, `strings` → 0 hits for any record. Import the same file (own salt, **no password prompt**) → preview "Created … · 56 records … Trips: 2 · Journeys: 2 · Checklists: 0 · Attachments: 0" → Import → snackbar **"Import finished: 0 added, 0 updated, 56 unchanged"**; Documents tab still shows exactly one Visa | PASS | `88-backup-v2-import-merge-summary.png`, byte dump |
+| 7 | Google spot-check (6E 2001 / 22 Sep, the fresh flight): first check hit a Google **bot wall** ("unusual traffic", IP 49.207.62.35 — the egress is rate-limited after the prior stage's ~14 loads) → the app showed the failure banner with **Retry / Close** over the page; Retry after ~60 s → **"Status updated"** → sheet **Landed**, Dep Scheduled 08:20 / Estimated **08:09**, Arr Scheduled 10:15 / Estimated **09:41**, Terminal **2**, "Checked 22 Sep, 13:37" — identical to the 10:50 capture of the previous stage. SG 128 / 6E 541 / 6353 / 6144 / 9468 were 22-Sept vectors validated at 11:15–11:50 (captures `73`–`77`); not re-run to avoid re-tripping the wall | PASS | `89-google-botwall-banner-retry.png`, `90-google-6e2001-live-landed-sheet.png` |
+| 8 | `ktlintCheck lintDebug testDebugUnitTest --rerun-tasks assembleDebug assembleDebugAndroidTest` → BUILD SUCCESSFUL, 1 202 tasks executed; unit **949/949**, 0 failures, 0 skipped (app 48, core:data 99, core:database 37, core:designsystem 27, core:google 61, core:model 10, core:notifications 14, core:ocr 49, core:scrape 78, core:security 27, feature:applock 7, checklist 21, documents 18, flights 132, itinerary 88, menu 55, trains 178) | PASS | `validate2.log` (git-ignored) |
+| 8 | `connectedDebugAndroidTest` → **15/15 PASS**: AppLockSetupE2eTest 1, BackNavigationE2eTest 5, ChecklistE2eTest 1, CrossTabE2eTest 1, DocumentsE2eTest 1, FlightsE2eTest 2, SeatMapE2eTest 1, TrainsE2eTest 2, TripsE2eTest 1; `core:ocr` OcrCaptureHarnessTest SKIPPED (`@Ignore`). No flakiness, no test edits, `TestSecurityModule` untouched | PASS | `connected-validate2.log` |
+
+Notes and open items (no code changes were needed in this pass):
+
+- The POST_NOTIFICATIONS system prompt is requested at activity start, i.e. it shows
+  over the password-setup screen on first run. It is a system dialog, not app content,
+  but asking after the first unlock would read better — follow-up, not a defect.
+- The itinerary item **sheet** labels a linked journey by id prefix ("Flight d72275b9")
+  while the **form** shows the journey label ("Flight 6E 2001"); pre-existing
+  (`ItineraryItemSheet` uses `journeyId.take(8)`), cosmetic, not part of this wave.
+- Backup preview says "Attachments: 0" although one document was bundled (the record
+  count and the round trip are right; the counter reads only booking-confirmation
+  attachments). Cosmetic follow-up.
+- Biometric enrolment left the AVD with a lock-screen PIN; cleared with
+  `locksettings clear --old 1234` before shutdown so future e2e runs boot unlocked.
+- Emulator shut down at the end of the run.
