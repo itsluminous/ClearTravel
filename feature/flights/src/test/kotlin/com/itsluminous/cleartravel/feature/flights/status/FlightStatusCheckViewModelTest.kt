@@ -96,6 +96,32 @@ class FlightStatusCheckViewModelTest {
         }
 
     @Test
+    fun `start is a no-op while the same flight's check is running but re-checks the same flight after it finished`() =
+        runTest {
+            buildViewModel("testair.json" to testRuleJson)
+            viewModel.start(flight.id)
+            val first = (viewModel.uiState.value as StatusCheckUiState.Scraping).session
+
+            // Recomposition / LaunchedEffect replay mid-check: same session, no new attempt.
+            viewModel.start(flight.id)
+            assertThat((viewModel.uiState.value as StatusCheckUiState.Scraping).session).isSameInstanceAs(first)
+
+            first.onHtmlDumped(RESULT_HTML)
+            assertThat(viewModel.uiState.value).isInstanceOf(StatusCheckUiState.Done::class.java)
+            assertThat(repository.appliedResults).hasSize(1)
+
+            // "Check status" tapped again for the same flight (the ViewModel outlives the
+            // check screen): a FRESH attempt must run, not a replay of the old outcome.
+            viewModel.start(flight.id)
+            val second = viewModel.uiState.value as StatusCheckUiState.Scraping
+            assertThat(second.session).isNotSameInstanceAs(first)
+            assertThat(second.attempt).isEqualTo(2)
+            assertThat(viewModel.lastOutcome.value).isNull()
+            second.session.onHtmlDumped(RESULT_HTML)
+            assertThat(repository.appliedResults).hasSize(2)
+        }
+
+    @Test
     fun `extraction applies the result, announces changes and finishes`() =
         runTest {
             buildViewModel("testair.json" to testRuleJson)

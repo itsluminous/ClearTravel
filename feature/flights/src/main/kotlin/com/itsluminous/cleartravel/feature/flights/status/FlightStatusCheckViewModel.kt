@@ -111,15 +111,24 @@ class FlightStatusCheckViewModel
         private var scrapeJob: Job? = null
 
         /**
-         * Idempotent — safe to call from a LaunchedEffect. Rule selection (ADR-026):
-         * airline rule → the Google flight-status panel rule (any airline) → plain web
-         * search. A flight without a date never scrapes: the Google card shows a
-         * date window around today, and applying another day's gate/times to an
-         * undated journey would be a silent lie.
+         * Safe to call from a LaunchedEffect: a call for the flight whose check is
+         * still RUNNING is a no-op (recomposition, rotation), while a call after that
+         * check finished — "Check status" tapped again on the same flight — starts a
+         * fresh attempt. The ViewModel outlives the check screen (it is scoped to the
+         * host, not to a back-stack entry), so a plain same-id guard would replay the
+         * previous outcome forever within one process (found on device, 2026-09-22).
+         *
+         * Rule selection (ADR-026): airline rule → the Google flight-status panel rule
+         * (any airline) → plain web search. A flight without a date never scrapes: the
+         * Google card shows a date window around today, and applying another day's
+         * gate/times to an undated journey would be a silent lie.
          */
         fun start(id: String) {
-            if (flightId == id) return
+            val inProgress = state.value is StatusCheckUiState.Loading || state.value is StatusCheckUiState.Scraping
+            if (flightId == id && inProgress) return
             flightId = id
+            state.value = StatusCheckUiState.Loading
+            outcome.value = null
             viewModelScope.launch {
                 val flight = repository.getFlight(id) ?: return@launch
                 val airlineRule = ruleRegistry.flightRuleFor("${flight.airlineIata}-${flight.flightNumber}")
