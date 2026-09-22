@@ -369,6 +369,12 @@ offline.
   the EntryPoint keeps the milestone app-module-free (parallel-agent boundary). The
   app shell owes no wiring; `FlightPollScheduler.ensureScheduled` runs from the
   flights UI.
+  *Re-assessed in the 2026-09-22 cleanup pass, once app wiring existed:* the
+  EntryPoint stays. All five workers (flights poll, calendar sync, calendar cleanup,
+  Drive upload, Drive backup) use it consistently; `@HiltWorker` would cost a
+  `Configuration.Provider` Application, dropping the default `WorkManagerInitializer`
+  from the manifest, `hilt-work` in two more modules and a WorkManager test
+  configuration for the hermetic `HiltTestApplication`, for no behavioural gain.
 - **Notification dedupe state lives in feature-local SharedPreferences**
   (`flights_poll_state`), NOT a Room column: it is device-local bookkeeping that must
   never enter the backup/merge surface (ADR-002 covers synced entities only).

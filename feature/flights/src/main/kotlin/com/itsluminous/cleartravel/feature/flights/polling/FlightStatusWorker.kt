@@ -28,7 +28,14 @@ import java.time.Instant
  * Escalating cadence: each run reschedules itself as unique one-time work with
  * [NextPollDelay]'s soonest delay — a self-chaining chain, because WorkManager's
  * periodic API cannot vary its period. Dependencies come from an [EntryPoint]
- * (NOT @HiltWorker) so no app-module `Configuration.Provider` wiring is required.
+ * (NOT @HiltWorker). Kept that way on purpose after the app wiring existed (cleanup
+ * assessment 2026-09-22): all five workers in the app (this one, `CalendarSyncWorker`,
+ * `DriveUploadWorker`, `DriveBackupWorker`, the calendar cleanup) share the pattern,
+ * `@HiltWorker` would need a `Configuration.Provider` Application + the default
+ * `WorkManagerInitializer` removed from the manifest + `hilt-work` compilers in two more
+ * modules + a test `Configuration` for the hermetic e2e `HiltTestApplication`, and the
+ * only thing gained is constructor injection of the same five dependencies. Not worth
+ * the surface; the EntryPoint keeps the worker a plain WorkManager class.
  *
  * ADR-031: the flight list lives in the encrypted database, whose key exists only
  * after an unlock in this process. A run that fires before that posts the "unlock to
