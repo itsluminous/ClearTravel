@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Documents tab (ADR-027). -->
+    <string name="documents_title">Documents</string>
+    <string name="documents_add_fab">Add document</string>
+    <string name="documents_empty_title">No documents yet</string>
+    <string name="documents_empty_message">Keep scans of your passport, visas, insurance and tickets here — available offline, shown at full brightness when you need them.</string>
+
+    <!-- Type presets (also the default name of a new document). -->
+    <string name="documents_type_passport">Passport</string>
+    <string name="documents_type_visa">Visa</string>
+    <string name="documents_type_id_card">ID card</string>
+    <string name="documents_type_driving_license">Driving licence</string>
+    <string name="documents_type_insurance">Travel insurance</string>
+    <string name="documents_type_vaccination">Vaccination certificate</string>
+    <string name="documents_type_ticket">Ticket</string>
+    <string name="documents_type_other">Other document</string>
+
+    <!-- Card. -->
+    <string name="documents_card_expires">Expires %1$s</string>
+    <string name="documents_card_expires_soon">Expires soon · %1$s</string>
+    <string name="documents_card_expired">Expired · %1$s</string>
+    <string name="documents_card_type_icon">Document type</string>
+    <string name="documents_card_more">More actions</string>
+    <string name="documents_action_open">Open</string>
+    <string name="documents_action_edit">Edit details</string>
+    <string name="documents_action_delete">Delete</string>
+
+    <!-- Add / edit dialog. -->
+    <string name="documents_add_title">New document</string>
+    <string name="documents_edit_title">Edit document</string>
+    <string name="documents_type_label">Type</string>
+    <string name="documents_name_label">Name</string>
+    <string name="documents_expiry_label">Expiry date</string>
+    <string name="documents_expiry_none">No expiry</string>
+    <string name="documents_expiry_pick">Pick expiry date</string>
+    <string name="documents_expiry_clear">Clear expiry date</string>
+    <string name="documents_note_label">Note (optional)</string>
+    <string name="documents_save">Save</string>
+    <string name="documents_cancel">Cancel</string>
+    <string name="documents_date_ok">OK</string>
+
+    <!-- Delete confirmation. -->
+    <string name="documents_delete_title">Delete document?</string>
+    <string name="documents_delete_message">“%1$s” and its stored file will be removed from this device.</string>
+    <string name="documents_delete_confirm">Delete</string>
+
+    <!-- Snackbars. -->
+    <string name="documents_snackbar_added">Document added</string>
+    <string name="documents_snackbar_add_failed">Couldn\'t read that file. Try another one.</string>
+    <string name="documents_snackbar_updated">Document updated</string>
+    <string name="documents_snackbar_deleted">“%1$s” deleted</string>
+
+    <!-- Viewer. -->
+    <string name="documents_viewer_missing">Document not found</string>
+    <string name="documents_viewer_missing_message">It may have been deleted. Go back to the list.</string>
+</resources>
