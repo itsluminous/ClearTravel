@@ -56,6 +56,7 @@ import com.itsluminous.cleartravel.feature.flights.R
 import com.itsluminous.cleartravel.feature.flights.detail.FlightDetailSheet
 import com.itsluminous.cleartravel.feature.flights.detail.FlightDocumentType
 import com.itsluminous.cleartravel.feature.flights.detail.FlightDocumentsViewModel
+import com.itsluminous.cleartravel.feature.flights.detail.FlightTripLinksViewModel
 import com.itsluminous.cleartravel.feature.flights.detail.buildFlightDocuments
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcome
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcomeKind
@@ -95,12 +96,23 @@ fun FlightListScreen(
     lastCheckOutcome: CheckOutcome? = null,
     /** Duplicate-save notice (ADR-025) with a "View" action for the existing journey. */
     duplicateNotice: DuplicateFlightNotice? = null,
+    /** ADR-028: opens the add-options sheet on arrival (one open per distinct nonce). */
+    openAddSheetNonce: Long? = null,
+    /** The add options were left without picking a path (sheet dismissed, no file chosen). */
+    onAddAbandoned: () -> Unit = {},
+    /** "Part of" rows (ADR-028) — the shell opens the tapped trip in the Trips tab. */
+    onOpenTrip: (tripId: String) -> Unit = {},
+    tripLinksViewModel: FlightTripLinksViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showAddOptions by remember { mutableStateOf(false) }
     var detailFlightId by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(openAddSheetNonce) {
+        if (openAddSheetNonce != null) showAddOptions = true
+    }
 
     LaunchedEffect(initialDetailFlightId) {
         if (initialDetailFlightId != null) detailFlightId = initialDetailFlightId
@@ -140,11 +152,11 @@ fun FlightListScreen(
 
     val passPicker =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            uri?.let { onImportPass(it.toString()) }
+            if (uri != null) onImportPass(uri.toString()) else onAddAbandoned()
         }
     val bookingImportPicker =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            uri?.let { onImportBooking(it.toString()) }
+            if (uri != null) onImportBooking(uri.toString()) else onAddAbandoned()
         }
 
     // Attach-to-existing-flight flow (ADR-017): the picker result lands after the
@@ -227,7 +239,12 @@ fun FlightListScreen(
     }
 
     if (showAddOptions) {
-        ModalBottomSheet(onDismissRequest = { showAddOptions = false }) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                showAddOptions = false
+                onAddAbandoned()
+            },
+        ) {
             Text(
                 text = stringResource(R.string.flights_add_sheet_title),
                 style = MaterialTheme.typography.titleLarge,
@@ -274,10 +291,18 @@ fun FlightListScreen(
         val attachments by remember(detailFlight.id) {
             documentsViewModel.observeAttachments(detailFlight.id)
         }.collectAsStateWithLifecycle(initialValue = emptyList())
+        val linkedTrips by remember(detailFlight.id) {
+            tripLinksViewModel.observeLinkedTrips(detailFlight.id)
+        }.collectAsStateWithLifecycle(initialValue = emptyList())
         FlightDetailSheet(
             flight = detailFlight,
             lastCheckOutcome = lastCheckOutcome?.takeIf { it.flightId == detailFlight.id },
             documents = buildFlightDocuments(detailFlight, attachments),
+            linkedTrips = linkedTrips,
+            onOpenTrip = { tripId ->
+                detailFlightId = null
+                onOpenTrip(tripId)
+            },
             onOpenDocument = { document ->
                 detailFlightId = null
                 when (document.type) {

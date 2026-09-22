@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -70,6 +71,10 @@ fun FlightDetailSheet(
     onOpenDocument: (FlightDocument) -> Unit = {},
     /** Launches the picker to attach a booking confirmation to THIS flight. */
     onAttachBooking: () -> Unit = {},
+    /** Trips whose itinerary links this flight (ADR-028); empty hides the section. */
+    linkedTrips: List<LinkedTrip> = emptyList(),
+    /** A "Part of" row was tapped — the shell opens the trip in the Trips tab. */
+    onOpenTrip: (tripId: String) -> Unit = {},
 ) {
     val context = LocalContext.current
     var confirmDelete by remember { mutableStateOf(false) }
@@ -205,6 +210,30 @@ fun FlightDetailSheet(
                         supportingContent = { Text(stringResource(R.string.flights_doc_open_hint)) },
                         leadingContent = { Icon(Icons.Filled.Description, contentDescription = null) },
                         modifier = Modifier.clickable { onOpenDocument(document) },
+                    )
+                }
+            }
+
+            if (linkedTrips.isNotEmpty()) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                Text(
+                    text = stringResource(R.string.flights_detail_part_of),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                linkedTrips.forEach { linked ->
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                stringResource(
+                                    R.string.flights_detail_part_of_trip,
+                                    linked.tripName,
+                                    linked.dayIndex + 1,
+                                ),
+                            )
+                        },
+                        supportingContent = { Text(stringResource(R.string.flights_detail_part_of_hint)) },
+                        leadingContent = { Icon(Icons.Filled.Map, contentDescription = null) },
+                        modifier = Modifier.clickable { onOpenTrip(linked.tripId) },
                     )
                 }
             }

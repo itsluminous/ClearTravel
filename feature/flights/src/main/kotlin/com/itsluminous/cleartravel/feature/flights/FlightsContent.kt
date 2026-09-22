@@ -6,6 +6,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -25,16 +26,38 @@ import com.itsluminous.cleartravel.feature.flights.status.StatusCheckScreen
  * [initialFlightId] is the deep-link hook (integration contract): when non-null the
  * segment arrives on that journey per [initialAction] — detail sheet expanded
  * (notification deep links, saves) or the list with a duplicate notice whose "View"
- * opens the existing journey (ADR-025). Both defaulted so existing call sites are
- * untouched.
+ * opens the existing journey (ADR-025). [addRequest] is the ADR-028 pick-mode hook:
+ * the segment opens its add options at once and reports the outcome ONCE via
+ * [onAddRequestDone] — saved → `Saved` (after "Save & check status" the report waits
+ * for the check to close, like the external entry), refused duplicate →
+ * `DuplicateFlight` (the existing journey is what the user meant), backed out
+ * before a save → `Cancelled`. [onOpenTrip] reports a "Part of" row tapped in the
+ * detail sheet. All defaulted so existing call sites are untouched.
  */
 @Composable
 fun FlightsContent(
     modifier: Modifier = Modifier,
     initialFlightId: String? = null,
     initialAction: FlightsLandingAction = FlightsLandingAction.OPEN_DETAIL,
+    addRequest: FlightsAddRequest? = null,
+    onAddRequestDone: (FlightsEntryResult) -> Unit = {},
+    onOpenTrip: (tripId: String) -> Unit = {},
 ) {
     var route by remember { mutableStateOf<FlightsRoute>(FlightsRoute.Journeys) }
+    // ADR-028 pick mode: the request being fulfilled, until its outcome is reported;
+    // pickSavedFlightId bridges "Save & check status" to the check's close.
+    var activeAddRequest by remember { mutableStateOf<FlightsAddRequest?>(null) }
+    var pickSavedFlightId by remember { mutableStateOf<String?>(null) }
+    val currentOnAddRequestDone by rememberUpdatedState(onAddRequestDone)
+
+    /** Reports the pick outcome exactly once and leaves pick mode. */
+    fun finishAddRequest(result: FlightsEntryResult) {
+        if (activeAddRequest == null) return
+        activeAddRequest = null
+        pickSavedFlightId = null
+        currentOnAddRequestDone(result)
+    }
+
     // Transient (per D2 decision — no DB column): outcome of the last completed
     // status-check attempt, surfaced as a snackbar + detail-sheet line on return.
     var checkOutcome by remember { mutableStateOf<CheckOutcome?>(null) }
@@ -49,7 +72,13 @@ fun FlightsContent(
     // on the list (back leaves the tab) and on the status check, which owns its own
     // handler so the outcome travels back with it.
     val backRoute = flightsBackRoute(route)
-    BackHandler(enabled = backRoute != null) { backRoute?.let { route = it } }
+    BackHandler(enabled = backRoute != null) {
+        backRoute?.let {
+            // Backing out of the add form in pick mode = the add was cancelled.
+            if (route is FlightsRoute.Form) finishAddRequest(FlightsEntryResult.Cancelled)
+            route = it
+        }
+    }
 
     // Feature-local WorkManager wiring: make sure a poll chain exists (ADR-013).
     LaunchedEffect(Unit) {
@@ -66,6 +95,13 @@ fun FlightsContent(
 
     LaunchedEffect(route) {
         if (route !is FlightsRoute.Journeys) duplicateNotice = null
+    }
+
+    LaunchedEffect(addRequest) {
+        if (addRequest != null) {
+            route = FlightsRoute.Journeys
+            activeAddRequest = addRequest
+        }
     }
 
     when (val current = route) {
@@ -89,6 +125,9 @@ fun FlightsContent(
                 initialDetailFlightId = initialFlightId.takeIf { initialAction == FlightsLandingAction.OPEN_DETAIL },
                 lastCheckOutcome = checkOutcome,
                 duplicateNotice = duplicateNotice,
+                openAddSheetNonce = activeAddRequest?.nonce,
+                onAddAbandoned = { finishAddRequest(FlightsEntryResult.Cancelled) },
+                onOpenTrip = onOpenTrip,
             )
 
         is FlightsRoute.Form ->
@@ -96,16 +135,29 @@ fun FlightsContent(
                 editId = current.editId,
                 importUri = current.importUri,
                 bookingUri = current.bookingUri,
-                onClose = { route = FlightsRoute.Journeys },
+                onClose = {
+                    finishAddRequest(FlightsEntryResult.Cancelled)
+                    route = FlightsRoute.Journeys
+                },
+                onSaved = { id ->
+                    route = FlightsRoute.Journeys
+                    finishAddRequest(FlightsEntryResult.Saved(id))
+                },
                 onSavedAndCheck = { id ->
                     checkOutcome = null
+                    if (activeAddRequest != null) pickSavedFlightId = id
                     route = FlightsRoute.StatusCheck(id)
                 },
                 onDuplicate = { existingId ->
-                    // Nothing was written (ADR-025): back to the list, which already
-                    // shows the existing journey, with the notice + a "View" action.
-                    duplicateNotice = DuplicateFlightNotice(existingFlightId = existingId)
                     route = FlightsRoute.Journeys
+                    if (activeAddRequest != null) {
+                        // Pick mode (ADR-028): the existing journey IS the one to link.
+                        finishAddRequest(FlightsEntryResult.DuplicateFlight(existingId))
+                    } else {
+                        // Nothing was written (ADR-025): back to the list, which already
+                        // shows the existing journey, with the notice + a "View" action.
+                        duplicateNotice = DuplicateFlightNotice(existingFlightId = existingId)
+                    }
                 },
                 modifier = modifier,
             )
@@ -116,6 +168,7 @@ fun FlightsContent(
                 onClose = { outcome ->
                     checkOutcome = outcome
                     route = FlightsRoute.Journeys
+                    pickSavedFlightId?.let { finishAddRequest(FlightsEntryResult.Saved(it)) }
                 },
                 modifier = modifier,
             )

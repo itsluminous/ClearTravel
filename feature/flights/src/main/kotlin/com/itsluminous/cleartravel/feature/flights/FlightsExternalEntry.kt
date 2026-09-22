@@ -48,6 +48,16 @@ sealed interface FlightsEntryResult {
 }
 
 /**
+ * ADR-028: the Trips tab asked for a NEW flight to link into an itinerary leg. The
+ * Flights segment opens its add options straight away and reports how the add ended
+ * through `FlightsContent.onAddRequestDone` as a [FlightsEntryResult]; the shell then
+ * returns to the Trips tab. [nonce] makes consecutive requests distinct.
+ */
+data class FlightsAddRequest(
+    val nonce: Long = System.nanoTime(),
+)
+
+/**
  * What the Flights segment should do on arrival for a given journey (integration
  * contract for the Journeys shell, ADR-024/025). Mirrors [FlightsEntryResult] so
  * the shell can forward an entry outcome without knowing the segment's internals.
