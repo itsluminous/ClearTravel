@@ -24,8 +24,10 @@ import com.itsluminous.cleartravel.feature.itinerary.TRIP_ID_ARG
 import com.itsluminous.cleartravel.feature.itinerary.logic.dateForDay
 import com.itsluminous.cleartravel.feature.itinerary.logic.dayCount
 import com.itsluminous.cleartravel.feature.itinerary.logic.dayIndexFor
+import com.itsluminous.cleartravel.feature.itinerary.logic.flightDepartureTime
 import com.itsluminous.cleartravel.feature.itinerary.logic.nextOrderInDay
 import com.itsluminous.cleartravel.feature.itinerary.logic.sortDayByTime
+import com.itsluminous.cleartravel.feature.itinerary.logic.trainDepartureTime
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,12 +35,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 /** Editable state of the itinerary item form (place and commute variants). */
@@ -162,6 +163,15 @@ class ItineraryItemFormViewModel
                                 linkedJourneyId = item.linkedJourneyId,
                                 linkedJourneyType = item.linkedJourneyType,
                             )
+                        // ADR-029 part C: a linked leg without a time picks the journey's
+                        // time up on open — e.g. the train's route was fetched after linking.
+                        val linkedId = item.linkedJourneyId
+                        val linkedType = item.linkedJourneyType
+                        if (item.plannedTime.isBlank() && linkedId != null && linkedType != null) {
+                            derivedJourneyTime(linkedType, linkedId)?.let { time ->
+                                _form.value = _form.value.copy(plannedTime = time)
+                            }
+                        }
                     }
                 }
             }
@@ -174,7 +184,10 @@ class ItineraryItemFormViewModel
 
         /**
          * Links a train ticket to this commute leg; prefills mode and blank endpoints,
-         * and moves the leg onto the journey's day when that day is within the trip.
+         * moves the leg onto the journey's day when that day is within the trip, and
+         * (ADR-029 part C) takes the planned time from the boarding station's departure
+         * in the stored route — asynchronously, since the route is a separate table.
+         * The field stays editable afterwards.
          */
         fun linkTrain(ticket: TrainTicket) {
             _form.value =
@@ -186,12 +199,20 @@ class ItineraryItemFormViewModel
                     toName = _form.value.toName.ifBlank { ticket.toStation },
                     dayIndex = dayFor(ticket.journeyDate) ?: _form.value.dayIndex,
                 )
+            viewModelScope.launch {
+                val time = trainDepartureTime(trainRepository.observeRouteStops(ticket.id).first(), ticket.fromStation)
+                // Still the same link? The user may have picked another journey meanwhile.
+                if (time != null && _form.value.linkedJourneyId == ticket.id) {
+                    _form.value = _form.value.copy(plannedTime = time)
+                }
+            }
         }
 
         /**
-         * Links a flight journey to this commute leg; prefills mode, blank endpoints
-         * and (when blank) the planned time from the scheduled departure, and moves
-         * the leg onto the journey's day when that day is within the trip.
+         * Links a flight journey to this commute leg; prefills mode and blank endpoints,
+         * sets the planned time from the scheduled departure (ADR-029 part C; the field
+         * stays editable), and moves the leg onto the journey's day when that day is
+         * within the trip.
          */
         fun linkFlight(flight: FlightJourney) {
             _form.value =
@@ -201,7 +222,7 @@ class ItineraryItemFormViewModel
                     commuteMode = CommuteMode.FLIGHT,
                     fromName = _form.value.fromName.ifBlank { flight.depAirport },
                     toName = _form.value.toName.ifBlank { flight.arrAirport },
-                    plannedTime = _form.value.plannedTime.ifBlank { flight.schedDep?.let(::localTime).orEmpty() },
+                    plannedTime = flightDepartureTime(flight.schedDep, zone) ?: _form.value.plannedTime,
                     dayIndex = dayFor(flight.date) ?: _form.value.dayIndex,
                 )
         }
@@ -240,7 +261,22 @@ class ItineraryItemFormViewModel
         /** The trip day of [date] when it falls inside the offered day slots; null otherwise. */
         private fun dayFor(date: LocalDate?): Int? = dayIndexFor(trip.value, date, dayCount(trip.value, itemsForTrip.value))
 
-        private fun localTime(instant: Instant): String = instant.atZone(zone).toLocalTime().format(TIME_FORMAT)
+        /**
+         * The linked journey's departure as a planned time (ADR-029 part C): a train's
+         * boarding-station departure from its stored route, a flight's scheduled
+         * departure in [zone]; null when the journey is gone or has no time yet.
+         */
+        private suspend fun derivedJourneyTime(
+            type: JourneyType,
+            journeyId: String,
+        ): String? =
+            when (type) {
+                JourneyType.TRAIN ->
+                    trainRepository.getTicket(journeyId)?.let { ticket ->
+                        trainDepartureTime(trainRepository.observeRouteStops(journeyId).first(), ticket.fromStation)
+                    }
+                JourneyType.FLIGHT -> flightDepartureTime(flightRepository.getFlight(journeyId)?.schedDep, zone)
+            }
 
         fun clearLinkedJourney() {
             _form.value = _form.value.copy(linkedJourneyId = null, linkedJourneyType = null)
@@ -320,9 +356,5 @@ class ItineraryItemFormViewModel
 
         fun consumeMessage() {
             _message.value = null
-        }
-
-        private companion object {
-            val TIME_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
         }
     }

@@ -102,7 +102,10 @@ class FakeTrainRepository : TrainRepository {
 
     override fun observePassengers(ticketId: String): Flow<List<TrainPassenger>> = MutableStateFlow(emptyList())
 
-    override fun observeRouteStops(ticketId: String): Flow<List<TrainRouteStop>> = MutableStateFlow(emptyList())
+    /** Stored route per ticket id (ADR-029 part C: the boarding departure is read from here). */
+    val routeStops = MutableStateFlow<Map<String, List<TrainRouteStop>>>(emptyMap())
+
+    override fun observeRouteStops(ticketId: String): Flow<List<TrainRouteStop>> = routeStops.map { it[ticketId].orEmpty() }
 
     override suspend fun save(ticket: TrainTicket): TrainTicket {
         tickets.value = tickets.value.filterNot { it.id == ticket.id } + ticket

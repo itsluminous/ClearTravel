@@ -428,4 +428,107 @@ class ItineraryItemFormViewModelTest {
             viewModel.linkTrain(Fixtures.trainTicket(journeyDate = LocalDate.parse("2026-10-01")))
             assertThat(viewModel.form.value.dayIndex).isEqualTo(2)
         }
+
+    // ---- ADR-029 part C: a linked leg takes its planned time from the journey ----
+
+    @Test
+    fun `linking a train takes the boarding station departure from its stored route`() =
+        runTest {
+            val ticket = Fixtures.trainTicket(id = "t1", fromStation = "YPR", toStation = "NDLS")
+            trainRepository.routeStops.value =
+                mapOf(
+                    "t1" to
+                        listOf(
+                            Fixtures.trainRouteStop(
+                                ticketId = "t1",
+                                stationName = "KSR Bengaluru (SBC)",
+                                departure = "20:00",
+                                sortOrder = 0,
+                            ),
+                            Fixtures.trainRouteStop(
+                                ticketId = "t1",
+                                stationName = "Yesvantpur Jn (YPR)",
+                                departure = "20:25",
+                                sortOrder = 1,
+                            ),
+                        ),
+                )
+            val viewModel = viewModel()
+            viewModel.update { it.copy(type = ItineraryItemType.COMMUTE, plannedTime = "09:00") }
+
+            viewModel.linkTrain(ticket)
+
+            // Linking is explicit: the journey's time replaces what was typed…
+            assertThat(viewModel.form.value.plannedTime).isEqualTo("20:25")
+            // …and the field stays editable afterwards.
+            viewModel.update { it.copy(plannedTime = "20:00") }
+            assertThat(viewModel.form.value.plannedTime).isEqualTo("20:00")
+        }
+
+    @Test
+    fun `linking a train without a stored route leaves the time alone`() =
+        runTest {
+            val viewModel = viewModel()
+            viewModel.update { it.copy(type = ItineraryItemType.COMMUTE, plannedTime = "09:00") }
+
+            viewModel.linkTrain(Fixtures.trainTicket(id = "no-route"))
+
+            assertThat(viewModel.form.value.plannedTime).isEqualTo("09:00")
+        }
+
+    @Test
+    fun `linking a flight replaces a typed time with the scheduled departure`() =
+        runTest {
+            val flight = Fixtures.flightJourney(schedDep = Instant.parse("2026-10-02T02:50:00Z"))
+            val viewModel = viewModel()
+            viewModel.update { it.copy(type = ItineraryItemType.COMMUTE, plannedTime = "07:00") }
+
+            viewModel.linkFlight(flight)
+
+            assertThat(viewModel.form.value.plannedTime).isEqualTo("02:50")
+        }
+
+    @Test
+    fun `opening a linked leg without a time fills it from the journey`() =
+        runTest {
+            trainRepository.tickets.value = listOf(Fixtures.trainTicket(id = "t1", fromStation = "SBC"))
+            trainRepository.routeStops.value =
+                mapOf("t1" to listOf(Fixtures.trainRouteStop(ticketId = "t1", stationName = "KSR Bengaluru (SBC)", departure = "20:00")))
+            itineraryRepository.items.value =
+                listOf(
+                    Fixtures.itineraryItem(
+                        id = "leg",
+                        tripId = TRIP_ID,
+                        type = ItineraryItemType.COMMUTE,
+                        plannedTime = "",
+                        linkedJourneyId = "t1",
+                        linkedJourneyType = JourneyType.TRAIN,
+                    ),
+                )
+
+            val viewModel = viewModel(itemId = "leg")
+
+            assertThat(viewModel.form.value.plannedTime).isEqualTo("20:00")
+        }
+
+    @Test
+    fun `opening a linked leg with a time keeps the stored (possibly overridden) time`() =
+        runTest {
+            flightRepository.flights.value = listOf(Fixtures.flightJourney(id = "f1", schedDep = Instant.parse("2026-10-02T02:50:00Z")))
+            itineraryRepository.items.value =
+                listOf(
+                    Fixtures.itineraryItem(
+                        id = "leg",
+                        tripId = TRIP_ID,
+                        type = ItineraryItemType.COMMUTE,
+                        plannedTime = "01:30",
+                        linkedJourneyId = "f1",
+                        linkedJourneyType = JourneyType.FLIGHT,
+                    ),
+                )
+
+            val viewModel = viewModel(itemId = "leg")
+
+            assertThat(viewModel.form.value.plannedTime).isEqualTo("01:30")
+        }
 }
