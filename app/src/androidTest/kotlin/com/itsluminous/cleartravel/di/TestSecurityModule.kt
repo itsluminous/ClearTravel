@@ -23,19 +23,26 @@ import javax.inject.Singleton
  * renders the app straight away and every pre-existing e2e runs unchanged. Files the
  * app writes during a test are encrypted under this process-only key (plaintext files
  * seeded by tests still read — the cipher passes them through). No Keystore: the
- * biometric wrapper is a plain AES stand-in. `AppLockSetupE2eTest` uninstalls this
- * module to exercise the real first-run flow.
+ * biometric wrapper is a plain AES stand-in.
+ *
+ * A `@TestInstallIn` module cannot be uninstalled per test, so the first-run e2e flips
+ * [freshInstall] in `@BeforeClass` (Hilt builds one component per test class) to get a
+ * NOT-set-up vault and a locked UI instead.
  */
 @Module
 @TestInstallIn(components = [SingletonComponent::class], replaces = [SecurityModule::class])
 object TestSecurityModule {
     const val TEST_PASSWORD = "e2e-test-password"
 
+    /** When true the next component gets a vault with NO password (first-run flow). */
+    @Volatile
+    var freshInstall: Boolean = false
+
     @Provides
     @Singleton
     fun provideKeyVault(): KeyVault =
         DefaultKeyVault(InMemoryKeyFileStore(), iterations = 1_000).also { vault ->
-            runBlocking { vault.setUp(TEST_PASSWORD.toCharArray()) }
+            if (!freshInstall) runBlocking { vault.setUp(TEST_PASSWORD.toCharArray()) }
         }
 
     @Provides
@@ -48,7 +55,7 @@ object TestSecurityModule {
 
     @Provides
     @Singleton
-    fun provideAppLockController(): AppLockController = AppLockController().also { it.unlock() }
+    fun provideAppLockController(): AppLockController = AppLockController().also { if (!freshInstall) it.unlock() }
 }
 
 /** Keystore stand-in for tests: an ordinary AES key behind GCM ciphers. */
