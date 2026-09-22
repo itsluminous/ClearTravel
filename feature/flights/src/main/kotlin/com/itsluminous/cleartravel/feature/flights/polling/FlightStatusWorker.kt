@@ -7,7 +7,9 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.itsluminous.cleartravel.core.data.repository.FlightRepository
+import com.itsluminous.cleartravel.core.notifications.AppLockNotifier
 import com.itsluminous.cleartravel.core.notifications.FlightNotifier
+import com.itsluminous.cleartravel.core.security.vault.KeyVault
 import com.itsluminous.cleartravel.feature.flights.checkin.CheckInRuleSource
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
@@ -27,6 +29,11 @@ import java.time.Instant
  * [NextPollDelay]'s soonest delay — a self-chaining chain, because WorkManager's
  * periodic API cannot vary its period. Dependencies come from an [EntryPoint]
  * (NOT @HiltWorker) so no app-module `Configuration.Provider` wiring is required.
+ *
+ * ADR-031: the flight list lives in the encrypted database, whose key exists only
+ * after an unlock in this process. A run that fires before that posts the "unlock to
+ * sync" nudge and ends WITHOUT re-chaining; `AppStartupTasks` re-kicks the chain on
+ * the next unlocked app open.
  */
 class FlightStatusWorker(
     appContext: Context,
@@ -40,10 +47,18 @@ class FlightStatusWorker(
         fun checkInRuleSource(): CheckInRuleSource
 
         fun flightNotifier(): FlightNotifier
+
+        fun keyVault(): KeyVault
+
+        fun appLockNotifier(): AppLockNotifier
     }
 
     override suspend fun doWork(): Result {
         val deps = EntryPointAccessors.fromApplication(applicationContext, Dependencies::class.java)
+        if (!deps.keyVault().isUnlocked) {
+            deps.appLockNotifier().notifyUnlockToSync()
+            return Result.success()
+        }
         val stateStore = PollStateStore(applicationContext)
 
         val flights = deps.flightRepository().observeActive().first()

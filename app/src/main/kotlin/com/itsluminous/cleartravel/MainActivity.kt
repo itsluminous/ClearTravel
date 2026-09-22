@@ -25,6 +25,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.designsystem.component.LocalDocumentFileReader
 import com.itsluminous.cleartravel.core.designsystem.theme.ClearTravelTheme
 import com.itsluminous.cleartravel.core.model.ThemeMode
+import com.itsluminous.cleartravel.core.notifications.AppLockNotifier
 import com.itsluminous.cleartravel.core.notifications.NotificationChannelRegistrar
 import com.itsluminous.cleartravel.core.notifications.NotificationPermissions
 import com.itsluminous.cleartravel.feature.applock.AppLockGate
@@ -76,6 +77,10 @@ class MainActivity : FragmentActivity() {
     @Inject
     lateinit var lockLifecycleObserver: AppLockLifecycleObserver
 
+    /** ADR-031: the "unlock to sync" nudge background jobs post before the first unlock. */
+    @Inject
+    lateinit var appLockNotifier: AppLockNotifier
+
     /** Pending notification deep link (ADR-013 contract); cleared once consumed. */
     private val pendingDeepLink = mutableStateOf<JourneysDeepLink?>(null)
 
@@ -126,7 +131,10 @@ class MainActivity : FragmentActivity() {
                     AppLockGate(
                         // Housekeeping (auto-archive past journeys, restart the flight
                         // poll chain) runs on IO once the encrypted store is open.
-                        onUnlocked = { startupTasks.runOnAppOpen() },
+                        onUnlocked = {
+                            appLockNotifier.clear()
+                            startupTasks.runOnAppOpen()
+                        },
                     ) {
                         ShellContent(themeViewModel, intakeViewModel, pickCoordinator)
                     }

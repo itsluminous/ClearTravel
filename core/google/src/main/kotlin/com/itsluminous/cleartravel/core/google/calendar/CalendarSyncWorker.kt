@@ -5,6 +5,8 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.itsluminous.cleartravel.core.google.auth.GoogleNotAvailableException
+import com.itsluminous.cleartravel.core.notifications.AppLockNotifier
+import com.itsluminous.cleartravel.core.security.vault.KeyVault
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -15,6 +17,11 @@ import kotlinx.coroutines.CancellationException
  * WorkManager job driving the one-way calendar reconciliation. Plain (non-Hilt)
  * worker resolved through an entry point (the ADR-013 pattern) so no custom
  * `Configuration.Provider` is needed in :app.
+ *
+ * ADR-031: reconciliation reads Room, so before the first unlock of this process the
+ * worker posts the "unlock to sync" nudge and succeeds quietly (the 6-hourly
+ * periodic pass and the app-open re-kick cover it). The calendar-delete action needs
+ * no database and runs regardless.
  */
 class CalendarSyncWorker(
     appContext: Context,
@@ -24,20 +31,28 @@ class CalendarSyncWorker(
     @InstallIn(SingletonComponent::class)
     interface CalendarSyncEntryPoint {
         fun calendarSyncEngine(): CalendarSyncEngine
+
+        fun keyVault(): KeyVault
+
+        fun appLockNotifier(): AppLockNotifier
     }
 
     override suspend fun doWork(): Result {
-        val engine =
-            EntryPointAccessors
-                .fromApplication(applicationContext, CalendarSyncEntryPoint::class.java)
-                .calendarSyncEngine()
+        val deps = EntryPointAccessors.fromApplication(applicationContext, CalendarSyncEntryPoint::class.java)
+        val engine = deps.calendarSyncEngine()
         val result =
             when (inputData.getString(KEY_ACTION)) {
                 ACTION_DELETE_CALENDAR -> {
                     val calendarId = inputData.getString(KEY_CALENDAR_ID) ?: return Result.failure()
                     engine.deleteCalendar(calendarId)
                 }
-                else -> engine.reconcile()
+                else -> {
+                    if (!deps.keyVault().isUnlocked) {
+                        deps.appLockNotifier().notifyUnlockToSync()
+                        return Result.success()
+                    }
+                    engine.reconcile()
+                }
             }
         return result.fold(
             onSuccess = { Result.success() },

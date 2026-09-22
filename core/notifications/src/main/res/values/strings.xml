@@ -24,4 +24,7 @@
     <string name="notifications_flight_belt_text">Collect your bags at belt %1$s</string>
     <string name="notifications_flight_status_check_title">%1$s status may have changed</string>
     <string name="notifications_flight_status_check_text">Tap to check the latest status.</string>
+    <!-- ADR-031: background job could not run before the first unlock -->
+    <string name="notifications_unlock_to_sync_title">Unlock ClearTravel to sync</string>
+    <string name="notifications_unlock_to_sync_text">Flight updates, calendar sync and Drive uploads resume once you open and unlock the app.</string>
 </resources>

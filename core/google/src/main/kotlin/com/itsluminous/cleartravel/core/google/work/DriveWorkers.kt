@@ -9,6 +9,8 @@ import com.itsluminous.cleartravel.core.google.backup.DriveBackupService
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupUploadResult
 import com.itsluminous.cleartravel.core.google.drive.DriveUploadEngine
 import com.itsluminous.cleartravel.core.google.drive.DriveUploadResult
+import com.itsluminous.cleartravel.core.notifications.AppLockNotifier
+import com.itsluminous.cleartravel.core.security.vault.KeyVault
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -21,6 +23,10 @@ private const val MAX_ATTEMPTS = 5
 /**
  * Drains the Drive attachment/boarding-pass upload queue with retry/backoff. Plain
  * (non-Hilt) worker resolved through an entry point (the ADR-013 pattern).
+ *
+ * ADR-031: needs the vault (database + file keys). Before the first unlock of this
+ * process it posts the "unlock to sync" nudge and succeeds quietly — the periodic
+ * drain and the toggle/link passes pick the queue up later.
  */
 class DriveUploadWorker(
     appContext: Context,
@@ -30,13 +36,19 @@ class DriveUploadWorker(
     @InstallIn(SingletonComponent::class)
     interface DriveUploadEntryPoint {
         fun driveUploadEngine(): DriveUploadEngine
+
+        fun keyVault(): KeyVault
+
+        fun appLockNotifier(): AppLockNotifier
     }
 
     override suspend fun doWork(): Result {
-        val engine =
-            EntryPointAccessors
-                .fromApplication(applicationContext, DriveUploadEntryPoint::class.java)
-                .driveUploadEngine()
+        val deps = EntryPointAccessors.fromApplication(applicationContext, DriveUploadEntryPoint::class.java)
+        if (!deps.keyVault().isUnlocked) {
+            deps.appLockNotifier().notifyUnlockToSync()
+            return Result.success()
+        }
+        val engine = deps.driveUploadEngine()
         return try {
             resolveQueueResult(engine.processQueue(), runAttemptCount)
         } catch (e: CancellationException) {
@@ -63,7 +75,11 @@ class DriveUploadWorker(
     }
 }
 
-/** Uploads the newest app-storage backup ZIP to Drive (after each successful export). */
+/**
+ * Uploads the newest app-storage backup ZIP to Drive (after each successful export).
+ * Runs even while the vault is locked: the file is already a sealed portable envelope
+ * and the upload needs no key (ADR-031).
+ */
 class DriveBackupWorker(
     appContext: Context,
     params: WorkerParameters,
