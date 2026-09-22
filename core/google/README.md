@@ -13,4 +13,8 @@ Implemented (ADR-016): `GoogleAccountManager` (link state machine + incremental
 scopes), `CalendarSyncEngine` (state-store reconciliation), `DriveUploadEngine` +
 `AttachmentFileResolver` (restore ladder), `DriveBackupService` (upload/prune-to-5/
 list/download) + `FreshInstallDetector`, all behind fake-able `CalendarClient`/
-`DriveClient` seams over plain REST. Setup steps: `docs/google-setup.md`.
+`DriveClient` seams over plain REST. ADR-037: `ScheduledBackupRunner` /
+`ScheduledBackupWorker` / `ScheduledBackupScheduler` run the automatic backup
+(local export always, Drive upload when the toggle is on and an account is linked;
+unique periodic work `scheduled-backup`, no network constraint, `UPDATE` policy).
+Setup steps: `docs/google-setup.md`.

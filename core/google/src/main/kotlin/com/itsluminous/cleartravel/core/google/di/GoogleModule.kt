@@ -33,7 +33,9 @@ import com.itsluminous.cleartravel.core.google.drive.DriveClient
 import com.itsluminous.cleartravel.core.google.drive.DriveFolderResolver
 import com.itsluminous.cleartravel.core.google.drive.DriveUploadEngine
 import com.itsluminous.cleartravel.core.google.drive.RestDriveClient
+import com.itsluminous.cleartravel.core.google.work.ScheduledBackupScheduler
 import com.itsluminous.cleartravel.core.google.work.WorkManagerGoogleSyncScheduler
+import com.itsluminous.cleartravel.core.google.work.WorkManagerScheduledBackupScheduler
 import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
 import com.itsluminous.cleartravel.core.security.vault.KeyVault
 import dagger.Binds
@@ -62,6 +64,9 @@ abstract class GoogleModule {
     @Binds abstract fun bindCalendarSyncStateStore(impl: PreferencesCalendarSyncStateStore): CalendarSyncStateStore
 
     @Binds abstract fun bindGoogleSyncScheduler(impl: WorkManagerGoogleSyncScheduler): GoogleSyncScheduler
+
+    /** ADR-037: the automatic-backup periodic job. */
+    @Binds abstract fun bindScheduledBackupScheduler(impl: WorkManagerScheduledBackupScheduler): ScheduledBackupScheduler
 
     companion object {
         @Provides
