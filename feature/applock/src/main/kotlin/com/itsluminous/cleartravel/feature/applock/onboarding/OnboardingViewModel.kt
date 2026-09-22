@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsluminous.cleartravel.core.data.backup.BackupException
@@ -17,6 +18,7 @@ import com.itsluminous.cleartravel.core.google.auth.GoogleLinkState
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupInfo
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -79,6 +81,8 @@ sealed interface RestoreSource {
 
     data class LocalFile(
         override val uri: Uri,
+        /** SAF display name (a `content://` URI's last segment is an opaque document id). */
+        val displayName: String,
     ) : RestoreSource
 
     data class Drive(
@@ -128,6 +132,7 @@ data class OnboardingUiState(
 class OnboardingViewModel
     @Inject
     constructor(
+        @ApplicationContext private val context: Context,
         private val accountManager: GoogleAccountManager,
         private val driveBackupService: DriveBackupService,
         private val backupManager: BackupManager,
@@ -224,8 +229,18 @@ class OnboardingViewModel
         /** A backup file picked through SAF. */
         fun restoreFromFile(uri: Uri) {
             if (local.value.busy) return
-            viewModelScope.launch { attemptRestore(RestoreSource.LocalFile(uri), sourcePassword = null) }
+            viewModelScope.launch { attemptRestore(RestoreSource.LocalFile(uri, displayName(uri)), sourcePassword = null) }
         }
+
+        /** `OpenableColumns.DISPLAY_NAME` of a SAF document, falling back to the last path segment. */
+        private fun displayName(uri: Uri): String =
+            try {
+                context.contentResolver
+                    .query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                    ?.use { cursor -> if (cursor.moveToFirst()) cursor.getString(0) else null }
+            } catch (e: Exception) {
+                null
+            } ?: uri.lastPathSegment.orEmpty()
 
         /** A Drive backup picked from the list: download, then the same restore path. */
         fun restoreFromDrive(backup: DriveBackupInfo) {

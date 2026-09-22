@@ -281,7 +281,7 @@ internal fun BackupPasswordStep(
     val sourceName =
         when (val source = state.restoreSource) {
             is RestoreSource.Drive -> source.backup.fileName
-            is RestoreSource.LocalFile -> source.uri.lastPathSegment.orEmpty()
+            is RestoreSource.LocalFile -> source.displayName
             null -> ""
         }
 

@@ -144,7 +144,7 @@ class OnboardingViewModelTest {
     private val fileUri: Uri = Uri.parse("content://downloads/cleartravel-backup-old.zip")
 
     private fun viewModel(google: FakeGoogleAccountManager = FakeGoogleAccountManager()) =
-        OnboardingViewModel(google, drive, backups, settings)
+        OnboardingViewModel(context, google, drive, backups, settings)
 
     @Test
     fun startsAtGoogleStep_offlineSkipsToRestore_startFreshFinishes() =
@@ -302,7 +302,8 @@ class OnboardingViewModelTest {
 
             viewModel.restoreFromFile(fileUri)
             assertThat(viewModel.uiState.value.step).isEqualTo(OnboardingStep.BACKUP_PASSWORD)
-            assertThat(viewModel.uiState.value.restoreSource).isEqualTo(RestoreSource.LocalFile(fileUri))
+            // No provider behind the fake URI → the last segment stands in for the display name.
+            assertThat(viewModel.uiState.value.restoreSource).isEqualTo(RestoreSource.LocalFile(fileUri, "cleartravel-backup-old.zip"))
             assertThat(viewModel.uiState.value.wrongBackupPassword).isFalse()
 
             viewModel.submitBackupPassword("New-Install-Pass")

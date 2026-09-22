@@ -845,3 +845,48 @@ Notes and open items (no code changes were needed in this pass):
 - Biometric enrolment left the AVD with a lock-screen PIN; cleared with
   `locksettings clear --old 1234` before shutdown so future e2e runs boot unlocked.
 - Emulator shut down at the end of the run.
+
+## Onboarding wizard — on-device validation + full regression (2026-09-22 13:55–14:40 IST, emulator Android_16_AOSP_Medium, API 36, ADR-032)
+
+Goal: prove the four-step first-run wizard end to end, INCLUDING a restore of a
+backup made by a *different install with a different password* — the case the
+step-4 copy is written for. Method: dumps only (`uiautomator dump` → text; the
+`/sdcard/ui.xml` removed before each dump), five blind captures `91`–`95`
+(downscaled to 540 px, never viewed). No Play services on the AVD, no
+`GOOGLE_WEB_CLIENT_ID` in the build, no biometrics enrolled — so the Google-linked
+and fingerprint branches are covered by the unit tests (fakes) and the Settings
+biometric path validated on 2026-09-22 13:15 (capture `81`), and the device run
+exercises the offline branches and the disabled states.
+
+Set-up of the foreign backup (the "previous install"): `pm uninstall` → install the
+pre-wizard build (`0726934`) → password **`OldDevicePass1`** → trip
+"ForeignBackupTrip / Lisbon" → Menu → Backup & Restore → Export →
+`/sdcard/Download/cleartravel-backup-20260922-1414.zip` (4 343 B, header
+`43 54 45 42 01 00 03 34 50` = CTEB v1, 210 000 iterations). Then `pm uninstall` →
+install the wizard build.
+
+| # | Check | Verdict | Evidence |
+|---|---|---|---|
+| 1 | **Step 1 of 4** is the first screen: "Protect your travel data", *Password* + *Confirm password* fields, red "If you forget this password, your data is lost" card, **"Unlock with fingerprint"** row with the hint *"No fingerprint or face is set up on this device. You can turn this on later in Settings → Security."*, its Switch `checkable=true checked=false enabled=false`; no tab bar. `NewDevicePass2` / `NewDevicePassX` → Create → inline **"The two passwords don't match."**, vault still not set up | PASS | `91-onboarding-step1-password-toggle.png`, dumps |
+| 2 | Corrected confirmation → Create → **Step 2 of 4** "Back up to Google Drive?" with *Connect Google account for backups*, the line *"Google features are not configured in this build, so connecting is unavailable. Everything else works offline."* and *Use offline*. Tapping Connect does nothing (disabled; the Compose semantics assertion lives in `AppLockSetupE2eTest`) | PASS | `92-onboarding-step2-google.png`, dumps |
+| 3 | **Resume after death**: `force-stop` on step 2 → relaunch → **"ClearTravel is locked"** (the password is asked to *open* the store, never to be *created* again) → `NewDevicePass2` → lands on **Step 2 of 4** directly | PASS | dumps |
+| 4 | *Use offline* → **Step 3 of 4** "Restore a backup or start fresh?" — *Restore from a file* card with *Choose backup file*, **no Drive card** (offline), *Start fresh*. Choose → SAF Downloads → the 14:14 backup | PASS | `93-onboarding-step3-restore.png`, dumps |
+| 5 | **Step 4 of 4** "Backup password": *"This may differ from the password you just created: a backup is sealed with the password of the ClearTravel install that made it. Use that one here."*, `Backup: cleartravel-backup-20260922-1414.zip`, one `Password` field, *Restore backup*, *Choose a different backup*. Typed the NEW app password → inline **"That password does not open this backup. Try again."**, still on step 4 (nothing written). Typed **`OldDevicePass1`** → Restore → **Trips tab with "ForeignBackupTrip / Lisbon"** — the foreign-password restore merged into the new install's store (vault salt ≠ backup salt, key derived from the typed password, ADR-031 §4). Repeated on the final build after the display-name fix: same outcome | PASS | `94-onboarding-step4-backup-password.png`, `95-onboarding-restored-foreign-backup.png`, dumps |
+| 6 | Relaunch after the wizard: unlock screen → password → Trips with the restored trip, **no wizard** (flag cleared) | PASS | dumps |
+| 7 | **Settings parity** (dumps): Settings → Security: *Change password* button, *Unlock with biometrics* toggle (+ "No strong biometrics are set up on this device."), *Lock when in the background for* radios; Settings → Google account: not-configured explanation (the *Connect* button and the three toggles render when a client id is present — `GoogleAccountSection`); Menu → Backup & Restore: *Export backup*, *Import backup* (SAF), Drive card ("Link a Google account in Settings to keep backups in Drive…" when unlinked; list + restore when linked). All four operations reachable outside the wizard | PASS | dumps |
+| 8 | `pm clear` → **start-fresh path**: Step 1 (`FreshStartPass3`) → Step 2 → *Use offline* → Step 3 → *Start fresh* → Trips **"No trips yet"** (empty app) | PASS | dumps |
+| 9 | Bug found & fixed in the run: step 4 showed `Backup: 23` — a SAF `content://` URI's last segment is an opaque document id. `OnboardingViewModel` now resolves `OpenableColumns.DISPLAY_NAME` (falls back to the last segment); the in-place upgrade `adb install -r` over the mid-wizard install resumed at the unlock screen → step 2 as designed | FIXED | dump after fix: `Backup: cleartravel-backup-20260922-1414.zip` |
+| 10 | `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → BUILD SUCCESSFUL (1 202 tasks); unit **967/967**, 0 failures (was 949: feature:applock 7 → 24, core:data 99 → 100) | PASS | `onboarding.log` (git-ignored) |
+| 11 | `connectedDebugAndroidTest` → **15/15 PASS** (AppLockSetupE2eTest now walks step 1 short → mismatch → valid, step 2 connect-disabled → offline, step 3 no-Drive → start fresh → Trips; the other 14 unchanged and green with the flag defaulting to false in `FakeSettingsRepository`); `core:ocr` harness SKIPPED (`@Ignore`) | PASS | `connected-onboarding.log` |
+
+Notes:
+
+- Not device-tested here (covered by unit tests with fakes): Google linking (no Play
+  services on the AVD, no client id), Drive listing found/none, the consent-sheet
+  round trip, and the step-1 fingerprint enrolment (the Settings enrolment path was
+  device-tested in the security wave; the wizard reuses `BiometricKeyWrapper` +
+  `KeyVault.enableBiometric` and its wiring is asserted in `AppLockViewModelTest`).
+- `adb shell input text` mangles `-`; the run used dash-free passwords.
+- The POST_NOTIFICATIONS prompt was pre-granted with `pm grant` for the walk; it
+  still fires over step 1 on a real first run (pre-existing follow-up).
+- Emulator shut down at the end of the run (`emu kill`, `adb devices` empty).
