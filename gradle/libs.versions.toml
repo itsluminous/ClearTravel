@@ -40,6 +40,13 @@ okhttp = "4.12.0"
 securityCrypto = "1.1.0-alpha06"
 # core:scrape — pure-JVM HTML parsing of WebView-dumped DOM (fixture-testable off-device).
 jsoup = "1.18.3"
+# ADR-031 at-rest encryption + app lock: SQLCipher for Room, BiometricPrompt for unlock.
+# sqlcipher-android 4.19 is built against androidx.sqlite 2.7 — pinned explicitly so it
+# does not silently resolve to Room 2.6's older transitive 2.4.
+sqlcipher = "4.19.0"
+androidxSqlite = "2.7.0"
+biometric = "1.1.0"
+fragment = "1.8.5"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -103,6 +110,13 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 
 google-material = { group = "com.google.android.material", name = "material", version.ref = "material" }
+
+# ADR-031: at-rest encryption + app lock.
+sqlcipher-android = { group = "net.zetetic", name = "sqlcipher-android", version.ref = "sqlcipher" }
+androidx-sqlite = { group = "androidx.sqlite", name = "sqlite", version.ref = "androidxSqlite" }
+androidx-sqlite-framework = { group = "androidx.sqlite", name = "sqlite-framework", version.ref = "androidxSqlite" }
+androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
+androidx-fragment-ktx = { group = "androidx.fragment", name = "fragment-ktx", version.ref = "fragment" }
 
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 truth = { group = "com.google.truth", name = "truth", version.ref = "truth" }
