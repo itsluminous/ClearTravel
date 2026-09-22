@@ -1,16 +1,13 @@
 package com.itsluminous.cleartravel.feature.trains.pnr
 
-import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsluminous.cleartravel.core.data.repository.TrainRepository
-import com.itsluminous.cleartravel.core.scrape.AssetRuleSource
 import com.itsluminous.cleartravel.core.scrape.RuleDrivenScrapeSession
 import com.itsluminous.cleartravel.core.scrape.RuleRegistry
 import com.itsluminous.cleartravel.core.scrape.ScrapeParams
 import com.itsluminous.cleartravel.core.scrape.ScrapedData
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,10 +52,10 @@ sealed interface PnrCheckUiState {
 class PnrCheckViewModel
     @Inject
     constructor(
-        @ApplicationContext context: Context,
+        /** The shared registry hoisted to `core:scrape`'s `ScrapeModule` (ADR-014). */
+        private val registry: RuleRegistry,
         private val repository: TrainRepository,
     ) : ViewModel() {
-        private val registry = RuleRegistry(AssetRuleSource(context))
         private val clock: Clock = Clock.systemUTC()
 
         private val state = MutableStateFlow<PnrCheckUiState>(PnrCheckUiState.RuleUnavailable)

@@ -444,8 +444,9 @@ app/ ownership:
   ksp+hilt plugin pair and `hilt-android` to `core:scrape` (a `@InstallIn` module is
   only aggregated when its defining module runs the Hilt compiler) — the only
   build-file change of the wave; no version-catalog changes. `feature:trains`'
-  `PnrCheckViewModel` still constructs its registry directly (unchanged, works);
-  migrating it to injection is optional follow-up.
+  `PnrCheckViewModel` still constructed its registry directly at the time; the
+  cleanup pass (2026-09-22) completed the hoist — it now injects the shared
+  registry like `RouteFetchViewModel` (`PnrCheckViewModelTest`).
 - **Startup housekeeping** (`app` `startup/AppStartupTasks`, launched from
   `MainActivity.onCreate` on `Dispatchers.IO`): (1) auto-archive — train tickets
   past `feature:trains`' `isPastJourney` and flights past the app-level
