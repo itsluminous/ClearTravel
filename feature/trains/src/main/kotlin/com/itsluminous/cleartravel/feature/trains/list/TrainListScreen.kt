@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -50,11 +49,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
+import com.itsluminous.cleartravel.core.designsystem.component.FullWidthFilterChip
+import com.itsluminous.cleartravel.core.designsystem.component.FullWidthFilterRow
 import com.itsluminous.cleartravel.core.model.TrainTicket
 import com.itsluminous.cleartravel.feature.trains.R
 import java.time.Instant
@@ -110,24 +110,16 @@ internal fun TrainListScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Two equal-width segments spanning the row (user steering): the same
-            // 32dp FilterChips, stretched with weight(1f) so the row reads as one
-            // full-width control without growing taller.
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+            FullWidthFilterRow {
                 FullWidthFilterChip(
                     selected = state.filter == TrainListFilter.ACTIVE,
                     onClick = { onFilterChange(TrainListFilter.ACTIVE) },
                     label = stringResource(R.string.trains_filter_active),
-                    modifier = Modifier.weight(1f),
                 )
                 FullWidthFilterChip(
                     selected = state.filter == TrainListFilter.ARCHIVED,
                     onClick = { onFilterChange(TrainListFilter.ARCHIVED) },
                     label = stringResource(R.string.trains_filter_archived),
-                    modifier = Modifier.weight(1f),
                 )
             }
             if (state.isEmpty) {
@@ -380,19 +372,3 @@ internal fun lastFetchedText(ticket: TrainTicket): String {
 }
 
 internal fun formatDate(date: LocalDate): String = DATE_FORMAT.format(date)
-
-/** A [FilterChip] that stretches to its [modifier] width with a centered label (full-width filter rows). */
-@Composable
-private fun FullWidthFilterChip(
-    selected: Boolean,
-    onClick: () -> Unit,
-    label: String,
-    modifier: Modifier = Modifier,
-) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(text = label, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) },
-        modifier = modifier,
-    )
-}
