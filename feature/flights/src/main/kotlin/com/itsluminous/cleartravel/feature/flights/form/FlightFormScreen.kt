@@ -1,8 +1,8 @@
 package com.itsluminous.cleartravel.feature.flights.form
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,8 +13,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -22,13 +20,12 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -37,13 +34,12 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
+import com.itsluminous.cleartravel.core.designsystem.component.LocalDatePickerDialog
 import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassSource
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationSource
 import com.itsluminous.cleartravel.feature.flights.R
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -153,56 +149,28 @@ fun FlightFormScreen(
                     modifier = Modifier.weight(1f),
                 )
             }
-            // Date comes from a picker, not typing (user request 2026-09-22);
-            // the field stays read-only and mirrors the picked ISO date.
+            // Date comes from a picker, not typing (user request 2026-09-22): the field
+            // is read-only and mirrors the picked ISO date; a tap anywhere on it opens
+            // the shared picker.
             var showDatePicker by rememberSaveable { mutableStateOf(false) }
-            Box {
-                FormField(
-                    value = state.dateText,
-                    onChange = {},
-                    labelRes = R.string.flights_field_date,
-                    error = FlightFormError.DATE_INVALID in state.errors,
-                    errorRes = R.string.flights_error_date,
-                    confidence = state.confidences[FlightField.DATE],
-                    readOnly = true,
-                )
-                // Transparent click target over the read-only field.
-                Box(
-                    modifier =
-                        Modifier
-                            .matchParentSize()
-                            .clickable { showDatePicker = true },
-                )
-            }
+            FormField(
+                value = state.dateText,
+                onChange = {},
+                labelRes = R.string.flights_field_date,
+                error = FlightFormError.DATE_INVALID in state.errors,
+                errorRes = R.string.flights_error_date,
+                confidence = state.confidences[FlightField.DATE],
+                onClickReadOnly = { showDatePicker = true },
+            )
             if (showDatePicker) {
-                val pickerState =
-                    rememberDatePickerState(
-                        initialSelectedDateMillis =
-                            runCatching { LocalDate.parse(state.dateText) }
-                                .getOrNull()
-                                ?.atStartOfDay(ZoneOffset.UTC)
-                                ?.toInstant()
-                                ?.toEpochMilli(),
-                    )
-                DatePickerDialog(
-                    onDismissRequest = { showDatePicker = false },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                pickerState.selectedDateMillis?.let { millis ->
-                                    val picked = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
-                                    viewModel.update { it.copy(dateText = picked.toString()) }
-                                }
-                                showDatePicker = false
-                            },
-                        ) { Text(stringResource(R.string.flights_date_picker_confirm)) }
+                LocalDatePickerDialog(
+                    initial = runCatching { LocalDate.parse(state.dateText) }.getOrNull(),
+                    onConfirm = { picked ->
+                        viewModel.update { it.copy(dateText = picked.toString()) }
+                        showDatePicker = false
                     },
-                    dismissButton = {
-                        TextButton(onClick = { showDatePicker = false }) {
-                            Text(stringResource(R.string.flights_date_picker_cancel))
-                        }
-                    },
-                ) { DatePicker(state = pickerState) }
+                    onDismiss = { showDatePicker = false },
+                )
             }
             FormField(
                 value = state.pnr,
@@ -324,6 +292,12 @@ private fun PrefillBanner(state: FlightFormState) {
     }
 }
 
+/**
+ * One form field. With [onClickReadOnly] the field is read-only and a tap on it (press
+ * released inside) invokes the callback — the idiomatic picker-backed text field: the
+ * interaction source of the field itself is observed, so there is no overlay and the
+ * label, error and supporting text keep their normal semantics.
+ */
 @Composable
 private fun FormField(
     value: String,
@@ -333,11 +307,20 @@ private fun FormField(
     error: Boolean = false,
     errorRes: Int? = null,
     confidence: ExtractionConfidence? = null,
-    readOnly: Boolean = false,
+    onClickReadOnly: (() -> Unit)? = null,
 ) {
+    val interactionSource = remember { MutableInteractionSource() }
+    if (onClickReadOnly != null) {
+        LaunchedEffect(interactionSource) {
+            interactionSource.interactions.collect { interaction ->
+                if (interaction is PressInteraction.Release) onClickReadOnly()
+            }
+        }
+    }
     OutlinedTextField(
         value = value,
-        readOnly = readOnly,
+        readOnly = onClickReadOnly != null,
+        interactionSource = interactionSource,
         onValueChange = onChange,
         label = { Text(stringResource(labelRes)) },
         isError = error,

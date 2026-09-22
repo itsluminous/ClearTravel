@@ -74,8 +74,6 @@
     <string name="trains_form_duplicate_pnr">Ticket with this PNR already exists</string>
     <string name="trains_form_duplicate_pnr_view">View</string>
     <string name="trains_form_back">Back</string>
-    <string name="trains_form_date_ok">OK</string>
-    <string name="trains_form_date_cancel">Cancel</string>
 
     <string name="trains_detail_title">Ticket details</string>
     <string name="trains_detail_pnr">PNR</string>

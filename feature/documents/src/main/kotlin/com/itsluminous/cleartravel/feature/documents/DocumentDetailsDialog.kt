@@ -10,15 +10,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,10 +26,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.itsluminous.cleartravel.core.designsystem.component.ChipRow
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
+import com.itsluminous.cleartravel.core.designsystem.component.LocalDatePickerDialog
 import com.itsluminous.cleartravel.core.model.TravelDocumentType
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
 
 /** What the details dialog hands back on Save. */
 data class DocumentDetails(
@@ -49,7 +44,6 @@ data class DocumentDetails(
  * selected preset (edited names stick when the type changes), an optional expiry date
  * via the Material date picker, and an optional note. [initial] null = add mode.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun DocumentDetailsDialog(
     initial: DocumentDetails?,
@@ -158,40 +152,13 @@ internal fun DocumentDetailsDialog(
     )
 
     if (showDatePicker) {
-        val pickerState =
-            rememberDatePickerState(
-                initialSelectedDateMillis =
-                    (expiryDate ?: LocalDate.now().plusYears(1))
-                        .atStartOfDay(ZoneOffset.UTC)
-                        .toInstant()
-                        .toEpochMilli(),
-            )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        pickerState.selectedDateMillis?.let { millis ->
-                            expiryIso =
-                                Instant
-                                    .ofEpochMilli(millis)
-                                    .atZone(ZoneOffset.UTC)
-                                    .toLocalDate()
-                                    .toString()
-                        }
-                        showDatePicker = false
-                    },
-                ) {
-                    Text(stringResource(R.string.documents_date_ok))
-                }
+        LocalDatePickerDialog(
+            initial = expiryDate ?: LocalDate.now().plusYears(1),
+            onConfirm = { picked ->
+                expiryIso = picked.toString()
+                showDatePicker = false
             },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text(stringResource(R.string.documents_cancel))
-                }
-            },
-        ) {
-            DatePicker(state = pickerState)
-        }
+            onDismiss = { showDatePicker = false },
+        )
     }
 }

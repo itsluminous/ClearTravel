@@ -45,7 +45,6 @@
     <string name="documents_note_label">Note (optional)</string>
     <string name="documents_save">Save</string>
     <string name="documents_cancel">Cancel</string>
-    <string name="documents_date_ok">OK</string>
 
     <!-- Delete confirmation. -->
     <string name="documents_delete_title">Delete document?</string>

@@ -12,15 +12,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -32,17 +27,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
+import com.itsluminous.cleartravel.core.designsystem.component.LocalDatePickerDialog
 import com.itsluminous.cleartravel.feature.trains.R
 import com.itsluminous.cleartravel.feature.trains.list.formatDate
-import java.time.Instant
-import java.time.ZoneOffset
 
 /**
  * The add/edit ticket form — the single review point for every prefill path
  * (manual, pasted SMS/email, imported PDF/image). Low-confidence auto-filled fields
  * carry a subtle supporting-text marker; nothing is saved without the user's tap.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TrainTicketFormScreen(
     state: TrainFormUiState,
@@ -184,38 +177,14 @@ internal fun TrainTicketFormScreen(
     }
 
     if (showDatePicker) {
-        val pickerState =
-            rememberDatePickerState(
-                initialSelectedDateMillis =
-                    state.journeyDate
-                        ?.atStartOfDay(ZoneOffset.UTC)
-                        ?.toInstant()
-                        ?.toEpochMilli(),
-            )
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        pickerState.selectedDateMillis?.let { millis ->
-                            viewModel.onJourneyDateChange(
-                                Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate(),
-                            )
-                        }
-                        showDatePicker = false
-                    },
-                ) {
-                    Text(stringResource(R.string.trains_form_date_ok))
-                }
+        LocalDatePickerDialog(
+            initial = state.journeyDate,
+            onConfirm = { picked ->
+                viewModel.onJourneyDateChange(picked)
+                showDatePicker = false
             },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text(stringResource(R.string.trains_form_date_cancel))
-                }
-            },
-        ) {
-            DatePicker(state = pickerState)
-        }
+            onDismiss = { showDatePicker = false },
+        )
     }
 }
 

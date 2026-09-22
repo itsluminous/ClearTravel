@@ -3,15 +3,19 @@ package com.itsluminous.cleartravel
 import android.os.Build
 import androidx.annotation.StringRes
 import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.notifications.NotificationPermissions
+import com.itsluminous.cleartravel.core.designsystem.R as DesignR
 
 /** Shared plumbing for the e2e suite. */
 object E2e {
@@ -85,3 +89,21 @@ fun AndroidComposeTestRule<*, MainActivity>.assertDockedAboveNavBar(tag: String)
     assertThat(docked.top.value).isGreaterThan(((root.bottom - root.top) / 2).value)
     assertThat(docked.bottom.value).isAtMost(navLabel.top.value)
 }
+
+/**
+ * Picks TODAY in the shared `LocalDatePickerDialog` that a tap on a date field opened:
+ * Material 3 labels the current day's cell "Today, <full date>", so it is the one day
+ * every locale/month state exposes without navigation. Confirms with the shared OK.
+ */
+fun AndroidComposeTestRule<*, MainActivity>.pickTodayInDatePicker() {
+    waitUntil(timeoutMillis = E2e.WAIT_TIMEOUT_MILLIS) {
+        onAllNodes(hasText(M3_TODAY_PREFIX, substring = true) and hasClickAction())
+            .fetchSemanticsNodes()
+            .isNotEmpty()
+    }
+    onNode(hasText(M3_TODAY_PREFIX, substring = true) and hasClickAction()).performClick()
+    onNodeWithText(string(DesignR.string.designsystem_date_picker_ok)).performClick()
+}
+
+/** Material 3's `m3c_date_picker_today_description` (English test locale). */
+private const val M3_TODAY_PREFIX = "Today"

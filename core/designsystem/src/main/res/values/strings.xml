@@ -2,6 +2,10 @@
 <resources>
     <string name="designsystem_reorder_handle">Reorder</string>
 
+    <!-- Shared LocalDate picker dialog. -->
+    <string name="designsystem_date_picker_ok">OK</string>
+    <string name="designsystem_date_picker_cancel">Cancel</string>
+
     <!-- Shared document viewer (ADR-027, upgraded in ADR-030, responsive chrome + fullscreen in ADR-034). -->
     <string name="designsystem_viewer_close">Close</string>
     <string name="designsystem_viewer_image_description">Stored document</string>

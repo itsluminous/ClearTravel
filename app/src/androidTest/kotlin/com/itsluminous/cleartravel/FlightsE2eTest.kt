@@ -57,9 +57,11 @@ class FlightsE2eTest {
         composeRule
             .onNodeWithText(composeRule.string(FlightsR.string.flights_field_flight_number))
             .performTextInput(FLIGHT_NUMBER)
+        // The date is picker-only (read-only field): tap it, pick today, confirm.
         composeRule
             .onNodeWithText(composeRule.string(FlightsR.string.flights_field_date))
-            .performTextInput(DATE)
+            .performClick()
+        composeRule.pickTodayInDatePicker()
         composeRule
             .onNodeWithText(composeRule.string(FlightsR.string.flights_field_dep_airport))
             .performScrollTo()
@@ -110,7 +112,8 @@ class FlightsE2eTest {
                 .performTextInput(number)
             composeRule
                 .onNodeWithText(composeRule.string(FlightsR.string.flights_field_date))
-                .performTextInput(DATE)
+                .performClick()
+            composeRule.pickTodayInDatePicker()
             composeRule
                 .onNodeWithText(composeRule.string(FlightsR.string.flights_form_save))
                 .performScrollTo()
@@ -137,7 +140,6 @@ class FlightsE2eTest {
         const val DUPLICATE_AIRLINE = "AI"
         const val DUPLICATE_FLIGHT_NUMBER = "777"
         const val FLIGHT_NUMBER = "2345"
-        const val DATE = "2030-01-01"
         const val DEP = "BLR"
         const val ARR = "DEL"
 

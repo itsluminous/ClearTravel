@@ -12,16 +12,12 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,13 +34,12 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.itsluminous.cleartravel.core.designsystem.component.ChipRow
+import com.itsluminous.cleartravel.core.designsystem.component.LocalDatePickerDialog
 import com.itsluminous.cleartravel.core.model.Trip
 import com.itsluminous.cleartravel.feature.itinerary.R
 import com.itsluminous.cleartravel.feature.itinerary.formatMedium
 import com.itsluminous.cleartravel.feature.itinerary.parseCoverColor
-import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
 
 /** Curated cover emoji choices (a simple row — no full emoji keyboard needed). */
 private val TRIP_EMOJIS =
@@ -179,23 +174,23 @@ internal fun TripFormDialog(
     )
 
     if (showStartPicker) {
-        TripDatePickerDialog(
+        LocalDatePickerDialog(
             initial = startDate,
-            onDismiss = { showStartPicker = false },
             onConfirm = { picked ->
                 startDate = picked
                 showStartPicker = false
             },
+            onDismiss = { showStartPicker = false },
         )
     }
     if (showEndPicker) {
-        TripDatePickerDialog(
+        LocalDatePickerDialog(
             initial = endDate,
-            onDismiss = { showEndPicker = false },
             onConfirm = { picked ->
                 endDate = picked
                 showEndPicker = false
             },
+            onDismiss = { showEndPicker = false },
         )
     }
 }
@@ -227,38 +222,5 @@ private fun ColorSwatch(
                         .background(Color.White),
             )
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun TripDatePickerDialog(
-    initial: LocalDate?,
-    onDismiss: () -> Unit,
-    onConfirm: (LocalDate?) -> Unit,
-) {
-    val state =
-        rememberDatePickerState(
-            initialSelectedDateMillis =
-                initial?.atStartOfDay(ZoneOffset.UTC)?.toInstant()?.toEpochMilli(),
-        )
-    DatePickerDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onConfirm(
-                        state.selectedDateMillis?.let {
-                            Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate()
-                        },
-                    )
-                },
-            ) { Text(stringResource(R.string.itinerary_ok)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.itinerary_cancel)) }
-        },
-    ) {
-        DatePicker(state = state)
     }
 }
