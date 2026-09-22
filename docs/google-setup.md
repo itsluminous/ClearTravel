@@ -65,19 +65,28 @@ Two clients are involved; the id you configure in the app is the **Web** one:
 > - the Android OAuth client for the build's signing certificate (SHA-1) is
 >   missing — create one per certificate (debug AND release).
 
-## 6. Put the values in `local.properties`
+## 6. Put the values in the ROOT `local.properties`
 
-`local.properties` sits at the repository root and is **git-ignored** — never
-commit it. Empty/absent values are safe defaults (blank map tiles; Google section
-shows "not set up").
+`local.properties` sits at the **repository root** (next to `settings.gradle.kts`)
+and is **git-ignored** — never commit it. Empty/absent values are safe defaults
+(blank map tiles; Google section shows "not set up").
 
 ```properties
 MAPS_API_KEY=AIza...your-maps-key...
 GOOGLE_WEB_CLIENT_ID=1234567890-abc123.apps.googleusercontent.com
 ```
 
+> ⚠️ **Trap (hit twice during validation): `app/local.properties` is IGNORED.**
+> `app/build.gradle.kts` reads `rootProject.file("local.properties")` only. A file
+> at `app/local.properties` — which Android Studio never creates but is an easy
+> guess — silently leaves both values empty: the map stays blank and Settings →
+> Google account shows "not set up" even though the ids are correct. Put the file
+> at the repo root, then rebuild.
+
 Rebuild after editing (`./gradlew assembleDebug`) — the values are baked in at
-build time (manifest placeholder + `BuildConfig`).
+build time (manifest placeholder + `BuildConfig`). Quick check that the build saw
+them: `grep -c 'GOOGLE_WEB_CLIENT_ID = ""' app/build/generated/source/buildConfig/debug/com/itsluminous/cleartravel/BuildConfig.java`
+prints `0` when the id was picked up.
 
 ## 7. Test checklist
 
@@ -95,10 +104,18 @@ build time (manifest placeholder + `BuildConfig`).
 6. Toggle **Drive uploads** on → approve the Drive scope → attachments and
    boarding passes appear in a **"ClearTravel"** Drive folder.
 7. Toggle **Backup to Drive** on, then Menu → Backup & Restore → Export backup →
-   the ZIP appears in the Drive folder; export six times → only the 5 newest
-   remain.
-8. Fresh-install restore: clear app data (or reinstall), link the same account,
-   open Backup & Restore → the "Restore your data from Drive?" prompt shows the
-   newest backup's date + size; Import restores your data (merge, never a wipe).
+   the backup (a `.zip`-named file that is in fact a password-sealed envelope,
+   ADR-031) appears in the Drive folder; export six times → only the 5 newest remain. Drive only ever receives
+   sealed files — nothing there is readable without your password.
+8. Fresh-install restore — two paths now exist:
+   - **First-run wizard** (ADR-032): reinstall → create a password (step 1) →
+     *Connect Google* (step 2, grants the Drive-backup scope) → step 3 lists the
+     newest Drive backups → tap one → step 4 asks for the **backup's own password**
+     (it is sealed with the password of the install that made it — usually the old
+     one, not the one you just created) → the data merges and the app opens.
+   - **Settings** (later): link the same account, open Backup & Restore → the
+     "Restore your data from Drive?" prompt shows the newest backup's date + size;
+     Import restores your data (merge, never a wipe), asking for the source password
+     when the backup came from another install.
 9. Disconnect from Settings → optional "Also delete calendar" removes the
    ClearTravel calendar; local data is untouched.
