@@ -67,6 +67,16 @@ sealed interface TrainsEntryResult {
 }
 
 /**
+ * ADR-028: the Trips tab asked for a NEW ticket to link into an itinerary leg. The
+ * Trains segment opens its add options straight away and reports how the add ended
+ * through `TrainsContent.onAddRequestDone` as a [TrainsEntryResult]; the shell then
+ * returns to the Trips tab. [nonce] makes consecutive requests distinct.
+ */
+data class TrainsAddRequest(
+    val nonce: Long = System.nanoTime(),
+)
+
+/**
  * What the Trains segment should do on arrival for a given ticket (integration
  * contract for the Journeys shell, ADR-024). Mirrors [TrainsEntryResult] so the
  * shell can forward an entry outcome without knowing the segment's internals.

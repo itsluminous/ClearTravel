@@ -41,6 +41,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,13 +92,21 @@ internal fun TrainListScreen(
     onShare: (TrainTicketCard) -> Unit,
     onAdd: (AddChoice) -> Unit,
     modifier: Modifier = Modifier,
+    /** ADR-028: opens the add-options sheet on arrival (one open per distinct nonce). */
+    openAddSheetNonce: Long? = null,
+    /** The add options were left without picking a path (sheet/paste dismissed, no file chosen). */
+    onAddAbandoned: () -> Unit = {},
 ) {
     var showAddSheet by rememberSaveable { mutableStateOf(false) }
     var showPasteDialog by rememberSaveable { mutableStateOf(false) }
     val importLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            if (uri != null) onAdd(AddChoice.FromFile(uri))
+            if (uri != null) onAdd(AddChoice.FromFile(uri)) else onAddAbandoned()
         }
+
+    LaunchedEffect(openAddSheetNonce) {
+        if (openAddSheetNonce != null) showAddSheet = true
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -161,7 +170,12 @@ internal fun TrainListScreen(
     }
 
     if (showAddSheet) {
-        ModalBottomSheet(onDismissRequest = { showAddSheet = false }) {
+        ModalBottomSheet(
+            onDismissRequest = {
+                showAddSheet = false
+                onAddAbandoned()
+            },
+        ) {
             AddOptionRow(
                 icon = Icons.Filled.Edit,
                 titleRes = R.string.trains_add_manual,
@@ -194,7 +208,10 @@ internal fun TrainListScreen(
 
     if (showPasteDialog) {
         PasteTextDialog(
-            onDismiss = { showPasteDialog = false },
+            onDismiss = {
+                showPasteDialog = false
+                onAddAbandoned()
+            },
             onConfirm = { text ->
                 showPasteDialog = false
                 onAdd(AddChoice.FromText(text))

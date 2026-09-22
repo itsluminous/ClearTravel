@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,16 +73,35 @@ private suspend fun showDuplicateNotice(
  * segment arrives on that ticket per [initialAction] — detail sheet expanded
  * (notification deep links, saves), the PNR check opened (PNR-only quick add via a
  * share link, ADR-023) or the existing ticket shown with a duplicate notice
- * (ADR-024). Both defaulted so existing call sites are untouched.
+ * (ADR-024). [addRequest] is the ADR-028 pick-mode hook: the segment opens its add
+ * options at once and reports the outcome ONCE via [onAddRequestDone] — saved →
+ * `Saved`, refused duplicate → `DuplicatePnr` (the existing ticket is what the user
+ * meant), backed out anywhere before a save → `Cancelled`. [onOpenTrip] reports a
+ * "Part of" row tapped in the detail sheet. All defaulted so existing call sites are
+ * untouched.
  */
 @Composable
 fun TrainsContent(
     modifier: Modifier = Modifier,
     initialTicketId: String? = null,
     initialAction: TrainsLandingAction = TrainsLandingAction.OPEN_DETAIL,
+    addRequest: TrainsAddRequest? = null,
+    onAddRequestDone: (TrainsEntryResult) -> Unit = {},
+    onOpenTrip: (tripId: String) -> Unit = {},
 ) {
     var screen by remember { mutableStateOf<TrainsScreen>(TrainsScreen.List) }
     var detailTicketId by remember { mutableStateOf<String?>(null) }
+    // ADR-028 pick mode: the request being fulfilled, until its outcome is reported.
+    var activeAddRequest by remember { mutableStateOf<TrainsAddRequest?>(null) }
+    // Read at call time: the reporter is invoked from a long-lived event collector.
+    val currentOnAddRequestDone by rememberUpdatedState(onAddRequestDone)
+
+    /** Reports the pick outcome exactly once and leaves pick mode. */
+    fun finishAddRequest(result: TrainsEntryResult) {
+        if (activeAddRequest == null) return
+        activeAddRequest = null
+        currentOnAddRequestDone(result)
+    }
 
     // State-based navigation does not take part in system back by itself: without
     // this, back reaches the shell NavHost and pops the whole Journeys tab. Step one
@@ -89,6 +109,8 @@ fun TrainsContent(
     val backTarget = trainsBackTarget(screen, detailTicketId)
     BackHandler(enabled = backTarget != null) {
         backTarget?.let {
+            // Backing out of the add form in pick mode = the add was cancelled.
+            if (screen is TrainsScreen.Form) finishAddRequest(TrainsEntryResult.Cancelled)
             screen = it.screen
             detailTicketId = it.detailTicketId
         }
@@ -150,13 +172,26 @@ fun TrainsContent(
         }
     }
 
+    LaunchedEffect(addRequest) {
+        if (addRequest != null) {
+            detailTicketId = null
+            screen = TrainsScreen.List
+            activeAddRequest = addRequest
+        }
+    }
+
     LaunchedEffect(detailTicketId) { detailViewModel.setTicketId(detailTicketId) }
 
     LaunchedEffect(formViewModel) {
         formViewModel.events.collect { event ->
             when (event) {
                 is TrainFormEvent.Saved -> {
-                    if (event.openPnrCheck) {
+                    if (activeAddRequest != null) {
+                        // Pick mode (ADR-028): the itinerary is waiting — hand the
+                        // ticket back instead of chaining the PNR check here.
+                        screen = TrainsScreen.List
+                        finishAddRequest(TrainsEntryResult.Saved(event.ticketId, openPnrCheck = event.openPnrCheck))
+                    } else if (event.openPnrCheck) {
                         // PNR-only quick add: go straight to the status check so the
                         // first fetch backfills the ticket (user request, ADR-023).
                         screen = TrainsScreen.PnrCheck(ticketId = event.ticketId, pnr = event.pnr)
@@ -175,8 +210,13 @@ fun TrainsContent(
                     // Nothing was written (ADR-024): back to the list, which already
                     // shows the existing ticket, with the notice + a "View" action.
                     screen = TrainsScreen.List
-                    scope.launch {
-                        showDuplicateNotice(snackbarHostState, context) { detailTicketId = event.existingTicketId }
+                    if (activeAddRequest != null) {
+                        // Pick mode: the existing ticket IS the one to link.
+                        finishAddRequest(TrainsEntryResult.DuplicatePnr(event.existingTicketId))
+                    } else {
+                        scope.launch {
+                            showDuplicateNotice(snackbarHostState, context) { detailTicketId = event.existingTicketId }
+                        }
                     }
                 }
             }
@@ -222,6 +262,8 @@ fun TrainsContent(
                                 }
                             }
                     },
+                    openAddSheetNonce = activeAddRequest?.nonce,
+                    onAddAbandoned = { finishAddRequest(TrainsEntryResult.Cancelled) },
                     onAdd = { choice ->
                         // A lingering "Ticket saved" would sit over the form's Save/
                         // Cancel row and eat the tap; it has done its job by now.
@@ -246,7 +288,10 @@ fun TrainsContent(
                 TrainTicketFormScreen(
                     state = formState,
                     viewModel = formViewModel,
-                    onCancel = { screen = TrainsScreen.List },
+                    onCancel = {
+                        finishAddRequest(TrainsEntryResult.Cancelled)
+                        screen = TrainsScreen.List
+                    },
                 )
             is TrainsScreen.PnrCheck ->
                 PnrCheckScreen(
@@ -400,6 +445,10 @@ fun TrainsContent(
                     scope.launch {
                         snackbarHostState.showSnackbar(context.getString(R.string.trains_detail_deleted))
                     }
+                },
+                onOpenTrip = { tripId ->
+                    detailTicketId = null
+                    onOpenTrip(tripId)
                 },
             )
         }

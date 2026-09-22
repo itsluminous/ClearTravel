@@ -1,5 +1,6 @@
 package com.itsluminous.cleartravel.feature.trains.detail
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,10 +8,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
@@ -37,7 +42,8 @@ private const val MINUTES_PER_HOUR = 60L
 /**
  * The ticket detail bottom sheet: PNR, per-passenger booking/current status and seat
  * details, train details, route stops (when present), derived journey duration,
- * last-fetched timestamp, and the four actions. Delete asks for confirmation.
+ * last-fetched timestamp, the trips this ticket is part of (ADR-028, tap opens the
+ * trip), and the four actions. Delete asks for confirmation.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,6 +57,7 @@ internal fun TrainDetailSheet(
     onArchiveToggle: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    onOpenTrip: (tripId: String) -> Unit = {},
 ) {
     val ticket = state.ticket ?: return
     var showDeleteConfirm by rememberSaveable { mutableStateOf(false) }
@@ -121,6 +128,30 @@ internal fun TrainDetailSheet(
                 )
                 state.routeStops.forEach { stop ->
                     RouteStopDetail(stop = stop)
+                }
+            }
+
+            if (state.linkedTrips.isNotEmpty()) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                Text(
+                    text = stringResource(R.string.trains_detail_part_of),
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                state.linkedTrips.forEach { linked ->
+                    ListItem(
+                        headlineContent = {
+                            Text(
+                                stringResource(
+                                    R.string.trains_detail_part_of_trip,
+                                    linked.tripName,
+                                    linked.dayIndex + 1,
+                                ),
+                            )
+                        },
+                        supportingContent = { Text(stringResource(R.string.trains_detail_part_of_hint)) },
+                        leadingContent = { Icon(Icons.Filled.Map, contentDescription = null) },
+                        modifier = Modifier.clickable { onOpenTrip(linked.tripId) },
+                    )
                 }
             }
 

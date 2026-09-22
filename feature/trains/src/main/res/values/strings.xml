@@ -176,4 +176,8 @@
     <string name="trains_seatmap_type_aisle">AISLE</string>
     <string name="trains_card_seat_map">Seat map</string>
     <string name="trains_detail_seat_map">Seat map</string>
+    <!-- ADR-028: trips whose itinerary links this ticket -->
+    <string name="trains_detail_part_of">Part of</string>
+    <string name="trains_detail_part_of_trip">%1$s · Day %2$d</string>
+    <string name="trains_detail_part_of_hint">Open the trip in the Trips tab</string>
 </resources>

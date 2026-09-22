@@ -4,9 +4,13 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.data.provider.TrainPassengerStatus
 import com.itsluminous.cleartravel.core.data.provider.TrainStatusResult
+import com.itsluminous.cleartravel.core.model.ItineraryItemType
+import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.core.testing.MainDispatcherRule
+import com.itsluminous.cleartravel.feature.trains.FakeItineraryRepository
 import com.itsluminous.cleartravel.feature.trains.FakeTrainRepository
+import com.itsluminous.cleartravel.feature.trains.FakeTripRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -17,8 +21,10 @@ class TrainDetailViewModelTest {
     val mainDispatcherRule = MainDispatcherRule()
 
     private val repository = FakeTrainRepository(now = { Fixtures.NOW })
+    private val itineraryRepository = FakeItineraryRepository()
+    private val tripRepository = FakeTripRepository()
 
-    private fun viewModel() = TrainDetailViewModel(repository)
+    private fun viewModel() = TrainDetailViewModel(repository, itineraryRepository, tripRepository)
 
     @Test
     fun `state emits the full ticket aggregate`() =
@@ -115,6 +121,70 @@ class TrainDetailViewModelTest {
                 val state = expectMostRecentItem()
                 assertThat(state.duration).isNotNull()
                 assertThat(state.duration!!.toHours()).isEqualTo(15)
+            }
+        }
+
+    // ---- ADR-028: "Part of" rows ----
+
+    @Test
+    fun `linked trips list every live leg with its trip name and day in itinerary order`() =
+        runTest {
+            val ticket = Fixtures.trainTicket()
+            repository.seed(ticket)
+            tripRepository.trips.value =
+                listOf(Fixtures.trip(id = "goa", name = "Goa"), Fixtures.trip(id = "kerala", name = "Kerala"))
+            itineraryRepository.items.value =
+                listOf(
+                    Fixtures.itineraryItem(
+                        tripId = "kerala",
+                        dayIndex = 2,
+                        type = ItineraryItemType.COMMUTE,
+                        linkedJourneyId = ticket.id,
+                        linkedJourneyType = JourneyType.TRAIN,
+                    ),
+                    Fixtures.itineraryItem(
+                        tripId = "goa",
+                        dayIndex = 0,
+                        type = ItineraryItemType.COMMUTE,
+                        linkedJourneyId = ticket.id,
+                        linkedJourneyType = JourneyType.TRAIN,
+                    ),
+                    Fixtures.itineraryItem(tripId = "goa", linkedJourneyId = "other", linkedJourneyType = JourneyType.TRAIN),
+                )
+            val vm = viewModel()
+            vm.setTicketId(ticket.id)
+
+            vm.uiState.test {
+                val loaded = expectMostRecentItem()
+                assertThat(loaded.linkedTrips)
+                    .containsExactly(LinkedTrip("goa", "Goa", 0), LinkedTrip("kerala", "Kerala", 2))
+                    .inOrder()
+            }
+        }
+
+    @Test
+    fun `linked trips are empty without legs and drop legs whose trip is gone`() =
+        runTest {
+            val ticket = Fixtures.trainTicket()
+            repository.seed(ticket)
+            itineraryRepository.items.value =
+                listOf(
+                    Fixtures.itineraryItem(
+                        tripId = "deleted-trip",
+                        type = ItineraryItemType.COMMUTE,
+                        linkedJourneyId = ticket.id,
+                        linkedJourneyType = JourneyType.TRAIN,
+                    ),
+                )
+            val vm = viewModel()
+            vm.setTicketId(ticket.id)
+
+            vm.uiState.test {
+                assertThat(expectMostRecentItem().linkedTrips).isEmpty()
+
+                tripRepository.trips.value = listOf(Fixtures.trip(id = "deleted-trip", name = "Back"))
+
+                assertThat(expectMostRecentItem().linkedTrips).containsExactly(LinkedTrip("deleted-trip", "Back", 0))
             }
         }
 }
