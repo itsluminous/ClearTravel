@@ -23,6 +23,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -51,12 +52,15 @@ import com.itsluminous.cleartravel.feature.itinerary.logic.MapPoint
 import com.itsluminous.cleartravel.feature.itinerary.logic.formatLatLng
 import com.itsluminous.cleartravel.feature.itinerary.logic.mapUnavailableReason
 import com.itsluminous.cleartravel.feature.itinerary.logic.platformPlaceGeocoder
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Default picker start (central India) when the item has no coordinates yet. */
 private val DEFAULT_PICKER_POINT = MapPoint(21.0, 78.0)
 private const val PICKER_ZOOM_WITH_INITIAL = 14f
 private const val PICKER_ZOOM_DEFAULT = 4f
+private const val MIN_QUERY_LENGTH = 3
+private const val SEARCH_DEBOUNCE_MILLIS = 450L
 
 /**
  * Center-pin location picker: the map pans under a fixed center pin; confirming
@@ -105,6 +109,22 @@ internal fun LocationPickerView(
     var searching by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+
+    // Live suggestions: each keystroke restarts this effect, so the delay acts as
+    // a debounce — the geocoder only runs once typing pauses briefly.
+    LaunchedEffect(query) {
+        val trimmed = query.trim()
+        if (trimmed.length < MIN_QUERY_LENGTH) {
+            results = emptyList()
+            searched = false
+            return@LaunchedEffect
+        }
+        delay(SEARCH_DEBOUNCE_MILLIS)
+        searching = true
+        results = geocoder.search(trimmed)
+        searched = true
+        searching = false
+    }
 
     fun runSearch() {
         if (query.isBlank() || searching) return
