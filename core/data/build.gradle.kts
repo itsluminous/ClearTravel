@@ -38,12 +38,18 @@ android {
 dependencies {
     api(project(":core:model"))
     implementation(project(":core:database"))
+    // ADR-031: the vault keys the SQLCipher open-helper and the file cipher.
+    implementation(project(":core:security"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
+    // ADR-031: SQLCipher-backed Room (androidx.sqlite pinned to the version SQLCipher targets).
+    implementation(libs.sqlcipher.android)
+    implementation(libs.androidx.sqlite)
+    implementation(libs.androidx.sqlite.framework)
 
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
