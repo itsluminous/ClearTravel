@@ -48,6 +48,14 @@ internal sealed interface TrainsScreen {
          * page on success (ADR-019) and the list on close.
          */
         val returnTo: TrainsScreen = List,
+        /**
+         * Started hands-free off the first PNR check of a quick add (ADR-023 chain)
+         * rather than by the user opening it. A chained fetch lands back on the LIST
+         * on success (the "N stations loaded" snackbar tells the story); only an
+         * explicitly opened fetch lands on the offline route page — see
+         * [routeFetchLanding].
+         */
+        val chained: Boolean = false,
     ) : TrainsScreen
 
     /** The OFFLINE seat map (ADR-022) — coach strip + berth grid from Room. */
@@ -102,3 +110,21 @@ private fun backToOpener(
     ticketId: String,
     fromDetail: Boolean,
 ): TrainsBackTarget = TrainsBackTarget(TrainsScreen.List, detailTicketId = ticketId.takeIf { fromDetail })
+
+/**
+ * Where the Trains segment lands once a route fetch has APPLIED its result.
+ *
+ * - Opened from the seat map (ADR-022) or the offline route page's refresh → back to
+ *   that screen, which now renders the fresh data from Room.
+ * - Chained off a quick add's first PNR check ([TrainsScreen.RouteFetch.chained]) →
+ *   the list: the user never asked for the route page, so the chain closes where it
+ *   started and the "N stations loaded" snackbar reports the outcome.
+ * - Explicitly opened from the list / detail sheet (place pin) → the offline route
+ *   page, so the freshly fetched route is immediately visible (ADR-019).
+ */
+internal fun routeFetchLanding(fetch: TrainsScreen.RouteFetch): TrainsScreen =
+    when {
+        fetch.returnTo is TrainsScreen.SeatMap || fetch.returnTo is TrainsScreen.RouteView -> fetch.returnTo
+        fetch.chained -> TrainsScreen.List
+        else -> TrainsScreen.RouteView(ticketId = fetch.ticketId, trainNumber = fetch.trainNumber)
+    }

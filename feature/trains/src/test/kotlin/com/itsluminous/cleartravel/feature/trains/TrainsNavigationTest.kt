@@ -3,7 +3,7 @@ package com.itsluminous.cleartravel.feature.trains
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
-/** The one-step-back map behind the Trains segment's system-back handling. */
+/** The one-step-back map behind the Trains segment's system-back handling, and the route-fetch landing. */
 class TrainsNavigationTest {
     @Test
     fun `bare list does not handle back`() {
@@ -77,6 +77,41 @@ class TrainsNavigationTest {
         screens.forEach { screen ->
             assertThat(trainsBackTarget(screen, detailTicketId = null)).isNotNull()
         }
+    }
+
+    // --- routeFetchLanding: where an APPLIED route fetch ends up ---
+
+    @Test
+    fun `explicit route fetch from the list lands on the offline route page`() {
+        assertThat(routeFetchLanding(TrainsScreen.RouteFetch(TICKET, TRAIN)))
+            .isEqualTo(TrainsScreen.RouteView(TICKET, TRAIN))
+    }
+
+    @Test
+    fun `chained route fetch closes to the list`() {
+        assertThat(routeFetchLanding(TrainsScreen.RouteFetch(TICKET, TRAIN, chained = true)))
+            .isEqualTo(TrainsScreen.List)
+    }
+
+    @Test
+    fun `route fetch opened from the seat map returns to that seat map`() {
+        val seatMap = TrainsScreen.SeatMap(TICKET, TRAIN, fromDetail = true)
+        assertThat(routeFetchLanding(TrainsScreen.RouteFetch(TICKET, TRAIN, returnTo = seatMap))).isEqualTo(seatMap)
+        // An opener always wins over the chained flag (it cannot be chained anyway).
+        assertThat(routeFetchLanding(TrainsScreen.RouteFetch(TICKET, TRAIN, returnTo = seatMap, chained = true)))
+            .isEqualTo(seatMap)
+    }
+
+    @Test
+    fun `route page refresh returns to that route page`() {
+        val routeView = TrainsScreen.RouteView(TICKET, TRAIN, fromDetail = true)
+        assertThat(routeFetchLanding(TrainsScreen.RouteFetch(TICKET, TRAIN, returnTo = routeView))).isEqualTo(routeView)
+    }
+
+    @Test
+    fun `chained route fetch still backs out to the list`() {
+        assertThat(trainsBackTarget(TrainsScreen.RouteFetch(TICKET, TRAIN, chained = true), detailTicketId = null))
+            .isEqualTo(TrainsBackTarget(TrainsScreen.List))
     }
 
     private companion object {

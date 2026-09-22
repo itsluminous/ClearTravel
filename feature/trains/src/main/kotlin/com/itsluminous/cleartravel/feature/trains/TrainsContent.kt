@@ -324,7 +324,14 @@ fun TrainsContent(
                         if (card?.hasRoute != true && trainNumber.isNotBlank()) {
                             // Chain the hands-free route fetch so departure times and
                             // coach positions land right after the first PNR check.
-                            screen = TrainsScreen.RouteFetch(ticketId = current.ticketId, trainNumber = trainNumber)
+                            // Chained: on success it closes back to the list rather
+                            // than the route page the user never asked to open.
+                            screen =
+                                TrainsScreen.RouteFetch(
+                                    ticketId = current.ticketId,
+                                    trainNumber = trainNumber,
+                                    chained = true,
+                                )
                         } else {
                             screen = TrainsScreen.List
                         }
@@ -341,18 +348,11 @@ fun TrainsContent(
                     ticketId = current.ticketId,
                     trainNumber = current.trainNumber,
                     onApplied = { stationCount ->
-                        // Land on the OFFLINE route page so the freshly fetched
-                        // route is immediately visible from Room (ADR-019) — or
-                        // back on the seat map when the fetch started there.
-                        screen =
-                            when (val returnTo = current.returnTo) {
-                                is TrainsScreen.SeatMap, is TrainsScreen.RouteView -> returnTo
-                                else ->
-                                    TrainsScreen.RouteView(
-                                        ticketId = current.ticketId,
-                                        trainNumber = current.trainNumber,
-                                    )
-                            }
+                        // Explicit fetch: land on the OFFLINE route page so the fresh
+                        // route is immediately visible from Room (ADR-019) — or back
+                        // on the seat map / route page when the fetch started there.
+                        // Chained off a quick add's PNR check: close to the list.
+                        screen = routeFetchLanding(current)
                         scope.launch {
                             snackbarHostState.showSnackbar(
                                 context.getString(R.string.trains_route_fetch_applied, stationCount),
