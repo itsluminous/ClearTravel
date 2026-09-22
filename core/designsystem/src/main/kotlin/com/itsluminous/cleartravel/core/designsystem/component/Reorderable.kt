@@ -25,8 +25,10 @@ import androidx.compose.ui.zIndex
 import com.itsluminous.cleartravel.core.designsystem.R
 
 /**
- * Drag-to-reorder state for a `LazyColumn` whose ONLY children are the reorderable
- * items (no headers — layout indices must equal list indices).
+ * Drag-to-reorder state for the rows of a `LazyColumn` that belong to [items]. The
+ * column may hold other rows too (section headers, several independent reorderable
+ * sections each with their own state, ADR-029): rows are matched by key, so a row
+ * outside this list is never a drop target and a drag cannot leave its section.
  *
  * The state owns a locally reordered copy of the caller's list ([items]) so the row
  * under the finger swaps with its neighbours live while dragging (neighbours slide via
@@ -86,9 +88,12 @@ class ReorderableListState<T> internal constructor(
             lazyListState.layoutInfo.visibleItemsInfo.firstOrNull { info ->
                 info.key != draggingKey && centre >= info.offset && centre < info.offset + info.size
             } ?: return
-        val from = dragged.index
-        val to = target.index
-        if (from == to || to !in items.indices) return
+        // Positions are resolved by KEY, not layout index, so a LazyColumn may hold
+        // rows that are not part of this list (section headers, other sections): they
+        // are simply never a drop target and the drag stays within its own list.
+        val from = items.indexOfFirst { key(it) == draggingKey }
+        val to = items.indexOfFirst { key(it) == target.key }
+        if (from < 0 || to < 0 || from == to) return
         items = items.moved(from, to)
         currentIndex = to
         // Keep the dragged row under the finger: compensate for the layout offset it

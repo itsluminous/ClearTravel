@@ -11,13 +11,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.EventNote
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,6 +35,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -52,6 +52,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
+import com.itsluminous.cleartravel.core.designsystem.component.ReorderHandle
+import com.itsluminous.cleartravel.core.designsystem.component.ReorderableListState
+import com.itsluminous.cleartravel.core.designsystem.component.rememberReorderableListState
+import com.itsluminous.cleartravel.core.designsystem.component.reorderableItem
 import com.itsluminous.cleartravel.core.model.ItineraryItem
 import com.itsluminous.cleartravel.core.model.ItineraryItemType
 import com.itsluminous.cleartravel.core.model.JourneyType
@@ -168,7 +172,7 @@ internal fun TripDetailScreen(
                     TimelineView(
                         days = days,
                         onItemClick = { sheetItem = it },
-                        onMove = viewModel::moveItem,
+                        onReorder = viewModel::reorderDay,
                     )
                 VIEW_MAP ->
                     TripMapView(
@@ -224,7 +228,7 @@ internal fun TripDetailScreen(
 private fun TimelineView(
     days: List<ItineraryDay>,
     onItemClick: (ItineraryItem) -> Unit,
-    onMove: (itemId: String, delta: Int) -> Unit,
+    onReorder: (dayIndex: Int, from: Int, to: Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (days.isEmpty()) {
@@ -236,23 +240,40 @@ private fun TimelineView(
         )
         return
     }
+    val lazyListState = rememberLazyListState()
+    // One drag-reorder state PER DAY over the shared list state (ADR-029): rows are
+    // matched by key, so the day headers and the other days' rows are never drop
+    // targets — a drag rewrites the explicit order within its own day only.
+    val dayStates =
+        days.map { day ->
+            key(day.dayIndex) {
+                rememberReorderableListState(
+                    items = day.items,
+                    key = { it.id },
+                    onDrop = { from, to -> onReorder(day.dayIndex, from, to) },
+                    lazyListState = lazyListState,
+                )
+            }
+        }
     LazyColumn(
+        state = lazyListState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        days.forEach { day ->
+        days.forEachIndexed { position, day ->
+            val reorderState = dayStates[position]
             item(key = "day-${day.dayIndex}") {
                 DayHeader(day = day)
             }
-            day.items.forEachIndexed { index, dayItem ->
+            // Render the reorder state's copy: it is the live order while a drag is active.
+            reorderState.items.forEach { dayItem ->
                 item(key = dayItem.id) {
                     ItineraryItemCard(
                         item = dayItem,
-                        canMoveUp = index > 0,
-                        canMoveDown = index < day.items.lastIndex,
+                        reorderState = reorderState,
                         onClick = { onItemClick(dayItem) },
-                        onMove = { delta -> onMove(dayItem.id, delta) },
+                        modifier = Modifier.reorderableItem(reorderState, dayItem.id, this),
                     )
                 }
             }
@@ -294,17 +315,17 @@ private fun DayHeader(
 @Composable
 private fun ItineraryItemCard(
     item: ItineraryItem,
-    canMoveUp: Boolean,
-    canMoveDown: Boolean,
+    reorderState: ReorderableListState<ItineraryItem>,
     onClick: () -> Unit,
-    onMove: (delta: Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     ElevatedCard(onClick = onClick, modifier = modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(start = 4.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            // Manual override of the time-based order (ADR-029): drag by the handle.
+            ReorderHandle(state = reorderState, itemKey = item.id)
             val isCommute = item.type == ItineraryItemType.COMMUTE
             ExplainableIcon(
                 icon = if (isCommute) item.commuteMode.icon() else item.category.icon(),
@@ -339,22 +360,6 @@ private fun ItineraryItemCard(
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
-            }
-            if (canMoveUp) {
-                ExplainableIcon(
-                    icon = Icons.Filled.KeyboardArrowUp,
-                    explanationRes = R.string.itinerary_move_up,
-                    targetSize = 36.dp,
-                    onClick = { onMove(-1) },
-                )
-            }
-            if (canMoveDown) {
-                ExplainableIcon(
-                    icon = Icons.Filled.KeyboardArrowDown,
-                    explanationRes = R.string.itinerary_move_down,
-                    targetSize = 36.dp,
-                    onClick = { onMove(1) },
-                )
             }
         }
     }

@@ -13,7 +13,7 @@ import com.itsluminous.cleartravel.feature.itinerary.logic.ItineraryDay
 import com.itsluminous.cleartravel.feature.itinerary.logic.TripMapContent
 import com.itsluminous.cleartravel.feature.itinerary.logic.buildTripMapContent
 import com.itsluminous.cleartravel.feature.itinerary.logic.groupItemsByDay
-import com.itsluminous.cleartravel.feature.itinerary.logic.moveWithinDay
+import com.itsluminous.cleartravel.feature.itinerary.logic.reorderWithinDay
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -65,12 +65,17 @@ class TripDetailViewModel
         private val _message = MutableStateFlow<ItineraryMessage?>(null)
         val message: StateFlow<ItineraryMessage?> = _message.asStateFlow()
 
-        /** Moves an item one step within its day; no-op at the edges. */
-        fun moveItem(
-            itemId: String,
-            delta: Int,
+        /**
+         * Drag-to-reorder drop within one day (ADR-029): [from]/[to] are positions in
+         * that day's displayed list. Rewrites only the rows whose order changed; a
+         * same-position or out-of-range drop persists nothing.
+         */
+        fun reorderDay(
+            dayIndex: Int,
+            from: Int,
+            to: Int,
         ) {
-            val updates = moveWithinDay(items.value, itemId, delta)
+            val updates = reorderWithinDay(items.value, dayIndex, from, to)
             if (updates.isEmpty()) return
             viewModelScope.launch { itineraryRepository.saveAll(updates) }
         }

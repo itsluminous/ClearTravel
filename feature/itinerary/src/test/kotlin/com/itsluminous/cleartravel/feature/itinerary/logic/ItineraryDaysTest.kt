@@ -4,6 +4,7 @@ import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import org.junit.Test
 import java.time.LocalDate
+import java.time.LocalTime
 
 class ItineraryDaysTest {
     @Test
@@ -69,26 +70,72 @@ class ItineraryDaysTest {
         assertThat(nextOrderInDay(items, 2)).isEqualTo(0)
     }
 
+    // ADR-029: a drag drop rewrites the day's explicit order — only the rows that moved.
     @Test
-    fun `moveWithinDay swaps neighbours and returns only changed rows`() {
-        val first = Fixtures.itineraryItem(id = "a", dayIndex = 0, orderInDay = 0, name = "A")
-        val second = Fixtures.itineraryItem(id = "b", dayIndex = 0, orderInDay = 1, name = "B")
-        val otherDay = Fixtures.itineraryItem(id = "c", dayIndex = 1, orderInDay = 0, name = "C")
+    fun `reorderWithinDay moves the dragged row and renumbers only the affected rows`() {
+        val a = Fixtures.itineraryItem(id = "a", dayIndex = 0, orderInDay = 0, name = "A")
+        val b = Fixtures.itineraryItem(id = "b", dayIndex = 0, orderInDay = 1, name = "B")
+        val c = Fixtures.itineraryItem(id = "c", dayIndex = 0, orderInDay = 2, name = "C")
+        val otherDay = Fixtures.itineraryItem(id = "d", dayIndex = 1, orderInDay = 0, name = "D")
 
-        val updates = moveWithinDay(listOf(first, second, otherDay), itemId = "b", delta = -1)
+        val updates = reorderWithinDay(listOf(a, b, c, otherDay), dayIndex = 0, from = 2, to = 0)
 
         assertThat(updates.map { it.id to it.orderInDay })
-            .containsExactly("b" to 0, "a" to 1)
+            .containsExactly("c" to 0, "a" to 1, "b" to 2)
     }
 
     @Test
-    fun `moveWithinDay at the edge changes nothing`() {
-        val first = Fixtures.itineraryItem(id = "a", dayIndex = 0, orderInDay = 0)
-        val second = Fixtures.itineraryItem(id = "b", dayIndex = 0, orderInDay = 1)
+    fun `reorderWithinDay ignores same-position and out-of-range drops`() {
+        val a = Fixtures.itineraryItem(id = "a", dayIndex = 0, orderInDay = 0)
+        val b = Fixtures.itineraryItem(id = "b", dayIndex = 0, orderInDay = 1)
 
-        assertThat(moveWithinDay(listOf(first, second), itemId = "a", delta = -1)).isEmpty()
-        assertThat(moveWithinDay(listOf(first, second), itemId = "b", delta = 1)).isEmpty()
-        assertThat(moveWithinDay(listOf(first, second), itemId = "missing", delta = 1)).isEmpty()
+        assertThat(reorderWithinDay(listOf(a, b), dayIndex = 0, from = 1, to = 1)).isEmpty()
+        assertThat(reorderWithinDay(listOf(a, b), dayIndex = 0, from = 0, to = 5)).isEmpty()
+        assertThat(reorderWithinDay(listOf(a, b), dayIndex = 3, from = 0, to = 1)).isEmpty()
+    }
+
+    // ADR-029 auto-sort: timed items ascending, untimed last, stable otherwise.
+    @Test
+    fun `sortDayByTime orders timed items by time and puts untimed items last`() {
+        val late = Fixtures.itineraryItem(id = "late", dayIndex = 0, orderInDay = 0, plannedTime = "18:30")
+        val untimed = Fixtures.itineraryItem(id = "none", dayIndex = 0, orderInDay = 1, plannedTime = "")
+        val early = Fixtures.itineraryItem(id = "early", dayIndex = 0, orderInDay = 2, plannedTime = "09:15")
+        val otherDay = Fixtures.itineraryItem(id = "other", dayIndex = 1, orderInDay = 0, plannedTime = "01:00")
+
+        val updates = sortDayByTime(listOf(late, untimed, early, otherDay), dayIndex = 0)
+
+        assertThat(updates.map { it.id to it.orderInDay })
+            .containsExactly("early" to 0, "late" to 1, "none" to 2)
+    }
+
+    @Test
+    fun `sortDayByTime is stable for ties and untimed items and reports nothing when already sorted`() {
+        val a = Fixtures.itineraryItem(id = "a", dayIndex = 0, orderInDay = 0, plannedTime = "10:00")
+        val b = Fixtures.itineraryItem(id = "b", dayIndex = 0, orderInDay = 1, plannedTime = "10:00")
+        val c = Fixtures.itineraryItem(id = "c", dayIndex = 0, orderInDay = 2, plannedTime = "")
+        val d = Fixtures.itineraryItem(id = "d", dayIndex = 0, orderInDay = 3, plannedTime = "notes")
+
+        assertThat(sortDayByTime(listOf(d, c, b, a), dayIndex = 0)).isEmpty()
+    }
+
+    @Test
+    fun `sortDayByTime treats an unparseable time as unscheduled`() {
+        val garbage = Fixtures.itineraryItem(id = "g", dayIndex = 0, orderInDay = 0, plannedTime = "evening")
+        val timed = Fixtures.itineraryItem(id = "t", dayIndex = 0, orderInDay = 1, plannedTime = "7:05")
+
+        assertThat(sortDayByTime(listOf(garbage, timed), dayIndex = 0).map { it.id to it.orderInDay })
+            .containsExactly("t" to 0, "g" to 1)
+    }
+
+    @Test
+    fun `parsePlannedTime accepts HH-mm and H-mm and rejects everything else`() {
+        assertThat(parsePlannedTime("09:05")).isEqualTo(LocalTime.of(9, 5))
+        assertThat(parsePlannedTime(" 7:30 ")).isEqualTo(LocalTime.of(7, 30))
+        assertThat(parsePlannedTime("23:59")).isEqualTo(LocalTime.of(23, 59))
+        assertThat(parsePlannedTime("24:00")).isNull()
+        assertThat(parsePlannedTime("10:60")).isNull()
+        assertThat(parsePlannedTime("")).isNull()
+        assertThat(parsePlannedTime("around 10")).isNull()
     }
 
     @Test

@@ -1,11 +1,17 @@
 package com.itsluminous.cleartravel.feature.itinerary.logic
 
+import com.itsluminous.cleartravel.core.designsystem.component.moved
 import com.itsluminous.cleartravel.core.model.ItineraryItem
 import com.itsluminous.cleartravel.core.model.Trip
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.temporal.ChronoUnit
 
-/** One day bucket of a trip's itinerary: items ordered by [ItineraryItem.orderInDay]. */
+/**
+ * One day bucket of a trip's itinerary: items ordered by [ItineraryItem.orderInDay] —
+ * the single source of truth for display order (ADR-029). Time-based auto-sort and
+ * manual drags both WRITE `orderInDay`; grouping never re-sorts by time on read.
+ */
 data class ItineraryDay(
     /** 0-based day within the trip ("Day 1" renders dayIndex 0). */
     val dayIndex: Int,
@@ -40,29 +46,65 @@ fun nextOrderInDay(
 ): Int = (items.filter { it.dayIndex == dayIndex }.maxOfOrNull { it.orderInDay } ?: -1) + 1
 
 /**
- * Moves [itemId] one step within its day ([delta] -1 = up, +1 = down) and returns
- * ONLY the rows whose `orderInDay` changed (ready for `saveAll`). Returns empty when
- * the item is absent or already at the edge — nothing to persist.
+ * Moves the item at [from] to [to] within [dayIndex] (positions in the day's
+ * `orderInDay`-sorted list, as the drag helper reports them) and returns ONLY the
+ * rows whose `orderInDay` changed (ready for `saveAll`). ADR-029: a manual drag
+ * rewrites the day's explicit order, which stays the source of truth until an item's
+ * time is next set or changed. Empty when the indices are out of range or equal.
  */
-fun moveWithinDay(
+fun reorderWithinDay(
     items: List<ItineraryItem>,
-    itemId: String,
-    delta: Int,
+    dayIndex: Int,
+    from: Int,
+    to: Int,
 ): List<ItineraryItem> {
-    val item = items.firstOrNull { it.id == itemId } ?: return emptyList()
-    val dayItems =
-        items
-            .filter { it.dayIndex == item.dayIndex }
-            .sortedWith(compareBy({ it.orderInDay }, { it.name }))
-    val index = dayItems.indexOfFirst { it.id == itemId }
-    val targetIndex = index + delta
-    if (targetIndex !in dayItems.indices) return emptyList()
-    val reordered = dayItems.toMutableList()
-    reordered.add(targetIndex, reordered.removeAt(index))
-    return reordered.mapIndexedNotNull { position, row ->
+    val dayItems = sortedDay(items, dayIndex)
+    if (from == to || from !in dayItems.indices || to !in dayItems.indices) return emptyList()
+    return renumber(dayItems.moved(from, to))
+}
+
+/**
+ * Re-derives [dayIndex]'s `orderInDay` from planned times (ADR-029 auto-sort): timed
+ * items ascending, untimed items last; ties and untimed items keep their current
+ * relative order (stable). Returns ONLY the rows whose `orderInDay` changed.
+ * Callers apply it whenever an item's time is set or changed — never on read.
+ */
+fun sortDayByTime(
+    items: List<ItineraryItem>,
+    dayIndex: Int,
+): List<ItineraryItem> {
+    val dayItems = sortedDay(items, dayIndex)
+    val sorted = dayItems.sortedWith(compareBy(nullsLast()) { parsePlannedTime(it.plannedTime) })
+    return renumber(sorted)
+}
+
+/**
+ * The "HH:mm" (or "H:mm") planned time as a [LocalTime]; null for blank or unparseable
+ * text, so free-form notes in the field simply sort as "unscheduled".
+ */
+fun parsePlannedTime(text: String): LocalTime? {
+    val match = TIME_PATTERN.matchEntire(text.trim()) ?: return null
+    val hour = match.groupValues[1].toInt()
+    val minute = match.groupValues[2].toInt()
+    if (hour > 23 || minute > 59) return null
+    return LocalTime.of(hour, minute)
+}
+
+private val TIME_PATTERN = Regex("""(\d{1,2}):(\d{2})""")
+
+private fun sortedDay(
+    items: List<ItineraryItem>,
+    dayIndex: Int,
+): List<ItineraryItem> =
+    items
+        .filter { it.dayIndex == dayIndex }
+        .sortedWith(compareBy({ it.orderInDay }, { it.name }))
+
+/** Assigns 0..n-1 positions and keeps only the rows that actually moved. */
+private fun renumber(ordered: List<ItineraryItem>): List<ItineraryItem> =
+    ordered.mapIndexedNotNull { position, row ->
         if (row.orderInDay == position) null else row.copy(orderInDay = position)
     }
-}
 
 /**
  * Number of day slots the item form offers: the trip's dated length when both dates

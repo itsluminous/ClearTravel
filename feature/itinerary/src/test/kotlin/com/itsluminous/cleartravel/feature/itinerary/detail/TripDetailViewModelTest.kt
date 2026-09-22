@@ -66,14 +66,14 @@ class TripDetailViewModelTest {
         }
 
     @Test
-    fun `moveItem persists the swapped ordering`() =
+    fun `reorderDay persists the dropped ordering`() =
         runTest {
             val first = Fixtures.itineraryItem(id = "a", tripId = TRIP_ID, dayIndex = 0, orderInDay = 0, name = "A")
             val second = Fixtures.itineraryItem(id = "b", tripId = TRIP_ID, dayIndex = 0, orderInDay = 1, name = "B")
             itineraryRepository.items.value = listOf(first, second)
             val viewModel = viewModel()
 
-            viewModel.moveItem("b", -1)
+            viewModel.reorderDay(dayIndex = 0, from = 1, to = 0)
 
             val byId = itineraryRepository.items.value.associateBy { it.id }
             assertThat(byId.getValue("b").orderInDay).isEqualTo(0)
@@ -81,13 +81,13 @@ class TripDetailViewModelTest {
         }
 
     @Test
-    fun `moveItem at the edge persists nothing`() =
+    fun `reorderDay with a same-position drop persists nothing`() =
         runTest {
             val first = Fixtures.itineraryItem(id = "a", tripId = TRIP_ID, dayIndex = 0, orderInDay = 0)
             itineraryRepository.items.value = listOf(first)
             val viewModel = viewModel()
 
-            viewModel.moveItem("a", -1)
+            viewModel.reorderDay(dayIndex = 0, from = 0, to = 0)
 
             assertThat(
                 itineraryRepository.items.value

@@ -55,8 +55,6 @@
     <string name="itinerary_add_item">Add itinerary item</string>
     <string name="itinerary_empty_items_title">Nothing planned yet</string>
     <string name="itinerary_empty_items_message">Add places and commute legs to build the day-wise plan.</string>
-    <string name="itinerary_move_up">Move up within the day</string>
-    <string name="itinerary_move_down">Move down within the day</string>
     <string name="itinerary_commute_route">%1$s → %2$s</string>
     <string name="itinerary_trip_missing_title">Trip not found</string>
     <string name="itinerary_trip_missing_message">This trip no longer exists.</string>

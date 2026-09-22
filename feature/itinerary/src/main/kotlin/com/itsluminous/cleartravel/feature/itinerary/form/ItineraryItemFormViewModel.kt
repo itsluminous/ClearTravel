@@ -25,6 +25,7 @@ import com.itsluminous.cleartravel.feature.itinerary.logic.dateForDay
 import com.itsluminous.cleartravel.feature.itinerary.logic.dayCount
 import com.itsluminous.cleartravel.feature.itinerary.logic.dayIndexFor
 import com.itsluminous.cleartravel.feature.itinerary.logic.nextOrderInDay
+import com.itsluminous.cleartravel.feature.itinerary.logic.sortDayByTime
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -280,7 +281,8 @@ class ItineraryItemFormViewModel
                     } else {
                         state.name.trim()
                     }
-                itineraryRepository.save(
+                val plannedTime = state.plannedTime.trim()
+                val candidate =
                     base.copy(
                         dayIndex = state.dayIndex,
                         date = dateForDay(trip.value, state.dayIndex),
@@ -289,7 +291,7 @@ class ItineraryItemFormViewModel
                         name = name,
                         latitude = if (isCommute) null else state.latitude,
                         longitude = if (isCommute) null else state.longitude,
-                        plannedTime = state.plannedTime.trim(),
+                        plannedTime = plannedTime,
                         note = state.note.trim(),
                         category = state.category,
                         link = state.link.trim(),
@@ -298,8 +300,19 @@ class ItineraryItemFormViewModel
                         toName = if (isCommute) state.toName.trim() else "",
                         linkedJourneyId = if (isCommute) state.linkedJourneyId else null,
                         linkedJourneyType = if (isCommute) state.linkedJourneyType else null,
-                    ),
-                )
+                    )
+                // ADR-029 auto-sort: a new item, a day move, or a set/changed time
+                // re-derives the day's order from planned times. Any other edit leaves
+                // the day's explicit order (possibly hand-dragged) untouched.
+                val resort = existingItem == null || dayChanged || plannedTime != base.plannedTime
+                val reordered =
+                    if (resort) {
+                        sortDayByTime(itemsForTrip.value.filter { it.id != candidate.id } + candidate, state.dayIndex)
+                    } else {
+                        emptyList()
+                    }
+                itineraryRepository.save(reordered.firstOrNull { it.id == candidate.id } ?: candidate)
+                reordered.filter { it.id != candidate.id }.takeIf { it.isNotEmpty() }?.let { itineraryRepository.saveAll(it) }
                 _message.value = ItineraryMessage.ITEM_SAVED
                 _saved.value = true
             }

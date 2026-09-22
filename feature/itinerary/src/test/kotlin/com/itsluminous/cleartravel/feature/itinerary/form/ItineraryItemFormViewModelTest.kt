@@ -114,9 +114,98 @@ class ItineraryItemFormViewModelTest {
             assertThat(viewModel.saved.value).isTrue()
             val saved = itineraryRepository.items.value.first { it.name == "Fort" }
             assertThat(saved.dayIndex).isEqualTo(1)
-            assertThat(saved.orderInDay).isEqualTo(4)
+            // ADR-029: the day is re-derived on save — the untimed newcomer sorts after
+            // the existing (timed) item, and the day is renumbered from 0.
+            assertThat(saved.orderInDay).isEqualTo(1)
             assertThat(saved.date).isEqualTo(LocalDate.parse("2026-09-21"))
             assertThat(saved.latitude).isEqualTo(15.5)
+        }
+
+    // ADR-029 auto-sort: setting a time places the item by time within its day.
+    @Test
+    fun `saving an item with a time slots it between its neighbours by time`() =
+        runTest {
+            itineraryRepository.items.value =
+                listOf(
+                    Fixtures.itineraryItem(id = "morning", tripId = TRIP_ID, dayIndex = 0, orderInDay = 0, plannedTime = "09:00"),
+                    Fixtures.itineraryItem(id = "evening", tripId = TRIP_ID, dayIndex = 0, orderInDay = 1, plannedTime = "19:00"),
+                    Fixtures.itineraryItem(id = "unplanned", tripId = TRIP_ID, dayIndex = 0, orderInDay = 2, plannedTime = ""),
+                )
+            val viewModel = viewModel(dayIndex = 0)
+            viewModel.update { it.copy(name = "Lunch", plannedTime = "13:00") }
+
+            viewModel.save()
+
+            val order =
+                itineraryRepository.items.value
+                    .sortedBy { it.orderInDay }
+                    .map { it.name.ifBlank { it.id } }
+            assertThat(
+                itineraryRepository.items.value
+                    .first { it.name == "Lunch" }
+                    .orderInDay,
+            ).isEqualTo(1)
+            assertThat(
+                itineraryRepository.items.value
+                    .first { it.id == "evening" }
+                    .orderInDay,
+            ).isEqualTo(2)
+            assertThat(
+                itineraryRepository.items.value
+                    .first { it.id == "unplanned" }
+                    .orderInDay,
+            ).isEqualTo(3)
+            assertThat(order).hasSize(4)
+        }
+
+    @Test
+    fun `changing an item's time re-sorts its day`() =
+        runTest {
+            val first = Fixtures.itineraryItem(id = "a", tripId = TRIP_ID, dayIndex = 0, orderInDay = 0, plannedTime = "09:00", name = "A")
+            val second = Fixtures.itineraryItem(id = "b", tripId = TRIP_ID, dayIndex = 0, orderInDay = 1, plannedTime = "11:00", name = "B")
+            itineraryRepository.items.value = listOf(first, second)
+            val viewModel = viewModel(itemId = "a")
+            viewModel.update { it.copy(plannedTime = "12:30") }
+
+            viewModel.save()
+
+            val byId = itineraryRepository.items.value.associateBy { it.id }
+            assertThat(byId.getValue("b").orderInDay).isEqualTo(0)
+            assertThat(byId.getValue("a").orderInDay).isEqualTo(1)
+        }
+
+    @Test
+    fun `editing anything but the time keeps a hand-dragged order`() =
+        runTest {
+            // Dragged out of time order on purpose: the late item first.
+            val late =
+                Fixtures.itineraryItem(
+                    id = "late",
+                    tripId = TRIP_ID,
+                    dayIndex = 0,
+                    orderInDay = 0,
+                    plannedTime = "18:00",
+                    name = "Late",
+                )
+            val early =
+                Fixtures.itineraryItem(
+                    id = "early",
+                    tripId = TRIP_ID,
+                    dayIndex = 0,
+                    orderInDay = 1,
+                    plannedTime = "08:00",
+                    name = "Early",
+                )
+            itineraryRepository.items.value = listOf(late, early)
+            val viewModel = viewModel(itemId = "early")
+            viewModel.update { it.copy(note = "bring the tickets") }
+
+            viewModel.save()
+
+            val byId = itineraryRepository.items.value.associateBy { it.id }
+            assertThat(byId.getValue("late").orderInDay).isEqualTo(0)
+            assertThat(byId.getValue("early").orderInDay).isEqualTo(1)
+            assertThat(byId.getValue("early").note).isEqualTo("bring the tickets")
         }
 
     @Test
