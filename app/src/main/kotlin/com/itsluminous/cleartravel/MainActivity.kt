@@ -28,11 +28,13 @@ import com.itsluminous.cleartravel.core.notifications.NotificationChannelRegistr
 import com.itsluminous.cleartravel.core.notifications.NotificationPermissions
 import com.itsluminous.cleartravel.feature.flights.FlightsEntryRequest
 import com.itsluminous.cleartravel.feature.flights.FlightsExternalEntry
+import com.itsluminous.cleartravel.feature.itinerary.TripsLanding
 import com.itsluminous.cleartravel.feature.trains.TrainsEntryRequest
 import com.itsluminous.cleartravel.feature.trains.TrainsExternalEntry
 import com.itsluminous.cleartravel.feature.trains.share.TicketShareLinks
 import com.itsluminous.cleartravel.startup.AppStartupTasks
 import com.itsluminous.cleartravel.ui.ClearTravelApp
+import com.itsluminous.cleartravel.ui.JourneyPickCoordinator
 import com.itsluminous.cleartravel.ui.JourneysDeepLink
 import com.itsluminous.cleartravel.ui.ThemeViewModel
 import com.itsluminous.cleartravel.ui.intake.IntakeRoute
@@ -57,6 +59,9 @@ class MainActivity : ComponentActivity() {
 
     /** Pending notification deep link (ADR-013 contract); cleared once consumed. */
     private val pendingDeepLink = mutableStateOf<JourneysDeepLink?>(null)
+
+    /** Pending Trips-tab landing (ADR-028: "Part of" row, or the journey-add return); cleared once consumed. */
+    private val pendingTripsLanding = mutableStateOf<TripsLanding?>(null)
 
     /**
      * Pending external entry into a feature form — shared IRCTC text or a confirmed
@@ -86,9 +91,16 @@ class MainActivity : ComponentActivity() {
 
         val themeViewModel: ThemeViewModel by viewModels()
         val intakeViewModel: SharedFileIntakeViewModel by viewModels()
+        val pickCoordinator: JourneyPickCoordinator by viewModels()
         setContent {
             val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
             NotificationPermissionEffect()
+            // ADR-028: an itinerary leg asked for a new journey → land on Journeys in
+            // pick mode. Keyed on the request so it fires once per request.
+            val pickRequest by pickCoordinator.pendingRequest.collectAsStateWithLifecycle()
+            LaunchedEffect(pickRequest) {
+                pickRequest?.let { pendingDeepLink.value = JourneysDeepLink.forJourneyAdd(it) }
+            }
             ClearTravelTheme(darkTheme = themeMode.resolveDarkTheme()) {
                 when (val entry = pendingEntry.value) {
                     // External entry: a feature's add form rendered over the shell
@@ -125,6 +137,16 @@ class MainActivity : ComponentActivity() {
                         ClearTravelApp(
                             journeysDeepLink = pendingDeepLink.value,
                             onJourneysDeepLinkConsumed = { pendingDeepLink.value = null },
+                            tripsLanding = pendingTripsLanding.value,
+                            onTripsLandingConsumed = { pendingTripsLanding.value = null },
+                            onOpenJourney = { type, id -> pendingDeepLink.value = JourneysDeepLink.forJourney(type, id) },
+                            onOpenTrip = { tripId -> pendingTripsLanding.value = TripsLanding(tripId = tripId) },
+                            onJourneyAddDone = { result ->
+                                // Answer the bus FIRST so the restored itinerary form
+                                // already holds the linked journey, then go back.
+                                pickCoordinator.complete(result)
+                                pendingTripsLanding.value = TripsLanding(tripId = null)
+                            },
                         )
                 }
                 SharedFileIntakeHost(

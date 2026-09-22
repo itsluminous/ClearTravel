@@ -1,6 +1,8 @@
 package com.itsluminous.cleartravel.ui
 
 import android.content.Intent
+import com.itsluminous.cleartravel.core.data.crosstab.JourneyAddRequest
+import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.core.notifications.DeepLinkContract
 import com.itsluminous.cleartravel.feature.flights.FlightsEntryResult
 import com.itsluminous.cleartravel.feature.flights.FlightsLandingAction
@@ -13,17 +15,36 @@ import com.itsluminous.cleartravel.feature.trains.TrainsLandingAction
  * [trainsAction] / [flightsAction] for the respective segment (ADR-024/025). Built from notification deep links
  * (ADR-013's `DeepLinkContract` extras) and from external-entry outcomes (share
  * sheet / PNR links), so an added ticket is SHOWN instead of the app dropping back
- * on the Trips tab. [nonce] makes consecutive links to the same entity distinct so
- * effects re-fire.
+ * on the Trips tab. [addRequest] (ADR-028) instead puts the segment into pick mode:
+ * open the add flow for the itinerary leg that asked, and report the outcome back.
+ * [nonce] makes consecutive links to the same entity distinct so effects re-fire.
  */
 data class JourneysDeepLink(
     val target: String,
     val entityId: String?,
     val trainsAction: TrainsLandingAction = TrainsLandingAction.OPEN_DETAIL,
     val flightsAction: FlightsLandingAction = FlightsLandingAction.OPEN_DETAIL,
+    val addRequest: JourneyAddRequest? = null,
     val nonce: Long = System.nanoTime(),
 ) {
     companion object {
+        /** The contract target string for a journey [type]. */
+        fun targetFor(type: JourneyType): String =
+            when (type) {
+                JourneyType.TRAIN -> DeepLinkContract.TARGET_TRAIN
+                JourneyType.FLIGHT -> DeepLinkContract.TARGET_FLIGHT
+            }
+
+        /** ADR-028 part B: show a journey linked from an itinerary leg — its segment + detail sheet. */
+        fun forJourney(
+            type: JourneyType,
+            journeyId: String,
+        ): JourneysDeepLink = JourneysDeepLink(target = targetFor(type), entityId = journeyId)
+
+        /** ADR-028 part A: land on [request]'s segment in pick mode (add flow opens at once). */
+        fun forJourneyAdd(request: JourneyAddRequest): JourneysDeepLink =
+            JourneysDeepLink(target = targetFor(request.type), entityId = null, addRequest = request)
+
         /** Parses the contract extras from [intent]; null when absent/incomplete. */
         fun fromIntent(intent: Intent): JourneysDeepLink? {
             val target = intent.getStringExtra(DeepLinkContract.EXTRA_TARGET) ?: return null

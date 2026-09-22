@@ -27,11 +27,14 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.itsluminous.cleartravel.R
+import com.itsluminous.cleartravel.core.data.crosstab.JourneyAddResult
+import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.feature.checklist.CHECKLIST_ROUTE
 import com.itsluminous.cleartravel.feature.checklist.checklistGraph
 import com.itsluminous.cleartravel.feature.documents.DOCUMENTS_ROUTE
 import com.itsluminous.cleartravel.feature.documents.documentsGraph
 import com.itsluminous.cleartravel.feature.itinerary.TRIPS_ROUTE
+import com.itsluminous.cleartravel.feature.itinerary.TripsLanding
 import com.itsluminous.cleartravel.feature.itinerary.tripsGraph
 import com.itsluminous.cleartravel.feature.menu.MENU_ROUTE
 import com.itsluminous.cleartravel.feature.menu.menuGraph
@@ -56,28 +59,44 @@ private val topLevelDestinations =
  * App shell: the five-tab bottom-navigation scaffold hosting each feature's nav graph.
  * Tab switches follow the Material guidance — state is saved/restored per tab and
  * re-selecting pops to the tab root. A pending notification [journeysDeepLink]
- * navigates to the Journeys tab and is forwarded into the tab's graph.
+ * navigates to the Journeys tab and is forwarded into the tab's graph; a pending
+ * [tripsLanding] does the same for the Trips tab (ADR-028). Cross-tab intents raised
+ * inside the tabs — a linked journey tapped in an itinerary sheet
+ * ([onOpenJourney]), a "Part of" row tapped in a journey sheet ([onOpenTrip]), a
+ * finished journey-add pick ([onJourneyAddDone]) — are reported up to the activity,
+ * which turns them into the next pending landing.
  */
 @Composable
 fun ClearTravelApp(
     modifier: Modifier = Modifier,
     journeysDeepLink: JourneysDeepLink? = null,
     onJourneysDeepLinkConsumed: () -> Unit = {},
+    tripsLanding: TripsLanding? = null,
+    onTripsLandingConsumed: () -> Unit = {},
+    onOpenJourney: (JourneyType, String) -> Unit = { _, _ -> },
+    onOpenTrip: (tripId: String) -> Unit = {},
+    onJourneyAddDone: (JourneyAddResult) -> Unit = {},
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = backStackEntry?.destination
 
-    LaunchedEffect(journeysDeepLink) {
-        if (journeysDeepLink != null) {
-            navController.navigate(JOURNEYS_ROUTE) {
-                popUpTo(navController.graph.findStartDestination().id) {
-                    saveState = true
-                }
-                launchSingleTop = true
-                restoreState = true
+    /** The bottom-bar tab switch: save the leaving tab, restore the arriving one. */
+    fun switchTab(route: String) {
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
             }
+            launchSingleTop = true
+            restoreState = true
         }
+    }
+
+    LaunchedEffect(journeysDeepLink) {
+        if (journeysDeepLink != null) switchTab(JOURNEYS_ROUTE)
+    }
+    LaunchedEffect(tripsLanding) {
+        if (tripsLanding != null) switchTab(TRIPS_ROUTE)
     }
 
     Scaffold(
@@ -90,15 +109,7 @@ fun ClearTravelApp(
                     val label = stringResource(destination.labelRes)
                     NavigationBarItem(
                         selected = selected,
-                        onClick = {
-                            navController.navigate(destination.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
+                        onClick = { switchTab(destination.route) },
                         icon = { Icon(imageVector = destination.icon, contentDescription = null) },
                         label = { Text(label) },
                     )
@@ -115,10 +126,16 @@ fun ClearTravelApp(
                     .padding(padding)
                     .consumeWindowInsets(padding),
         ) {
-            tripsGraph()
+            tripsGraph(
+                landing = tripsLanding,
+                onLandingConsumed = onTripsLandingConsumed,
+                onOpenJourney = onOpenJourney,
+            )
             journeysGraph(
                 deepLink = journeysDeepLink,
                 onDeepLinkConsumed = onJourneysDeepLinkConsumed,
+                onJourneyAddDone = onJourneyAddDone,
+                onOpenTrip = onOpenTrip,
             )
             checklistGraph()
             documentsGraph()

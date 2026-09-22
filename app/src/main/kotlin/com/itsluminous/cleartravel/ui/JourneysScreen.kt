@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -20,9 +21,14 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import com.itsluminous.cleartravel.R
+import com.itsluminous.cleartravel.core.data.crosstab.JourneyAddRequest
+import com.itsluminous.cleartravel.core.data.crosstab.JourneyAddResult
+import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.core.notifications.DeepLinkContract
+import com.itsluminous.cleartravel.feature.flights.FlightsAddRequest
 import com.itsluminous.cleartravel.feature.flights.FlightsContent
 import com.itsluminous.cleartravel.feature.flights.FlightsLandingAction
+import com.itsluminous.cleartravel.feature.trains.TrainsAddRequest
 import com.itsluminous.cleartravel.feature.trains.TrainsContent
 import com.itsluminous.cleartravel.feature.trains.TrainsLandingAction
 
@@ -34,14 +40,24 @@ const val JOURNEYS_ROUTE = "journeys"
  * `feature:trains` and `feature:flights` are composed side by side — the features
  * themselves never depend on each other. [deepLink] carries a pending notification
  * deep link; the screen selects the matching segment, forwards the entity id to the
- * feature's detail hook, and reports consumption via [onDeepLinkConsumed].
+ * feature's detail hook, and reports consumption via [onDeepLinkConsumed]. ADR-028:
+ * a deep link carrying an add request puts the segment into pick mode and the
+ * outcome comes back through [onJourneyAddDone]; a "Part of" row tapped in a detail
+ * sheet is reported through [onOpenTrip].
  */
 fun NavGraphBuilder.journeysGraph(
     deepLink: JourneysDeepLink? = null,
     onDeepLinkConsumed: () -> Unit = {},
+    onJourneyAddDone: (JourneyAddResult) -> Unit = {},
+    onOpenTrip: (tripId: String) -> Unit = {},
 ) {
     composable(JOURNEYS_ROUTE) {
-        JourneysScreen(deepLink = deepLink, onDeepLinkConsumed = onDeepLinkConsumed)
+        JourneysScreen(
+            deepLink = deepLink,
+            onDeepLinkConsumed = onDeepLinkConsumed,
+            onJourneyAddDone = onJourneyAddDone,
+            onOpenTrip = onOpenTrip,
+        )
     }
 }
 
@@ -54,6 +70,8 @@ private enum class JourneysSegment {
 private fun JourneysScreen(
     deepLink: JourneysDeepLink?,
     onDeepLinkConsumed: () -> Unit,
+    onJourneyAddDone: (JourneyAddResult) -> Unit,
+    onOpenTrip: (tripId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var segment by rememberSaveable { mutableStateOf(JourneysSegment.TRAINS) }
@@ -61,6 +79,11 @@ private fun JourneysScreen(
     var trainAction by rememberSaveable { mutableStateOf(TrainsLandingAction.OPEN_DETAIL) }
     var flightDeepLinkId by rememberSaveable { mutableStateOf<String?>(null) }
     var flightAction by rememberSaveable { mutableStateOf(FlightsLandingAction.OPEN_DETAIL) }
+    // ADR-028 pick mode. Deliberately NOT saveable: the request lives only while this
+    // screen is composed. Completing it navigates away (disposing it); a manual tab
+    // tap does too, and the itinerary form cancels the stale request on its return —
+    // so a re-entered Journeys tab must never re-open the add sheet for it.
+    var addRequest by remember { mutableStateOf<JourneyAddRequest?>(null) }
 
     LaunchedEffect(deepLink) {
         if (deepLink != null) {
@@ -76,6 +99,7 @@ private fun JourneysScreen(
                     flightAction = deepLink.flightsAction
                 }
             }
+            addRequest = deepLink.addRequest
             onDeepLinkConsumed()
         }
     }
@@ -110,8 +134,32 @@ private fun JourneysScreen(
             }
         }
         when (segment) {
-            JourneysSegment.TRAINS -> TrainsContent(initialTicketId = trainDeepLinkId, initialAction = trainAction)
-            JourneysSegment.FLIGHTS -> FlightsContent(initialFlightId = flightDeepLinkId, initialAction = flightAction)
+            JourneysSegment.TRAINS ->
+                TrainsContent(
+                    initialTicketId = trainDeepLinkId,
+                    initialAction = trainAction,
+                    addRequest = addRequest?.takeIf { it.type == JourneyType.TRAIN }?.let { TrainsAddRequest(nonce = it.nonce) },
+                    onAddRequestDone = { result ->
+                        addRequest?.let { request ->
+                            addRequest = null
+                            onJourneyAddDone(JourneyPickRouting.resultFor(request, result))
+                        }
+                    },
+                    onOpenTrip = onOpenTrip,
+                )
+            JourneysSegment.FLIGHTS ->
+                FlightsContent(
+                    initialFlightId = flightDeepLinkId,
+                    initialAction = flightAction,
+                    addRequest = addRequest?.takeIf { it.type == JourneyType.FLIGHT }?.let { FlightsAddRequest(nonce = it.nonce) },
+                    onAddRequestDone = { result ->
+                        addRequest?.let { request ->
+                            addRequest = null
+                            onJourneyAddDone(JourneyPickRouting.resultFor(request, result))
+                        }
+                    },
+                    onOpenTrip = onOpenTrip,
+                )
         }
     }
 }

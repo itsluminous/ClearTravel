@@ -1,6 +1,8 @@
 package com.itsluminous.cleartravel.ui
 
 import com.google.common.truth.Truth.assertThat
+import com.itsluminous.cleartravel.core.data.crosstab.JourneyAddRequest
+import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.core.notifications.DeepLinkContract
 import com.itsluminous.cleartravel.feature.flights.FlightsEntryResult
 import com.itsluminous.cleartravel.feature.flights.FlightsLandingAction
@@ -71,5 +73,34 @@ class JourneysDeepLinkTest {
 
         assertThat(link.target).isEqualTo(DeepLinkContract.TARGET_FLIGHT)
         assertThat(link.entityId).isNull()
+    }
+
+    // ---- ADR-028 cross-tab hooks ----
+
+    @Test
+    fun `a linked journey tapped in an itinerary sheet opens its segment and detail`() {
+        val train = JourneysDeepLink.forJourney(JourneyType.TRAIN, "t1")
+        val flight = JourneysDeepLink.forJourney(JourneyType.FLIGHT, "f1")
+
+        assertThat(train.target).isEqualTo(DeepLinkContract.TARGET_TRAIN)
+        assertThat(train.entityId).isEqualTo("t1")
+        assertThat(train.trainsAction).isEqualTo(TrainsLandingAction.OPEN_DETAIL)
+        assertThat(train.addRequest).isNull()
+        assertThat(flight.target).isEqualTo(DeepLinkContract.TARGET_FLIGHT)
+        assertThat(flight.entityId).isEqualTo("f1")
+        assertThat(flight.flightsAction).isEqualTo(FlightsLandingAction.OPEN_DETAIL)
+    }
+
+    @Test
+    fun `a journey-add request lands on the requested segment in pick mode without an entity`() {
+        val request = JourneyAddRequest(JourneyType.FLIGHT)
+
+        val link = JourneysDeepLink.forJourneyAdd(request)
+
+        assertThat(link.target).isEqualTo(DeepLinkContract.TARGET_FLIGHT)
+        assertThat(link.entityId).isNull()
+        assertThat(link.addRequest).isEqualTo(request)
+        assertThat(JourneysDeepLink.forJourneyAdd(JourneyAddRequest(JourneyType.TRAIN)).target)
+            .isEqualTo(DeepLinkContract.TARGET_TRAIN)
     }
 }
