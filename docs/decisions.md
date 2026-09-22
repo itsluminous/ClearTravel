@@ -1374,6 +1374,59 @@ user is never worse off than the previous read-it-yourself page. No schema/DB
 change. `core:model`/`core:data` untouched; `core:scrape` contract grows by two
 defaulted fields. Verified live on the emulator (docs/validation-report.md).
 
+**Addendum — v2, live validation against real flights (2026-09-22).** Five
+user-supplied vectors (SG 128 cancelled, 6E 541 runway delay, 6E 6353 early, 6E 6144
+delayed, 6E 9468 multi-leg) were run through the shipped flow on the emulator, the
+fallback WebView DOM pulled over the devtools socket after every mismatch, and the
+following additive changes made (no `core:*` Kotlin touched; rule file `version` 1→2):
+
+1. **Date-aware query.** A bare `SG 128 flight status` made Google pre-select the
+   NEXT operating day (Wed 23 Sept, a *Scheduled* card) once today's departure time
+   had passed — while the journey's day (Tue 22 Sept) was **cancelled**; the date
+   guard correctly refused the card, so the user only got the "no card" banner. The
+   rule's `urlTemplate` now ends in `+{date}` and `FlightStatusFallbacks.formatDateForRule`
+   renders the Google date as query words (`22+September+2026`; the existing `{date}`
+   placeholder and per-rule format table, ADR-013). Verified on all five vectors that
+   the spelled-out date makes Google select the journey's tab. *Rejected:* clicking the
+   tab in the WebView (the tabpanels are empty in the live DOM — the card is fetched
+   async, and a click path forks the engine contract) and parsing all days from the
+   `data-maindata` blob (absent on some live pages, per ADR-026 §6).
+2. **Card disambiguation by date → airports → scheduled time.** `pickCard` now first
+   keeps the cards whose own `City · Day, DD Mon` caption names the journey's date
+   (when any card has a caption at all; the recon-shape card without one still falls
+   back to the selected-tab guard), then prefers the journey's departure airport, then
+   arrival airport, then a card whose scheduled departure equals the saved `schedDep`,
+   then the first. Live 6E 9468 renders TWO legs for ONE date (AUH→BLR *Diverted*,
+   BLR→IXE *Arrived late*); with no route saved the first leg is applied (documented,
+   the sheet shows which), with the route it picks the right one.
+3. **Live DOM traits pinned.** The panel contains a hidden duplicate of every card
+   inside an "About this result" `role=dialog` (with its own tab strip) — skipped, so
+   a single-card page yields one `Card`. A **cancelled** card keeps the `Scheduled
+   departure` caption but drops the time value (only `Originally scheduled …` +
+   `<del>6:45 am</del>` remain): the value sibling is accepted only when time-shaped
+   and the struck original becomes the schedule. Header vocabulary observed live and
+   mapped: `Departing late` → DELAYED, `Arrived late`/`Arrived` → LANDED, `Diverted`
+   (no status of its own; falls through to the captions — Landed → LANDED), `Cancelled`
+   → CANCELLED (now checked before everything, then landed/arrived, then delay/late).
+   Early running (6E 6353: 7:03 vs 7:10) stays LANDED/DEPARTED with the earlier
+   estimate — the sign is preserved, never read as a delay (unchanged rule, now pinned
+   by a live fixture). *Known gap:* no `DIVERTED` value exists in `FlightStatus`; adding
+   one is a `core:model` contract change left for its own ADR.
+4. **Re-check bug (found on device).** `FlightStatusCheckViewModel.start` treated any
+   call for the same flight id as a no-op; the ViewModel is host-scoped and outlives
+   the check screen, so a second "Check status" on the same flight in one process
+   replayed the previous outcome and never scraped. `start` is now a no-op only while
+   that flight's check is still Loading/Scraping and otherwise begins a fresh attempt.
+5. **Fixtures (all REAL, untouched WebView dumps trimmed to the `data-dates`
+   container):** `live-cancelled-sg128`, `live-wrong-day-sg128-bare` (the bare-query
+   page that must be refused for the 22nd and accepted for the 23rd),
+   `live-arrived-late-6e541`, `live-early-6e6353`, `live-departing-late-6e6144`,
+   `live-multi-card-6e9468` in `feature:flights`; `live-cancelled-sg128` also in
+   `core:scrape` (rule-level `headerStatus` = `Cancelled`, `mainStatuses` =
+   `ARRIVED_DELAYED, CANCELED, SCHEDULED_STATUS, SCHEDULED_STATUS`). The recon-gap
+   `synthetic-*` files stay as regression guards but every state they guessed at is
+   now also covered by a live DOM.
+
 ## ADR-028 — Cross-tab integration: journey-add bus, "Part of" reverse lookup, Trips landing hook (2026-09-22)
 
 **Context.** Trips and Journeys knew nothing of each other beyond the stored

@@ -745,3 +745,60 @@ were not re-walked (the former needs a real BCBP file and was validated in ADR-0
 run; colour cannot be judged from dumps). A modal add sheet covers the bottom bar,
 so the "manual tab tap" case only arises from the non-modal form — that is the path
 tested. No code fixes were needed in this pass. Emulator shut down at the end.
+
+## Google flight-status fallback — real-flight validation (2026-09-22 11:15–11:50 IST, emulator Android_16_AOSP_Medium, API 36, ADR-026 v2)
+
+Five user-supplied flights, all dated **2026-09-22**, run through the shipped flow
+(`installDebug` of `main` 59df4e6, fresh `pm clear`): add the flight → "Save & check
+status" → uiautomator dump of the detail sheet. Every mismatch was diagnosed by pulling
+the fallback WebView's `outerHTML` over the devtools socket
+(`webview_devtools_remote_<pid>`, `Runtime.evaluate`) and by navigating that same
+WebView (`Page.navigate`) to candidate queries; the resulting DOMs are the new `live-*`
+fixtures (untouched, trimmed to the panel container). No bot wall / consent wall on
+any of the ~14 page loads (India egress, stock WebView UA).
+
+### Per-vector verdict (final build)
+
+| Vector | Expected (user) | Live Google card (DOM) | Extracted on the sheet | Verdict |
+|---|---|---|---|---|
+| **SG 128** IXL→DEL | **Cancelled** on 22 Sept; bare `SG128` search shows 23 Sept | Bare query: tab **Wed 23 Sept** pre-selected, *Scheduled* card 6:45→8:10 (T1) — 22 Sept card absent. Dated query: tab **Tue 22 Sept**, header **Cancelled**, captions `Scheduled departure/arrival` with NO time value, `<del>6:45 am</del>` / `<del>8:10 am</del>`, arrival T1D; `data-maindata` = `ARRIVED_DELAYED, CANCELED, SCHEDULED_STATUS, SCHEDULED_STATUS` | Before fix: D2 banner "Google didn't show a flight status card for this flight and date" (the date guard correctly refused the 23 Sept card). After fix: **Cancelled**, Dep Scheduled 06:45 / Est —, Arr Scheduled 08:10 / Est —, Arr Terminal **1D**, "Last check: status updated" | **PASS** (`73-…status-updated.png`, `74-…cancelled-sheet.png`) |
+| **6E 541** BLR→IXE | Runway delay | Bare query again pre-selected **23 Sept** (Scheduled). Dated: header **Arrived late**, Departed **8:22 am** (`<del>7:15 am</del>`), Arrived 9:18 am (`<del>8:15 am</del>`), T1 gate **28** | **Landed**, Dep Sched 07:15 / Est **08:22**, T1 Gate 28, Arr Sched 08:15 / Est 09:18 | **PASS** — the 67-min departure delay is on the sheet; the flight had landed by check time (11:32) so LANDED is the right terminal status |
+| **6E 6353** BLR→LKO | Early departure | Header **Arrived**, Departed **7:03 am** (`<del>7:10 am</del>`), Arrived 9:27 am (`<del>9:50 am</del>`), T1 gate 22 → T3 | **Landed**, Dep Sched 07:10 / Est **07:03** (7 min early, sign kept, not read as a delay), Gate 22, Arr Sched 09:50 / Est 09:27, Arr T3 | **PASS** |
+| **6E 6144** BLR→TRV | Delay | Header **Departing late** (new wording), Estimated departure **11:40 am** (`<del>10:30 am</del>`), Estimated arrival 1:00 pm (`<del>11:50 am</del>`), T1 gate 25 → T1 | **Delayed**, Dep Sched 10:30 / Est 11:40, T1 Gate 25, Arr Sched 11:50 / Est 13:00, Arr T1 | **PASS** (`75-…delayed-sheet.png`) |
+| **6E 9468** | Multiple matches | ONE date tab, **two cards**: AUH→BLR header **Diverted** (Departed 12:45 am `<del>12:30 am</del>`, Landed 6:26 am `<del>5:40 am</del>`, T A) and BLR→IXE header **Arrived late** (Departed 8:30 am `<del>7:35 am</del>`, Arrived 9:29 am `<del>8:30 am</del>`, T2, collapsed) | Saved WITHOUT a route: first leg applied — Landed 00:30/00:45 → 05:40/06:26, T A (documented fallback). Edited to **BLR → IXE** + re-check: **Landed**, Dep Sched **07:35** / Est 08:30, **T2**, Arr Sched 08:30 / Est 09:29 | **PASS** — airports disambiguate the leg (`76-…multicard-blr-ixe-sheet.png`) |
+
+`77-google-validate-flights-list.png`: the Flights list after the run (SG 128
+Cancelled, 6E 6353 / 6E 541 / 6E 9468 Landed with actual times, 6E 6144 Delayed
+below the fold).
+
+### What was wrong and what shipped
+
+- **Wrong-day selection (root cause of the SG 128 miss).** Once the day's departure
+  time has passed, a bare `<IATA> <no> flight status` query makes Google pre-select
+  the NEXT operating day; the parser's date guard rightly refused that card, so the
+  user saw the "no card" banner instead of *Cancelled*. Fix: the rule URL now carries
+  `+{date}` and the feature renders it as `22+September+2026`; verified on all five
+  vectors that the spelled-out date selects the journey's tab (`SG 128 flight status
+  22 September`, `… September 22 2026` and `… 2026-09-22` all worked; the word form
+  shipped).
+- **Multi-card pages.** Card choice is now date → departure airport → arrival airport
+  → saved scheduled-departure time → first (6E 9468).
+- **Hidden duplicate card.** The live panel repeats every card inside an "About this
+  result" `role=dialog`; skipped, so `parse` yields one `Card` per real card.
+- **Cancelled card shape.** `Scheduled departure` caption with no time value; the
+  `<del>` original is now the schedule (06:45 / 08:10 landed on the sheet).
+- **Vocabulary.** `Departing late` → Delayed, `Arrived late` → Landed, `Diverted` falls
+  through to the captions (→ Landed here). No `DIVERTED` status exists in the model —
+  follow-up ADR if wanted.
+- **Re-check bug (found on device, unrelated to Google).** Tapping "Check status" a
+  second time on the same flight within one process replayed the previous outcome
+  (host-scoped ViewModel + same-id guard) — the sheet kept the old "Checked 11:36"
+  after the route edit. Fixed (`start` only short-circuits while that flight's check is
+  running); verified: 11:44 → 11:45 re-check produced a fresh timestamp and "no changes
+  found".
+
+Tests: `GoogleFlightsExtractorTest` 14 → 22, `GoogleFlightsRuleTest` 7 → 8,
+`FlightStatusFallbacksTest` 5 → 6, `FlightStatusCheckViewModelTest` 16 → 17; seven new
+live fixtures (six in `feature:flights`, one mirrored in `core:scrape`). Blind
+screenshots used: 5 of ≤5. Emulator left running with the app installed and the five
+journeys present.

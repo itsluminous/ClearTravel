@@ -213,3 +213,37 @@ In **both** cases:
   schedule flight, showing the `<del>`-strikethrough delay-indicator pattern
 
 Committed with the google-parse stage (ADR-026) as the fixture provenance.
+
+## Live validation follow-up (2026-09-22, Android 16 emulator WebView — closes the recon gaps)
+
+The cancelled/delayed/multi-card renderings flagged above as unobserved were captured
+live from the app's own WebView (devtools `Runtime.evaluate` on `outerHTML`) and are
+committed as `feature/flights/src/test/resources/google-flights/live-*.html`:
+
+- **Date selection is query-driven.** `SG 128 flight status` after the day's departure
+  time pre-selects the NEXT operating day (Wed 23 Sept); `SG 128 flight status 22
+  September` (also `September 22 2026`, `2026-09-22`) selects Tue 22 Sept. ClearTravel
+  now appends the spelled-out date to the query (ADR-026 addendum).
+- **Cancelled card** (`live-cancelled-sg128`): header `Cancelled`; captions stay
+  `Scheduled departure` / `Scheduled arrival` but the time value div is GONE — only
+  `Originally scheduled departure: 6:45 am` + `<del>6:45 am</del>` remain; terminal
+  still rendered (`1D`), gates `-`; a `Call: +91 …` airline phone row appears.
+  `data-maindata` on this page: `CANCELED` (US spelling) for the day.
+- **Delayed before departure** (`live-departing-late-6e6144`): header **`Departing
+  late`** (not "Delayed"); captions `Estimated departure` / `Estimated arrival` with
+  `<del>` originals. Header `Delayed by 1h 40m` was seen in a hidden/async fragment of
+  the same page family — treat `late`, `delay` as the delayed vocabulary.
+- **Arrived after a delay** (`live-arrived-late-6e541`, 6E 9468 leg 2): header
+  **`Arrived late`**; captions `Departed` / `Arrived`.
+- **Diverted** (`live-multi-card-6e9468` leg 1): header **`Diverted`**; captions
+  `Departed` / `Landed` — the arrival column still shows the original destination city.
+- **Multiple cards for one date** (6E 9468): a single `Tue, 22 Sept` tab
+  (`data-dates="2026-09-22"`), two `[role=button][aria-expanded]` headers in the async
+  container, only the first expanded. Airport codes per card come from the
+  `Airport info for XXX` aria-labels as before.
+- **Hidden duplicate.** Inside the `data-dates` container, after the visible card, an
+  "About this result" `role=dialog` repeats the tab strip AND the whole card (its own
+  async container). Skip anything under `[role=dialog]`.
+- `data-dates="2026-09-21,…"` on the panel container lists the tab dates in ISO — a
+  handy class-free anchor (not yet used by the parser; the per-card `City · Day, DD
+  Mon` caption is).
