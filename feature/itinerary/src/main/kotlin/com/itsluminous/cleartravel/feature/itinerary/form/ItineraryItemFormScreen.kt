@@ -60,8 +60,11 @@ import com.itsluminous.cleartravel.feature.itinerary.R
 import com.itsluminous.cleartravel.feature.itinerary.formatMedium
 import com.itsluminous.cleartravel.feature.itinerary.labelRes
 import com.itsluminous.cleartravel.feature.itinerary.logic.MapPoint
+import com.itsluminous.cleartravel.feature.itinerary.logic.flightJourneyLabel
 import com.itsluminous.cleartravel.feature.itinerary.logic.formatLatLng
+import com.itsluminous.cleartravel.feature.itinerary.logic.journeyIdFallback
 import com.itsluminous.cleartravel.feature.itinerary.logic.parseLatLng
+import com.itsluminous.cleartravel.feature.itinerary.logic.trainJourneyLabel
 import java.time.LocalTime
 import java.util.Locale
 
@@ -427,13 +430,11 @@ private fun linkedJourneyLabel(
 ): String =
     when (form.linkedJourneyType) {
         JourneyType.TRAIN ->
-            candidates.trains.firstOrNull { it.id == form.linkedJourneyId }?.trainNumber
+            candidates.trains.firstOrNull { it.id == form.linkedJourneyId }?.let(::trainJourneyLabel)
         JourneyType.FLIGHT ->
-            candidates.flights
-                .firstOrNull { it.id == form.linkedJourneyId }
-                ?.let { "${it.airlineIata} ${it.flightNumber}" }
+            candidates.flights.firstOrNull { it.id == form.linkedJourneyId }?.let(::flightJourneyLabel)
         else -> null
-    } ?: form.linkedJourneyId.orEmpty().take(8)
+    } ?: journeyIdFallback(form.linkedJourneyId.orEmpty())
 
 @Composable
 private fun PlannedTimeField(

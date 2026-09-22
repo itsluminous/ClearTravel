@@ -25,6 +25,7 @@ import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.feature.itinerary.R
 import com.itsluminous.cleartravel.feature.itinerary.labelRes
 import com.itsluminous.cleartravel.feature.itinerary.logic.formatLatLng
+import com.itsluminous.cleartravel.feature.itinerary.logic.journeyIdFallback
 
 /**
  * Bottom sheet showing EVERYTHING about one itinerary item: note/fun facts, link
@@ -40,6 +41,8 @@ internal fun ItineraryItemSheet(
     onEdit: () -> Unit,
     onDelete: () -> Unit,
     onOpenLinkedJourney: (JourneyType, String) -> Unit = { _, _ -> },
+    /** Resolved label of the linked journey (`12951`, `6E 2001`); null falls back to the id prefix. */
+    linkedJourneyLabel: String? = null,
 ) {
     val context = LocalContext.current
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -76,7 +79,7 @@ internal fun ItineraryItemSheet(
                                     JourneyType.TRAIN -> R.string.itinerary_linked_train
                                     JourneyType.FLIGHT -> R.string.itinerary_linked_flight
                                 },
-                                journeyId.take(8),
+                                linkedJourneyLabel ?: journeyIdFallback(journeyId),
                             ),
                     )
                     TextButton(onClick = { onOpenLinkedJourney(journeyType, journeyId) }) {

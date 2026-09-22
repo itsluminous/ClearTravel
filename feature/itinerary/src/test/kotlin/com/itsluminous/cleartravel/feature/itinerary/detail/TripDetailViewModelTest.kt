@@ -3,10 +3,13 @@ package com.itsluminous.cleartravel.feature.itinerary.detail
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
+import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.core.testing.MainDispatcherRule
 import com.itsluminous.cleartravel.feature.itinerary.ItineraryMessage
+import com.itsluminous.cleartravel.feature.itinerary.fakes.FakeFlightRepository
 import com.itsluminous.cleartravel.feature.itinerary.fakes.FakeItineraryRepository
+import com.itsluminous.cleartravel.feature.itinerary.fakes.FakeTrainRepository
 import com.itsluminous.cleartravel.feature.itinerary.fakes.FakeTripRepository
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -20,13 +23,47 @@ class TripDetailViewModelTest {
 
     private val tripRepository = FakeTripRepository()
     private val itineraryRepository = FakeItineraryRepository()
+    private val trainRepository = FakeTrainRepository()
+    private val flightRepository = FakeFlightRepository()
 
     private fun viewModel(): TripDetailViewModel =
         TripDetailViewModel(
             savedStateHandle = SavedStateHandle(mapOf("tripId" to TRIP_ID)),
             tripRepository = tripRepository,
             itineraryRepository = itineraryRepository,
+            trainRepository = trainRepository,
+            flightRepository = flightRepository,
         )
+
+    @Test
+    fun `journeyLabels resolves linked trains and flights by id and skips unknown journeys`() =
+        runTest {
+            trainRepository.tickets.value = listOf(Fixtures.trainTicket(id = "t-1", trainNumber = "12951"))
+            flightRepository.flights.value = listOf(Fixtures.flightJourney(id = "f-1", airlineIata = "6E", flightNumber = "2001"))
+            itineraryRepository.items.value =
+                listOf(
+                    Fixtures.itineraryItem(tripId = TRIP_ID, linkedJourneyId = "t-1", linkedJourneyType = JourneyType.TRAIN),
+                    Fixtures.itineraryItem(tripId = TRIP_ID, linkedJourneyId = "f-1", linkedJourneyType = JourneyType.FLIGHT),
+                    Fixtures.itineraryItem(tripId = TRIP_ID, linkedJourneyId = "gone", linkedJourneyType = JourneyType.FLIGHT),
+                    Fixtures.itineraryItem(tripId = TRIP_ID),
+                )
+
+            viewModel().journeyLabels.test {
+                val labels = awaitItem().ifEmpty { awaitItem() }
+                assertThat(labels).containsExactly("t-1", "12951", "f-1", "6E 2001")
+            }
+        }
+
+    @Test
+    fun `journeyLabels is empty when no leg links a journey`() =
+        runTest {
+            itineraryRepository.items.value = listOf(Fixtures.itineraryItem(tripId = TRIP_ID))
+
+            viewModel().journeyLabels.test {
+                assertThat(awaitItem()).isEmpty()
+                expectNoEvents()
+            }
+        }
 
     @Test
     fun `days groups only this trip's items in day and order sequence`() =

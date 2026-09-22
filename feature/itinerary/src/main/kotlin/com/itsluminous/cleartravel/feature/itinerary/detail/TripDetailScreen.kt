@@ -85,6 +85,7 @@ internal fun TripDetailScreen(
     val trip by viewModel.trip.collectAsStateWithLifecycle()
     val days by viewModel.days.collectAsStateWithLifecycle()
     val mapContent by viewModel.mapContent.collectAsStateWithLifecycle()
+    val journeyLabels by viewModel.journeyLabels.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
 
     var selectedView by rememberSaveable { mutableStateOf(VIEW_TIMELINE) }
@@ -190,6 +191,7 @@ internal fun TripDetailScreen(
     sheetItem?.let { item ->
         ItineraryItemSheet(
             item = item,
+            linkedJourneyLabel = item.linkedJourneyId?.let(journeyLabels::get),
             onDismiss = { sheetItem = null },
             onEdit = {
                 sheetItem = null
