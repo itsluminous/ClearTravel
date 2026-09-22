@@ -140,16 +140,19 @@ installable.
 
 ## Screenshots
 
-From the on-device validation runs (`docs/validation/`):
+Demo data on a Pixel emulator (`docs/screenshots/`):
 
-| Trips | Journeys | Checklist from preset |
-| :---: | :---: | :---: |
-| ![Trips tab](docs/validation/02-trips-tab.png) | ![Journeys tab](docs/validation/03-journeys-tab.png) | ![Checklist](docs/validation/07-checklist-from-preset.png) |
-
-| Train tickets | Offline train route | Ticket prefilled from SMS |
-| :---: | :---: | :---: |
-| ![Train ticket cards](docs/validation/26-trains-list-card-icons.png) | ![Offline route page](docs/validation/27-route-22346-offline.png) | ![Prefilled form](docs/validation/10-share-prefilled-form.png) |
-
-| Flight status extracted live | Scrape failure UX | PNR check WebView | Dark theme |
+| Trips | Trip map | Itinerary timeline | Dark theme |
 | :---: | :---: | :---: | :---: |
-| ![Flight sheet updated](docs/validation/24-flight-sheet-updated.png) | ![Failure banner](docs/validation/22-ai-parsefail-banner.png) | ![PNR WebView](docs/validation/25-pnr-webview-post-fix.png) | ![Dark theme](docs/validation/09-theme-dark.png) |
+| ![Trips tab](docs/screenshots/01-trips-tab.png) | ![Tokyo trip on the map](docs/screenshots/02-trip-map.png) | ![Tokyo timeline](docs/screenshots/03-trip-timeline.png) | ![Dark theme](docs/screenshots/12-dark-trips.png) |
+
+| Train tickets | Offline train route | Seat map | Flights |
+| :---: | :---: | :---: | :---: |
+| ![Train ticket cards](docs/screenshots/04-journeys-trains.png) | ![Offline route page](docs/screenshots/05-train-route.png) | ![Coach seat map](docs/screenshots/06-seat-map.png) | ![Flight cards](docs/screenshots/07-journeys-flights.png) |
+
+| Flight details | Checklists | Packing checklist | Travel documents |
+| :---: | :---: | :---: | :---: |
+| ![Flight detail sheet](docs/screenshots/08-flight-detail.png) | ![Checklist tab](docs/screenshots/09-checklist-tab.png) | ![Tokyo packing checklist](docs/screenshots/10-checklist-detail.png) | ![Documents tab](docs/screenshots/11-documents.png) |
+
+On-device validation runs against real railway/airline sites are documented with
+their own screenshots in `docs/validation-report.md`.
