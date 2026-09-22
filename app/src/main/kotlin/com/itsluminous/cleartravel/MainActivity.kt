@@ -118,7 +118,6 @@ class MainActivity : FragmentActivity() {
         val pickCoordinator: JourneyPickCoordinator by viewModels()
         setContent {
             val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
-            NotificationPermissionEffect()
             // ADR-028: an itinerary leg asked for a new journey → land on Journeys in
             // pick mode. Once per request (ADR-029): the coordinator latches the nonce
             // so an activity re-creation with the request still pending does not re-land.
@@ -150,6 +149,10 @@ class MainActivity : FragmentActivity() {
         intakeViewModel: SharedFileIntakeViewModel,
         pickCoordinator: JourneyPickCoordinator,
     ) {
+        // Runs only once the gate is open (password set, storage prepared, first-run
+        // wizard finished): the system permission dialog must never sit over the
+        // first-run password screen or the wizard (ADR-032 follow-up).
+        NotificationPermissionEffect()
         when (val entry = pendingEntry.value) {
             // External entry: a feature's add form rendered over the shell
             // until saved/cancelled; keyed by nonce so a repeated request

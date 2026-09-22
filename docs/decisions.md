@@ -2002,8 +2002,9 @@ backup's password with copy explaining it MAY DIFFER from the one just created;
 **Consequences.** `feature:applock` now depends on `core:google` (still `core:*`
 only). New package `feature.applock.onboarding` (`OnboardingViewModel`,
 `OnboardingScreens`). Additive contract change: `SettingsRepository.onboardingPending/
-setOnboardingPending`. The POST_NOTIFICATIONS system prompt still fires over step 1
-(pre-existing follow-up). Follow-ups: the ADR-031 per-file source-password prompt for
+setOnboardingPending`. The POST_NOTIFICATIONS system prompt used to fire over step 1;
+since the 2026-09-22 cleanup pass the one-time request lives inside the gate's
+content (`ShellContent`), so it appears only once the wizard has finished. Follow-ups: the ADR-031 per-file source-password prompt for
 Drive attachments (a wizard restore with the old password already adopts the key that
 opens them); a "skip for now, remind me" for Drive backup when the user stayed offline.
 
