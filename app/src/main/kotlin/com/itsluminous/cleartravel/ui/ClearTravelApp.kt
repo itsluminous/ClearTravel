@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.FlightTakeoff
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material3.Icon
@@ -28,12 +29,14 @@ import androidx.navigation.compose.rememberNavController
 import com.itsluminous.cleartravel.R
 import com.itsluminous.cleartravel.feature.checklist.CHECKLIST_ROUTE
 import com.itsluminous.cleartravel.feature.checklist.checklistGraph
+import com.itsluminous.cleartravel.feature.documents.DOCUMENTS_ROUTE
+import com.itsluminous.cleartravel.feature.documents.documentsGraph
 import com.itsluminous.cleartravel.feature.itinerary.TRIPS_ROUTE
 import com.itsluminous.cleartravel.feature.itinerary.tripsGraph
 import com.itsluminous.cleartravel.feature.menu.MENU_ROUTE
 import com.itsluminous.cleartravel.feature.menu.menuGraph
 
-/** The four bottom tabs. Labels are string resources; icons are decorative duplicates of the label. */
+/** The five bottom tabs. Labels are string resources; icons are decorative duplicates of the label. */
 private data class TopLevelDestination(
     val route: String,
     @StringRes val labelRes: Int,
@@ -45,11 +48,12 @@ private val topLevelDestinations =
         TopLevelDestination(TRIPS_ROUTE, R.string.nav_trips, Icons.Filled.Map),
         TopLevelDestination(JOURNEYS_ROUTE, R.string.nav_journeys, Icons.Filled.FlightTakeoff),
         TopLevelDestination(CHECKLIST_ROUTE, R.string.nav_checklist, Icons.Filled.Checklist),
+        TopLevelDestination(DOCUMENTS_ROUTE, R.string.nav_documents, Icons.Filled.Folder),
         TopLevelDestination(MENU_ROUTE, R.string.nav_menu, Icons.Filled.Menu),
     )
 
 /**
- * App shell: the four-tab bottom-navigation scaffold hosting each feature's nav graph.
+ * App shell: the five-tab bottom-navigation scaffold hosting each feature's nav graph.
  * Tab switches follow the Material guidance — state is saved/restored per tab and
  * re-selecting pops to the tab root. A pending notification [journeysDeepLink]
  * navigates to the Journeys tab and is forwarded into the tab's graph.
@@ -117,6 +121,7 @@ fun ClearTravelApp(
                 onDeepLinkConsumed = onJourneysDeepLinkConsumed,
             )
             checklistGraph()
+            documentsGraph()
             menuGraph()
         }
     }

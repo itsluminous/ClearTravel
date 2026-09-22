@@ -131,6 +131,7 @@ dependencies {
     implementation(project(":feature:flights"))
     implementation(project(":feature:itinerary"))
     implementation(project(":feature:checklist"))
+    implementation(project(":feature:documents"))
     implementation(project(":feature:menu"))
 
     implementation(libs.androidx.core.ktx)
