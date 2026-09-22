@@ -37,6 +37,11 @@ optional Google account link for Calendar/Drive sync.
   Fully optional; everything works without it.
 - **Material You** — dynamic color with a sensible seed fallback, dark/light/system
   theme, large accessible type, long-press explanations on every icon-only control.
+- **Guided first run** — a four-step wizard: create the password (with an optional
+  fingerprint toggle), connect a Google account for Drive backups or stay offline,
+  restore a backup from a file or from Drive (or start fresh), and — when the backup
+  comes from another install — enter *its* password. Every step stays available
+  later from Settings.
 - **Encrypted at rest, locked by you** — on first run you create a password; it
   protects a random master key that encrypts the database (SQLCipher), every stored
   document/boarding pass/attachment, and every backup — including the copies kept

@@ -1902,3 +1902,106 @@ tests total. Follow-ups: per-file "needs source password" prompt for Drive
 attachments; a "re-upload Drive files" action for pre-encryption uploads; Argon2 if a
 platform KDF ever lands; lock-timing "immediately" could also blank the task
 snapshot (`FLAG_SECURE`).
+
+## ADR-032 — First-run onboarding wizard: password → Google → restore-or-fresh → backup password (2026-09-22)
+
+**Context.** ADR-031 made the first run a single blocking password screen and left
+"restore my data on a new phone" to Settings → Backup & Restore (plus a one-time
+Drive prompt that only appears once the user has found that screen AND linked an
+account). The user asked for a guided fresh-install flow: (1) set the password —
+with confirmation, the data-loss warning and a fingerprint toggle on the same
+screen; (2) connect a Google account for backups or stay offline; (3) restore a
+backup (local file or Google Drive, the latter only when linked and auto-checked,
+saying clearly when none exist) or start fresh; (4) when restoring, ask for the
+backup's password with copy explaining it MAY DIFFER from the one just created;
+(5) land in the app — and every step must stay individually reachable from Settings.
+
+**Decision.**
+
+1. **One flag, not a new gate.** `SettingsRepository.onboardingPending: Flow<Boolean>`
+   + `setOnboardingPending` (Preferences DataStore, additive contract extension).
+   It defaults to **false**, so installs that predate the wizard never see it
+   (the vault-exists check alone cannot tell an upgrade from a resumed first run).
+   Step 1 writes `true` immediately BEFORE `KeyVault.setUp` — a death in between
+   leaves `VaultState.NotSetUp`, which simply shows step 1 again; the wizard's last
+   action writes `false`. The existing password-exists check stays the hard gate.
+2. **Gate states** (`AppLockViewModel`, `feature:applock`): `NotSetUp → Setup`
+   (step 1), `Locked → Locked`, preparing → `Preparing`, UI-locked → `Locked`,
+   **`onboardingPending → Onboarding`** (new; hosts steps 2–4 via
+   `OnboardingWizard`), else `Ready`. Storage is prepared (`SecureStorageInitializer`)
+   right after the password exists so a restore in step 3/4 merges into an OPEN
+   encrypted database through the public `BackupManager` seam — no engine changes.
+   **Resume semantics:** a process death after step 1 comes back to the unlock screen
+   (the DEK lives only in memory, so the password — or the fingerprint — is needed to
+   OPEN the store; it is never asked to be *created* again) and then to step 2; a
+   linked account is remembered by `GoogleLinkStore`, so step 2 then offers
+   *Continue* instead of *Connect*. A UI re-lock (lock timing) mid-wizard shows the
+   unlock screen and returns to the wizard.
+3. **Step 1 — fingerprint toggle** (`SetupPasswordScreen`): `Switch` disabled with a
+   hint when `BiometricUnlock.isAvailable` is false. Enabling needs a vault to wrap,
+   so `setUp(password, confirm, enableBiometric)` creates the vault FIRST, then
+   raises `feedback.awaitingBiometricEnrolment`; the screen runs `BiometricPrompt`
+   around `BiometricKeyWrapper.newEncryptCipher()` (the Settings toggle's exact
+   logic) and reports `completeBiometricEnrolment(cipher)` → `KeyVault.enableBiometric`
+   or `skipBiometricEnrolment()` (dismissed / failed / no host activity) → the
+   Keystore key is deleted and the run continues WITHOUT biometrics (Settings offers
+   it again). Either path then prepares storage. Both password fields keep
+   `ContentType.NewPassword`; step 4's field is `ContentType.Password`.
+4. **Step 2 — Google** (`OnboardingViewModel.connectGoogle`): `GoogleAccountManager.link`
+   AND `setFeatureEnabled(DRIVE_BACKUP, true)` — "connect for backups" means the
+   Drive-backup toggle, and listing Drive backups in step 3 needs that scope; a
+   `NeedsScopeConsent` surfaces its `PendingIntent` for the IntentSender launcher and
+   `onConsentResult` completes it. Unconfigured builds (`GoogleLinkState.NotConfigured`,
+   no `GOOGLE_WEB_CLIENT_ID`) show the connect button disabled with an explanation;
+   a link failure is an inline, retryable line; *Cancelled* shows nothing. *Use
+   offline* skips. A link that succeeded but was denied the Drive scope still
+   advances — step 3 then shows `DriveCheck.NoAccess` instead of a listing.
+5. **Step 3 — restore or start fresh**: *Choose backup file* (SAF `OpenDocument`,
+   any MIME — providers label backups inconsistently), the Drive card only when
+   linked (`DriveCheck`: `Checking` → `None` "No ClearTravel backups were found in
+   this Google Drive." with *Check again*, or `Found` — up to five newest rows, tap
+   to download and restore), and *Start fresh* (writes the flag, lands in the app).
+   Restore calls `BackupManager.importApply(uri, sourcePassword = null)` straight
+   away: a v1 plain ZIP or a same-salt envelope applies with no prompt; a foreign
+   envelope — the normal fresh-install case, the new install has a new random salt —
+   is typed `PasswordRequired` BEFORE anything is written and moves to step 4;
+   `CorruptedBackup`/`UnsupportedSchemaVersion`/`Io` (also a failed Drive download)
+   are inline errors on step 3. No preview dialog: the wizard restores into an empty
+   store, so the merge summary confirmation of Settings adds nothing here.
+6. **Step 4 — backup password**: copy states that the password *may differ from the
+   one just created* because a backup is sealed with the password of the install
+   that made it; `WrongPassword` (first-chunk GCM tag failure, nothing written) is an
+   inline error on the field with retry; *Choose a different backup* returns to step
+   3. A right password merges the backup (`MergeSummary` kept in state) and finishes.
+   **No API change was needed**: `importApply(uri, sourcePassword)` already exists
+   (ADR-031 §4) and derives the CTEB key from the caller-supplied secret via
+   `KeyVault.derivePortableKey`; the proven key is adopted for the process, which
+   also opens per-file Drive envelopes written under the same password (ADR-031 §5).
+7. **Settings parity (verified, no gaps):** change password + biometric toggle + lock
+   timing (`SecuritySection`), Google link/unlink + the three toggles
+   (`GoogleAccountSection`), restore from a local file with preview-then-confirm and
+   from Drive (list dialog) with the source-password dialog (`BackupRestoreScreen`).
+   The fresh-install Drive prompt in Backup & Restore is **kept**: it still covers the
+   user who chose *Use offline* in step 2 and links Google later from Settings while
+   the store is empty; the wizard covers only the first-run moment.
+8. **Tests.** `OnboardingViewModelTest` (13, Robolectric for `Uri`/`PendingIntent`;
+   fake account manager / Drive service / import-only backup manager): step
+   progression, offline skip, unconfigured build, link + Drive-scope + consent
+   round trip, link failure vs cancel, no-access, resume-already-linked, Drive
+   found/none/download failure, foreign-password wrong-then-right, passwordless
+   apply, unreadable/newer, cancel from step 4. `AppLockViewModelTest` grew to 9
+   (fingerprint toggle: vault-first then wrap; prompt dismissed continues;
+   resume-after-death unlocks then resumes onboarding; upgraded install never sees
+   the wizard). `DefaultSettingsRepositoryTest` +1 (flag defaults false). e2e:
+   `AppLockSetupE2eTest` walks step 1 (short → mismatch → valid), step 2 (connect
+   disabled, offline), step 3 (no Drive card, start fresh) to the Trips tab;
+   `FakeSettingsRepository` in `TestRepositoryModule` defaults the flag to false so
+   the other e2e classes skip the wizard.
+
+**Consequences.** `feature:applock` now depends on `core:google` (still `core:*`
+only). New package `feature.applock.onboarding` (`OnboardingViewModel`,
+`OnboardingScreens`). Additive contract change: `SettingsRepository.onboardingPending/
+setOnboardingPending`. The POST_NOTIFICATIONS system prompt still fires over step 1
+(pre-existing follow-up). Follow-ups: the ADR-031 per-file source-password prompt for
+Drive attachments (a wizard restore with the old password already adopts the key that
+opens them); a "skip for now, remind me" for Drive backup when the user stayed offline.

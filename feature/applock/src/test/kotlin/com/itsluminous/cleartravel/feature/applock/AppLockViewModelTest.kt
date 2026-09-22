@@ -63,10 +63,16 @@ class AppLockViewModelTest {
 
     private val biometric = FakeBiometricKeyWrapper()
     private val initializer = FakeInitializer()
+    private val settings = FakeSettingsRepository()
 
     private fun vault() = DefaultKeyVault(store, iterations = 1_000, ioDispatcher = UnconfinedTestDispatcher())
 
-    private fun viewModel(vault: DefaultKeyVault = vault()) = AppLockViewModel(vault, lockController, biometric, initializer)
+    private fun viewModel(vault: DefaultKeyVault = vault()) = AppLockViewModel(vault, lockController, biometric, initializer, settings)
+
+    /** The wizard's steps 2–4 finished (ADR-032) — the flag is what the gate keys on. */
+    private fun wizardDone() {
+        settings.onboarding.value = false
+    }
 
     @Test
     fun freshInstall_showsSetup_validatesPair_thenPreparesAndOpens() =
@@ -84,14 +90,87 @@ class AppLockViewModelTest {
 
             assertThat(store.current).isNotNull()
             assertThat(initializer.calls).isEqualTo(1)
-            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Ready)
+            // ADR-032: the password is step 1 of the wizard — the gate shows steps 2–4 next.
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Onboarding)
+            assertThat(settings.onboardingWrites).containsExactly(true)
             assertThat(lockController.locked.value).isFalse()
+
+            settings.setOnboardingPending(false) // the wizard finished
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Ready)
+        }
+
+    @Test
+    fun setUp_withFingerprintToggle_createsVaultFirst_thenWrapsInsideThePrompt() =
+        runTest {
+            val vault = vault()
+            val viewModel = viewModel(vault)
+
+            viewModel.setUp("long-enough-1", "long-enough-1", enableBiometric = true)
+
+            // Vault exists, storage NOT prepared yet: the screen must run BiometricPrompt.
+            assertThat(store.current).isNotNull()
+            assertThat(viewModel.feedback.value.awaitingBiometricEnrolment).isTrue()
+            assertThat(initializer.calls).isEqualTo(0)
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Locked(biometricEnabled = false))
+
+            viewModel.completeBiometricEnrolment(viewModel.biometricEnrolCipher()!!)
+
+            assertThat(viewModel.feedback.value.awaitingBiometricEnrolment).isFalse()
+            assertThat(vault.state.value).isEqualTo(VaultState.Unlocked(biometricEnabled = true))
+            assertThat(store.current!!.biometricWrap).isNotNull()
+            assertThat(initializer.calls).isEqualTo(1)
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Onboarding)
+        }
+
+    @Test
+    fun setUp_withFingerprintToggle_promptDismissed_continuesWithoutBiometrics() =
+        runTest {
+            val vault = vault()
+            val viewModel = viewModel(vault)
+            viewModel.setUp("long-enough-1", "long-enough-1", enableBiometric = true)
+            assertThat(viewModel.feedback.value.awaitingBiometricEnrolment).isTrue()
+
+            viewModel.skipBiometricEnrolment()
+
+            assertThat(vault.state.value).isEqualTo(VaultState.Unlocked(biometricEnabled = false))
+            assertThat(store.current!!.biometricWrap).isNull()
+            assertThat(initializer.calls).isEqualTo(1)
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Onboarding)
+        }
+
+    @Test
+    fun resumeAfterDeath_midWizard_unlocksThenResumesOnboarding_neverSetupAgain() =
+        runTest {
+            viewModel().setUp("pw-pw-pw-1", "pw-pw-pw-1")
+            assertThat(settings.onboarding.value).isTrue()
+            lockController.lock() // process died before the wizard finished
+
+            val viewModel = viewModel(vault())
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Locked(biometricEnabled = false))
+            viewModel.unlock("pw-pw-pw-1")
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Onboarding)
+        }
+
+    @Test
+    fun upgradedInstall_withoutTheFlag_neverSeesTheWizard() =
+        runTest {
+            // Pre-ADR-032 install: vault exists, the onboarding flag was never written.
+            viewModel().setUp("pw-pw-pw-1", "pw-pw-pw-1")
+            settings.onboarding.value = false
+            settings.onboardingWrites.clear()
+            lockController.lock()
+
+            val viewModel = viewModel(vault())
+            viewModel.unlock("pw-pw-pw-1")
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Ready)
+            assertThat(settings.onboardingWrites).isEmpty()
         }
 
     @Test
     fun coldStart_isLocked_wrongPasswordStays_rightPasswordOpens() =
         runTest {
             viewModel().setUp("pw-pw-pw-1", "pw-pw-pw-1")
+            wizardDone()
             lockController.lock() // simulate a new process: UI locked, vault forgets the DEK
             val viewModel = viewModel(vault()) // new vault over the same key file → Locked
             assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Locked(biometricEnabled = false))
@@ -116,6 +195,8 @@ class AppLockViewModelTest {
             assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Locked(biometricEnabled = false))
             viewModel.retryPreparation()
             assertThat(viewModel.feedback.value.preparationFailed).isFalse()
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Onboarding)
+            wizardDone()
             assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Ready)
         }
 
@@ -124,6 +205,7 @@ class AppLockViewModelTest {
         runTest {
             val setupVault = vault()
             viewModel(setupVault).setUp("pw-pw-pw-1", "pw-pw-pw-1")
+            wizardDone()
             setupVault.enableBiometric(biometric.newEncryptCipher())
             lockController.lock()
 
@@ -150,6 +232,7 @@ class AppLockViewModelTest {
             val vault = vault()
             val viewModel = viewModel(vault)
             viewModel.setUp("pw-pw-pw-1", "pw-pw-pw-1")
+            wizardDone()
             assertThat(vault.state.value).isEqualTo(VaultState.Unlocked(biometricEnabled = false))
 
             lockController.lock() // lock timing elapsed; DEK still cached for workers

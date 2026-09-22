@@ -2,6 +2,7 @@ package com.itsluminous.cleartravel.feature.applock
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +21,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -39,13 +41,15 @@ import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordField
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordFieldRole
 import com.itsluminous.cleartravel.core.security.biometric.BiometricUnlock
+import com.itsluminous.cleartravel.feature.applock.onboarding.OnboardingWizard
 
 /**
- * The app-lock gate (ADR-031): wraps the whole shell. Shows the blocking first-run
- * password setup, the unlock screen (password or BiometricPrompt), a "securing your
- * data" step while the database opens / migrates, and only then [content].
- * [onUnlocked] fires once per gate opening (the shell runs its startup housekeeping
- * there — nothing may touch the database before).
+ * The app-lock gate (ADR-031/032): wraps the whole shell. Shows the first-run wizard
+ * (step 1 password setup here; steps 2–4 in [OnboardingWizard]), the unlock screen
+ * (password or BiometricPrompt), a "securing your data" step while the database
+ * opens / migrates, and only then [content]. [onUnlocked] fires once per gate
+ * opening (the shell runs its startup housekeeping there — nothing may touch the
+ * database before).
  */
 @Composable
 fun AppLockGate(
@@ -65,6 +69,9 @@ fun AppLockGate(
                 feedback = feedback,
                 onSubmit = viewModel::setUp,
                 onEdit = viewModel::clearSetupError,
+                biometricEnrolCipher = viewModel::biometricEnrolCipher,
+                onBiometricEnrolled = viewModel::completeBiometricEnrolment,
+                onBiometricSkipped = viewModel::skipBiometricEnrolment,
                 modifier = modifier,
             )
         is AppLockUiState.Locked ->
@@ -79,23 +86,57 @@ fun AppLockGate(
                 modifier = modifier,
             )
         AppLockUiState.Preparing -> PreparingScreen(modifier)
+        AppLockUiState.Onboarding -> OnboardingWizard(modifier = modifier)
         AppLockUiState.Ready -> content()
     }
 }
 
-/** First run: create the password. Blocking — there is no way past it. */
+/**
+ * Wizard step 1 (ADR-032): create the password (+ confirmation, data-loss warning)
+ * and optionally turn on fingerprint unlock on the same screen. Blocking — there is
+ * no way past it. The toggle is disabled with a hint when the device has no strong
+ * biometrics enrolled; when on, the vault is created FIRST and `BiometricPrompt`
+ * then wraps the fresh key ([feedback] `awaitingBiometricEnrolment`).
+ */
 @Composable
 internal fun SetupPasswordScreen(
     feedback: AppLockFeedback,
-    onSubmit: (password: String, confirm: String) -> Unit,
+    onSubmit: (password: String, confirm: String, enableBiometric: Boolean) -> Unit,
     onEdit: () -> Unit,
+    biometricEnrolCipher: () -> javax.crypto.Cipher?,
+    onBiometricEnrolled: (javax.crypto.Cipher) -> Unit,
+    onBiometricSkipped: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val context = LocalContext.current
     var password by rememberSaveable { mutableStateOf("") }
     var confirm by rememberSaveable { mutableStateOf("") }
+    var wantBiometric by rememberSaveable { mutableStateOf(false) }
     val strength = PasswordRules.strength(password)
+    val biometricsAvailable = BiometricUnlock.isAvailable(context)
+    val promptTitle = stringResource(R.string.applock_setup_biometric_prompt_title)
+    val promptNegative = stringResource(R.string.applock_setup_biometric_prompt_skip)
+
+    // The vault now exists; enrol inside a successful authentication, or continue without.
+    LaunchedEffect(feedback.awaitingBiometricEnrolment) {
+        if (!feedback.awaitingBiometricEnrolment) return@LaunchedEffect
+        val cipher = biometricEnrolCipher()
+        val shown =
+            cipher != null &&
+                BiometricUnlock.prompt(
+                    context = context,
+                    cipher = cipher,
+                    title = promptTitle,
+                    negativeButton = promptNegative,
+                    onAuthenticated = onBiometricEnrolled,
+                    onDismissed = onBiometricSkipped,
+                    onError = { onBiometricSkipped() },
+                )
+        if (!shown) onBiometricSkipped()
+    }
 
     LockScaffold(modifier) {
+        StepIndicator(step = 1)
         Icon(Icons.Filled.Lock, contentDescription = null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.primary)
         Text(stringResource(R.string.applock_setup_title), style = MaterialTheme.typography.headlineMedium)
         Text(stringResource(R.string.applock_setup_body), style = MaterialTheme.typography.bodyLarge)
@@ -133,7 +174,7 @@ internal fun SetupPasswordScreen(
             isError = feedback.setupError == SetupError.MISMATCH,
             supportingText = if (feedback.setupError == SetupError.MISMATCH) stringResource(R.string.applock_error_mismatch) else null,
             enabled = !feedback.busy,
-            onImeAction = { onSubmit(password, confirm) },
+            onImeAction = { onSubmit(password, confirm, wantBiometric) },
             modifier = Modifier.fillMaxWidth(),
         )
         ClearTravelCard(modifier = Modifier.fillMaxWidth()) {
@@ -147,16 +188,57 @@ internal fun SetupPasswordScreen(
             Spacer(Modifier.height(8.dp))
             Text(stringResource(R.string.applock_setup_warning_body), style = MaterialTheme.typography.bodyLarge)
         }
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Fingerprint, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.size(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.applock_setup_biometric_title), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    text =
+                        stringResource(
+                            if (biometricsAvailable) {
+                                R.string.applock_setup_biometric_subtitle
+                            } else {
+                                R.string.applock_setup_biometric_unavailable
+                            },
+                        ),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = wantBiometric && biometricsAvailable,
+                enabled = biometricsAvailable && !feedback.busy,
+                onCheckedChange = { wantBiometric = it },
+            )
+        }
         Button(
-            onClick = { onSubmit(password, confirm) },
+            onClick = { onSubmit(password, confirm, wantBiometric && biometricsAvailable) },
             enabled = !feedback.busy && password.isNotEmpty() && confirm.isNotEmpty(),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Text(stringResource(R.string.applock_setup_action))
         }
+        if (feedback.busy) CircularProgressIndicator()
         if (feedback.preparationFailed) PreparationFailedText()
     }
 }
+
+/** "Step n of 4" — the wizard's position line, shared by all four screens. */
+@Composable
+internal fun StepIndicator(
+    step: Int,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = stringResource(R.string.applock_onboarding_step, step, ONBOARDING_STEPS),
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier,
+    )
+}
+
+internal const val ONBOARDING_STEPS = 4
 
 /** Cold start / re-lock: password, or BiometricPrompt when enabled. */
 @Composable
@@ -260,7 +342,7 @@ private fun PreparationFailedText() {
 }
 
 @Composable
-private fun LockScaffold(
+internal fun LockScaffold(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {

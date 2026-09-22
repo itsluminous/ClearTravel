@@ -9,6 +9,11 @@
     <string name="applock_setup_warning_title">If you forget this password, your data is lost</string>
     <string name="applock_setup_warning_body">There is no reset, no recovery e-mail and no way for anyone to unlock your data without it — not even Google Drive backups, which are encrypted with the same password. Save it in a password manager.</string>
     <string name="applock_setup_action">Create password and continue</string>
+    <string name="applock_setup_biometric_title">Unlock with fingerprint</string>
+    <string name="applock_setup_biometric_subtitle">Use your fingerprint or face instead of typing the password. The password still works.</string>
+    <string name="applock_setup_biometric_unavailable">No fingerprint or face is set up on this device. You can turn this on later in Settings → Security.</string>
+    <string name="applock_setup_biometric_prompt_title">Confirm to enable fingerprint unlock</string>
+    <string name="applock_setup_biometric_prompt_skip">Skip for now</string>
     <string name="applock_error_too_short">Use at least %1$d characters.</string>
     <string name="applock_error_mismatch">The two passwords don’t match.</string>
     <string name="applock_strength_too_short">Too short</string>
@@ -30,4 +35,39 @@
     <string name="applock_preparing_body">Opening your encrypted storage. The first time after an update this can take a moment while existing data is encrypted.</string>
     <string name="applock_preparation_failed">Your data could not be opened. Free up some storage space and try again.</string>
     <string name="applock_preparation_retry">Try again</string>
+
+    <!-- First-run wizard steps 2–4 (ADR-032) -->
+    <string name="applock_onboarding_step">Step %1$d of %2$d</string>
+    <string name="applock_onboarding_continue">Continue</string>
+    <string name="applock_onboarding_google_title">Back up to Google Drive?</string>
+    <string name="applock_onboarding_google_body">Connect a Google account and ClearTravel keeps an encrypted copy of your backups in your Drive — only this app, with your password, can read them. You can also connect later from Settings.</string>
+    <string name="applock_onboarding_google_connect">Connect Google account for backups</string>
+    <string name="applock_onboarding_google_offline">Use offline</string>
+    <string name="applock_onboarding_google_linked_as">Connected as %1$s</string>
+    <string name="applock_onboarding_google_not_configured">Google features are not configured in this build, so connecting is unavailable. Everything else works offline.</string>
+    <string name="applock_onboarding_restore_title">Restore a backup or start fresh?</string>
+    <string name="applock_onboarding_restore_body">If you used ClearTravel before, bring your journeys, trips, checklists and documents back from a backup. Otherwise start with an empty app.</string>
+    <string name="applock_onboarding_restore_file_title">Restore from a file</string>
+    <string name="applock_onboarding_restore_file_body">Pick a ClearTravel backup file you exported earlier (for example from your Downloads folder).</string>
+    <string name="applock_onboarding_restore_file_action">Choose backup file</string>
+    <string name="applock_onboarding_restore_drive_title">Restore from Google Drive</string>
+    <string name="applock_onboarding_restore_drive_no_access">Your account is connected, but Drive access was not granted. You can grant it later in Settings → Google account → Back up to Drive.</string>
+    <string name="applock_onboarding_restore_drive_checking">Checking your Drive for ClearTravel backups…</string>
+    <string name="applock_onboarding_restore_drive_none">No ClearTravel backups were found in this Google Drive.</string>
+    <string name="applock_onboarding_restore_drive_recheck">Check again</string>
+    <string name="applock_onboarding_restore_drive_found">%1$d backup(s) found — tap one to restore it.</string>
+    <string name="applock_onboarding_restore_drive_row">%1$s · %2$s</string>
+    <string name="applock_onboarding_start_fresh">Start fresh</string>
+    <string name="applock_onboarding_backup_password_title">Backup password</string>
+    <string name="applock_onboarding_backup_password_body">This backup is encrypted. Enter the password it was created with to restore it.</string>
+    <string name="applock_onboarding_backup_password_may_differ">This may differ from the password you just created: a backup is sealed with the password of the ClearTravel install that made it. Use that one here.</string>
+    <string name="applock_onboarding_backup_password_file">Backup: %1$s</string>
+    <string name="applock_onboarding_backup_password_label">Password of the backup</string>
+    <string name="applock_onboarding_backup_password_wrong">That password does not open this backup. Try again.</string>
+    <string name="applock_onboarding_backup_password_action">Restore backup</string>
+    <string name="applock_onboarding_backup_password_cancel">Choose a different backup</string>
+    <string name="applock_onboarding_error_google">Could not connect the Google account. You can try again or continue offline.</string>
+    <string name="applock_onboarding_error_backup_version">This backup was made by a newer ClearTravel. Update the app, then restore it.</string>
+    <string name="applock_onboarding_error_backup_unreadable">That file is not a readable ClearTravel backup.</string>
+    <string name="applock_onboarding_error_backup_io">The backup could not be read. Check the connection or pick the file again.</string>
 </resources>

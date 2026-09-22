@@ -41,10 +41,12 @@ android {
 
 dependencies {
     // ADR-031 app lock: first-run password setup, unlock (password / BiometricPrompt),
-    // post-unlock storage preparation. Depends on core:* only.
+    // post-unlock storage preparation. ADR-032 onboarding wizard: Google link + Drive
+    // restore (core:google), backup import (core:data). Depends on core:* only.
     implementation(project(":core:designsystem"))
     implementation(project(":core:data"))
     implementation(project(":core:security"))
+    implementation(project(":core:google"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.compose)

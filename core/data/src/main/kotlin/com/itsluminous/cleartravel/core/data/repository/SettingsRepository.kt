@@ -39,4 +39,14 @@ interface SettingsRepository {
     val lockTiming: Flow<LockTiming>
 
     suspend fun setLockTiming(timing: LockTiming)
+
+    /**
+     * ADR-032: true from the moment the first-run password is created until the
+     * onboarding wizard finishes (Google step, restore-or-start-fresh). Defaults to
+     * false so installs that predate the wizard never see it; a process death
+     * mid-wizard resumes at the step after password creation.
+     */
+    val onboardingPending: Flow<Boolean>
+
+    suspend fun setOnboardingPending(pending: Boolean)
 }

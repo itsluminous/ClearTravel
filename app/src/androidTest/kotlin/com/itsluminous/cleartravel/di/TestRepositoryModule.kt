@@ -134,4 +134,12 @@ class FakeSettingsRepository
         override suspend fun setLockTiming(timing: LockTiming) {
             this.timing.value = timing
         }
+
+        /** ADR-032: false by default so every pre-existing e2e skips the onboarding wizard. */
+        private val onboarding = MutableStateFlow(false)
+        override val onboardingPending: Flow<Boolean> = onboarding
+
+        override suspend fun setOnboardingPending(pending: Boolean) {
+            onboarding.value = pending
+        }
     }

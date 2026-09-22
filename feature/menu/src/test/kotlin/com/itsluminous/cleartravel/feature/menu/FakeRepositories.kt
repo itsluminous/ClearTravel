@@ -54,6 +54,13 @@ class FakeSettingsRepository : SettingsRepository {
     override suspend fun setLockTiming(timing: LockTiming) {
         this.timing.value = timing
     }
+
+    private val onboarding = MutableStateFlow(false)
+    override val onboardingPending: Flow<Boolean> = onboarding
+
+    override suspend fun setOnboardingPending(pending: Boolean) {
+        onboarding.value = pending
+    }
 }
 
 /** In-memory [ChecklistPresetRepository] for menu ViewModel tests. */

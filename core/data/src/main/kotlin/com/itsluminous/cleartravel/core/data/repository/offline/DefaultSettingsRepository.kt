@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.itsluminous.cleartravel.core.data.di.SecurePreferences
@@ -58,6 +59,12 @@ class DefaultSettingsRepository
             dataStore.edit { it[KEY_LOCK_TIMING] = timing.storageValue }
         }
 
+        override val onboardingPending: Flow<Boolean> = dataStore.data.map { it[KEY_ONBOARDING_PENDING] ?: false }
+
+        override suspend fun setOnboardingPending(pending: Boolean) {
+            dataStore.edit { it[KEY_ONBOARDING_PENDING] = pending }
+        }
+
         override suspend fun trainApiKey(): String? = readSecure(SECURE_KEY_TRAIN_API)
 
         override suspend fun setTrainApiKey(key: String?) = writeSecure(SECURE_KEY_TRAIN_API, key)
@@ -82,6 +89,7 @@ class DefaultSettingsRepository
             private val KEY_TRAIN_PROVIDER_ID = stringPreferencesKey("train_provider_id")
             private val KEY_FLIGHT_PROVIDER_ID = stringPreferencesKey("flight_provider_id")
             private val KEY_LOCK_TIMING = stringPreferencesKey("lock_timing")
+            private val KEY_ONBOARDING_PENDING = booleanPreferencesKey("onboarding_pending")
             private const val SECURE_KEY_TRAIN_API = "train_api_key"
             private const val SECURE_KEY_FLIGHT_API = "flight_api_key"
         }

@@ -97,4 +97,16 @@ class DefaultSettingsRepositoryTest {
             assertThat(repository.flightApiKey()).isNull()
             assertThat(repository.trainApiKey()).isEqualTo("train-secret")
         }
+
+    @Test
+    fun `onboarding pending defaults to false so upgraded installs skip the wizard, and round-trips`() =
+        runTest(testDispatcher) {
+            assertThat(repository.onboardingPending.first()).isFalse()
+
+            repository.setOnboardingPending(true)
+            assertThat(repository.onboardingPending.first()).isTrue()
+
+            repository.setOnboardingPending(false)
+            assertThat(repository.onboardingPending.first()).isFalse()
+        }
 }
