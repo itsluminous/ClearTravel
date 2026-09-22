@@ -2059,3 +2059,79 @@ On-device run recorded in `docs/validation-report.md`.
 **Consequences.** No contract change (`core:model` / `core:database` / `core:data`
 untouched). The explicit route-fetch landing (ADR-019) and the seat-map return
 (ADR-022) are unchanged; only the chained fetch closes to the list.
+
+## ADR-034 — Viewer & lock polish: step-1 biometric enrolment fix, 1-minute lock default, no forced brightness, fullscreen + landscape rail (2026-09-22)
+
+**Context.** Five user reports after the ADR-031/032/033 waves. (1) The fingerprint
+toggle on wizard step 1 "didn't stick" — biometric unlock had to be enabled again in
+Settings. (2) The lock timing defaulted to *Never*, so a phone left unlocked on a table
+stayed open. (3) The document/boarding-pass viewer forced the screen to full
+brightness, which users found aggressive (and it fought the system's adaptive
+brightness). (4) There was no way to look at a document without the toolbar, page bar
+and system bars around it. (5) In landscape the top bar + page bar + NavigationBar ate
+the short axis; a boarding pass was "next to impossible" to view.
+
+**Decision.**
+
+1. **Root cause of the step-1 biometric bug** (`feature:applock`). `setUp(…,
+   enableBiometric = true)` created the vault (`VaultState.Unlocked`) while the UI
+   lock (`AppLockController.locked`) was still `true` from the cold start, so the gate's
+   `combine` emitted `Locked(biometricEnabled = false)` and swapped
+   `SetupPasswordScreen` — the composable that owns the `LaunchedEffect` running
+   `BiometricPrompt` — for `UnlockScreen` before the prompt could launch. The user
+   typed the password again and was on the wizard with no biometric wrap
+   (device-reproduced on the pre-fix APK: `vault.json` had no `biometricWrap`). The
+   ADR-032 device run had **no fingerprint enrolled**, so only the unit test exercised
+   the path — and it *asserted* the wrong `Locked(false)` state. Fix: an explicit
+   `enrollingBiometric` flag raised BEFORE `keyVault.setUp` and cleared when
+   `prepareAndOpen()` starts; the `when` treats it like `Preparing` (wins over
+   `uiLocked`), so the gate stays on `Setup` until storage preparation begins and
+   there is no `Locked` emission anywhere between "Create" and the wizard. Tests: the
+   two toggle tests now assert `Setup`; two new tests collect every emission and
+   assert no `Locked` (success + Keystore-failure paths) and that a relaunch offers
+   biometrics. The `LaunchedEffect`, `BiometricUnlock.prompt` and the
+   `completeBiometricEnrolment`/`skipBiometricEnrolment` callbacks were correct.
+2. **`LockTiming.DEFAULT = ONE_MINUTE`** (`core:security`). Only the DataStore
+   fallback (`fromStorage(null)`) changes; an explicit choice is stored under its own
+   key and keeps winning (`DefaultSettingsRepositoryTest`). Settings shows "1 minute"
+   selected on a fresh install.
+3. **No forced brightness** (`core:designsystem`). `FullBrightness` (window
+   `screenBrightness = 1f` + restore on dispose) is deleted; nothing in the app touches
+   brightness any more. "Full-brightness viewer" wording in current code/docs/strings
+   is tidied (historical ADR text left as written).
+4. **Fullscreen** (`DocumentViewerState.isFullscreen`, `toggle/enter/exitFullscreen`;
+   saved in the `Saver`, legacy 3-slot lists restore as not fullscreen). Entered by
+   the new toolbar `ExplainableIcon` (`designsystem_viewer_fullscreen`) or a SINGLE
+   tap on the content (double-tap still zooms); tap again or Back leaves it. Hides the
+   viewer chrome, the system bars (`WindowInsetsControllerCompat.hide(systemBars)`,
+   transient-by-swipe, restored on exit/dispose) AND the shell chrome through a new
+   `core:designsystem` seam: `ShellChromeController` (reference-counted hide
+   requests) provided by the app via `LocalShellChrome`; the viewer holds a request
+   with `HideShellChrome(isFullscreen)` (a `DisposableEffect`, so popping the viewer
+   while fullscreen releases it). `ClearTravelApp` drops the `NavigationBar` and
+   `JourneysScreen` its segmented row while `hidden`. Features never talk to the
+   shell directly — the seam lives in the design system, the app is the only
+   provider.
+5. **Landscape chrome** (`LocalConfiguration.orientation`, no new dependency).
+   *Viewer:* the top bar and bottom page bar are replaced by a 56dp end-side rail
+   (close on top; rotate / fullscreen / share / save; for multi-page PDFs up / "n/N" /
+   down at the bottom), so the content gets the whole height between the insets and
+   the NavigationBar (the stock NavigationBar is deliberately left alone — fullscreen
+   removes it too). Chosen over auto-fullscreen-by-default because it keeps the
+   controls discoverable; fullscreen is one tap away. *Lists:* the Journeys segmented
+   row drops its vertical padding to 2dp in landscape; the Active|Archived filter rows
+   were already a single 32dp row with no vertical padding, so nothing to slim there.
+
+**Verification.** Unit: `AppLockViewModelTest` (+2, 2 corrected), `AppLockControllerTest`,
+`SecuritySettingsViewModelTest`, `DefaultSettingsRepositoryTest` (+1),
+`DocumentViewerStateTest` (+3). E2e: `DocumentsE2eTest` +2 (`viewer_fullscreenToggle_
+hidesAllChrome_andTapRestoresIt`, `viewer_inLandscape_usesSideRail_andContentKeepsThe
+ShortAxis` via `requestedOrientation`). On-device walk in `docs/validation-report.md`
+(fingerprint enrolled first; pre-fix reproduction; fixed build end-to-end incl. cold
+start → auto BiometricPrompt; brightness before/after; fullscreen and landscape dumps).
+
+**Consequences.** No `core:model` / `core:database` change. `core:data` untouched
+(`LockTiming` lives in `core:security`). `DocumentViewerState.Saver` gained a fourth
+slot (backwards-compatible). New public test tags `DOCUMENT_VIEWER_TOOLBAR/RAIL/
+CONTENT_TEST_TAG`. Follow-up: a multi-page PDF landscape check on device (the rail's
+page controls are covered by composition only).

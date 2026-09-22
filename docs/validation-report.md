@@ -910,3 +910,32 @@ password → offline → start fresh).
 | 7 | **Type-to-filter**: focus → keyboard → the field moves up to `[42,1328][1038,1478]` (`imePadding`, never covered); typing `visa` keeps **only Schengen** (matched on its TYPE label — the name has no "visa"), *Clear search* trailing icon appears; `visazz` → **"No matches" / "No document name or type contains “visazz”."**; Clear → both cards back, placeholder restored | PASS | `46-documents-search-no-matches.png`, dumps |
 | 8 | `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → BUILD SUCCESSFUL; unit **979/979**, 0 failures (was 967: `TrainsNavigationTest` +5, `DocumentSearchTest` +7) | PASS | `ui-polish.log` (git-ignored) |
 | 9 | `connectedDebugAndroidTest` → **18/18 PASS** (was 15: new `LayoutE2eTest` ×2 — segment docked above the nav bar + switching, equal-width filter chips spanning ≥ root − 41 dp at ≤ 48 dp on all three lists — and `DocumentsE2eTest.searchBox_isDockedAtBottom_filtersLive_andClearRestores`); no existing assertion referenced the old layout, so none needed changing | PASS | `connected.log` (git-ignored) |
+
+## Viewer & lock polish — five user-reported fixes (2026-09-22 16:35–17:20 IST, emulator Android_16_AOSP_Medium, API 36, ADR-034)
+
+Setup: fingerprint enrolled FIRST (`locksettings set-pin 1234` → Settings enrolment →
+`adb emu finger touch 1` ×14 → "Fingerprint added", `dumpsys fingerprint` count 1).
+All checks by `uiautomator dump`, `dumpsys`, `settings get`; screenshots captured blind
+(`sips -Z 800`), never viewed.
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 1a | **Pre-fix reproduction** (APK built from `main` before the fix): fresh install → step 1 → fingerprint Switch `checked=true` (enabled — a print exists) → password + confirm → Create. Landed on **"ClearTravel is locked / Enter your password"** — no BiometricPrompt, and `files/security/vault.json` keys = `salt, iterations, passwordWrap, portableWrap, filesMigrated` (**no `biometricWrap`**). Exactly the user's report. | BUG REPRODUCED | `95-prefix-toggle-on-lands-on-unlock.png`, vault dump |
+| 1b | **Fixed build**: same walk → BiometricPrompt **"Confirm to enable fingerprint unlock" / "Skip for now"** shown over step 1 → `finger touch 1` → straight to **Step 2 of 4** (no unlock screen in between); `vault.json` now has **`biometricWrap`**. Use offline → Start fresh → Trips. **Cold start** (`am force-stop` + launch) → BiometricPrompt **"Unlock ClearTravel" / "Use password"** auto-shown → `finger touch 1` → Trips. Settings → Security: *Unlock with biometrics* `checked=true`. | PASS | `96-onboarding-step1-biometric-prompt.png`, `97-coldstart-auto-biometric-prompt.png`, dumps |
+| 2 | **Lock-timing default**: fresh install, Settings → Security → "Lock when in the background for": *Immediately* `checked=false`, **1 minute `checked=true`** (was *Never*). Timing logic unit-tested (`AppLockControllerTest`, `DefaultSettingsRepositoryTest` explicit-value-wins). | PASS | dump |
+| 3 | **No forced brightness**: `settings get system screen_brightness` = **102 before**, document opened in the viewer → **102** (unchanged); `dumpsys window windows` has **no `screenBrightness=`** attribute on the app window (pre-fix it carried `1.0`). Empty-state copy "shown at full brightness" reworded. | PASS | dumps |
+| 4 | **Fullscreen**: viewer toolbar shows Close / Rotate 90° / **Fullscreen — tap the document to leave** / Share file / Save a copy. Tap Fullscreen → system "Viewing full screen" hint, `InsetsSource type=statusBars visible=false`; after *Got it* the dump has **zero text nodes** and the only content-desc is *Stored document* — no toolbar, no title, no NavigationBar labels. Single tap on the content → toolbar + tab bar back, `statusBars visible=true`. | PASS | `99-viewer-fullscreen.png`, dumps |
+| 5a | **Landscape viewer** (`accelerometer_rotation 0`, `user_rotation 1`, 2400×1080): no top bar; a **147px (56dp) end rail** at x 2253–2400 with Close (top) and Rotate / Fullscreen / Share / Save stacked; content region `[0,63][2253,807]` = the whole height between the status bar and the stock NavigationBar (807–1080, left alone by design). Fullscreen from the rail → image bounds `[840,0][1560,1080]` = **100% of the short axis**, no text nodes; tap → rail back. | PASS | `100-viewer-landscape-rail.png`, dumps |
+| 5b | **Landscape lists**: Journeys — Active|Archived is one 53px row at the top (y 100–153); the Trains|Flights segmented row sits at y ~705–801 directly above the NavigationBar (2dp padding instead of 8dp). Rotation restored afterwards (`user_rotation 0`, `accelerometer_rotation 1`). | PASS | `102-journeys-landscape-compact-segment.png`, dump |
+
+**Regression.** `./gradlew ktlintCheck lintDebug testDebugUnitTest assembleDebug
+assembleDebugAndroidTest` green (one transient lint K2 "Unexpected failure during lint
+analysis" on an untouched test file during the first parallel run; `lintDebug` alone
+passed and the re-run gate was clean). `connectedDebugAndroidTest`: **20/20** on the
+emulator, including the two new viewer e2e tests (fullscreen chrome gone + tap
+restores; landscape rail ≤57dp with the toolbar absent).
+
+**Notes.** The pre-fix bug hid because the ADR-032 device run had no fingerprint
+enrolled (toggle disabled) and the unit test asserted the wrong intermediate state.
+Fingerprint enrolment left the AVD with a lock-screen PIN; cleared with `locksettings
+clear --old 1234` before shutdown. Emulator shut down at the end of the run.
