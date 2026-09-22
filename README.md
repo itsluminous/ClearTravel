@@ -19,7 +19,10 @@ optional Google account link for Calendar/Drive sync.
   be read, timestamped last-check outcome on the sheet, background status polling
   with gate/delay notifications, and per-airline web check-in shortcuts.
 - **Trip itineraries** — day-grouped timeline of stays, activities and transport,
-  plus a Google Maps view of the trip (needs a Maps key and Play services).
+  plus a Google Maps view of the trip (needs a Maps key and Play services). Commute
+  legs link to your train/flight journeys — pick an existing one or add a new one
+  right from the leg (you are taken to Journeys and brought back with it linked);
+  a journey's detail sheet lists the trips it is part of, one tap apart.
 - **Packing checklists** — per-trip checklists built from editable preset templates
   (append multiple presets, track packed counts).
 - **Travel documents** — keep scans of your passport, visas, ID, insurance and

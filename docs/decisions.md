@@ -1373,3 +1373,99 @@ obfuscated CSS classes that rotate per deploy.
 user is never worse off than the previous read-it-yourself page. No schema/DB
 change. `core:model`/`core:data` untouched; `core:scrape` contract grows by two
 defaulted fields. Verified live on the emulator (docs/validation-report.md).
+
+## ADR-028 — Cross-tab integration: journey-add bus, "Part of" reverse lookup, Trips landing hook (2026-09-22)
+
+**Context.** Trips and Journeys knew nothing of each other beyond the stored
+`linkedJourneyId`/`linkedJourneyType` (ADR-004): a commute leg could only link a
+journey that ALREADY existed (the user had to leave the form, add it in Journeys,
+come back and rebuild the leg), the leg's sheet showed a truncated id you could not
+act on, and a ticket/flight never told you which trip it belonged to. Feature
+modules must never depend on each other, so every hand-off needs a `core:data`
+contract or app-shell coordination.
+
+**Decisions.**
+
+1. **`JourneyAddRequestBus` (core:data, `crosstab` package) — the ONE feature→shell
+   seam.** `request(type): JourneyAddRequest` (nonce + `JourneyType`),
+   `pendingRequest: StateFlow`, `results: Flow<JourneyAddResult>` (`Added(nonce,
+   type, journeyId)` / `Cancelled(nonce)`), `complete(result)`. Requester =
+   `ItineraryItemFormViewModel` (posts, then filters `results` by its nonce);
+   fulfiller = the app shell, the ONLY producer of results. A new request supersedes
+   a pending one (completed as `Cancelled`). Impl `InMemoryJourneyAddRequestBus`
+   (`@Singleton`) is bound in a dedicated `CrossTabModule` — deliberately NOT in
+   `RepositoryModule`, which the hermetic e2e replaces — so tests keep the real
+   bus (it has no I/O). Rejected: a callback threaded through `tripsGraph()` (the
+   result must reach a ViewModel that outlives the tab switch, not a composable),
+   and a repository-level "draft" table (nothing to persist; the hand-off lives
+   within one session).
+2. **Shell coordination (app).** `JourneyPickCoordinator` (`@HiltViewModel`,
+   activity-scoped) exposes the bus; `MainActivity` turns a pending request into
+   `JourneysDeepLink.forJourneyAdd(request)` — the SAME landing channel as
+   notifications/intake (ADR-014/024/025), now carrying `addRequest`. `JourneysScreen`
+   forwards it only to the segment matching the request type through the new
+   additive hooks `TrainsContent(addRequest, onAddRequestDone)` /
+   `FlightsContent(addRequest, onAddRequestDone)`: the segment opens its add-options
+   sheet at once (`TrainListScreen(openAddSheetNonce, onAddAbandoned)` and the
+   flights equivalent) and reports the outcome ONCE as the existing
+   `TrainsEntryResult`/`FlightsEntryResult` — saved → `Saved`, refused duplicate →
+   `DuplicatePnr`/`DuplicateFlight`, sheet dismissed / no file picked / paste
+   cancelled / form Cancel or back → `Cancelled`. Pure `JourneyPickRouting` maps
+   these onto bus results: **a refused duplicate links the EXISTING journey** (it is
+   what the user meant; ADR-024/025's notice is skipped in pick mode). In pick mode
+   a PNR-only quick add reports on save WITHOUT chaining the PNR check (the
+   itinerary is waiting; status can be checked later); flights' "Save & check
+   status" reports when the check closes, like `FlightsExternalEntry`. The shell
+   then calls `complete(result)` FIRST and lands on Trips (`TripsLanding(tripId =
+   null)`) so the restored form already holds the answer. The pick request in
+   `JourneysScreen` is `remember`ed, not saveable: completing or leaving the tab
+   disposes it, so a re-entered Journeys tab never re-opens a stale add sheet.
+3. **Form side.** The journey picker sheet gains "Add a new train ticket" / "Add a
+   new flight" rows above the existing journeys. On `Added` the form links via the
+   SAME `linkTrain`/`linkFlight` prefill as a pick, now extended: a flight's
+   `schedDep` fills a blank planned time (system zone, `HH:mm`), and a journey dated
+   inside the trip moves the leg onto that day (`dayIndexFor`, never creating a slot
+   the form does not offer). `Cancelled` leaves the form as it was.
+   `cancelStaleJourneyAdd()` runs whenever the form (re)appears: after a completed
+   add it is a no-op; after a MANUAL tab tap the request is still pending and is
+   cancelled so a later add in Journeys is not linked here by surprise.
+   **State preservation:** the form is a destination of the Trips tab's nested
+   NavHost; the shell's tab switch uses `popUpTo(start){saveState}` +
+   `restoreState`, so the nested back stack (same entry ids) and the
+   `hiltViewModel` scoped to the form entry survive — verified on the emulator
+   (docs/validation-report.md next stage); no draft persistence was needed.
+4. **Part B — leg → journey.** `ItineraryItemSheet` gains an "Open in Journeys"
+   action under the linked-journey field → `TripDetailScreen(onOpenJourney)` →
+   `tripsGraph(onOpenJourney)` → `ClearTravelApp(onOpenJourney)` → `MainActivity`
+   sets `JourneysDeepLink.forJourney(type, id)` — the existing `initialTicketId` /
+   `initialFlightId` detail hooks do the rest.
+5. **Part C — journey → trips.** Additive
+   `ItineraryRepository.observeItemsLinkedToJourney(journeyId)` (frozen-contract
+   rule): live legs across ALL trips with that `linkedJourneyId`, ordered (day,
+   order); DAO `observeLinkedToJourney` (no index — the table is small and the query
+   runs only while a detail sheet is open). Trip names resolve through the existing
+   `TripRepository.observeTrip` (combine per distinct trip id) — no new
+   `TripRepository` method or joined POJO. `TrainDetailViewModel` (now also injecting
+   `ItineraryRepository`/`TripRepository`) adds `linkedTrips: List<LinkedTrip>` to
+   its state; flights get a read-only `FlightTripLinksViewModel` beside the documents
+   one. Both sheets render a "Part of — `<trip> · Day N`" `ListItem` per linking leg
+   (section hidden when none); tapping reports `onOpenTrip(tripId)` up the same
+   chain → `MainActivity` sets a `TripsLanding(tripId)`.
+6. **`TripsLanding` (feature:itinerary) — the Trips mirror of `JourneysDeepLink`.**
+   `tripsGraph(landing, onLandingConsumed, onOpenJourney)`; the nested NavHost
+   navigates to the trip detail with `popUpTo(trip_list)` + `launchSingleTop` (the
+   user asked to SEE that trip; an open form/other detail is left behind), or — for
+   `tripId = null` — merely restores the tab (the pick return path).
+   `ClearTravelApp` gains `tripsLanding`/`onTripsLandingConsumed`/`onOpenJourney`/
+   `onOpenTrip`/`onJourneyAddDone`; all defaulted.
+
+**Consequences.** From a commute leg the user can add a train (manual / pasted
+SMS / imported file) or a flight (manual / boarding pass / booking confirmation)
+without leaving the form for good: the new journey comes back linked and
+prefilled. Linked legs and their journeys are one tap apart in both directions.
+Test fakes of `ItineraryRepository` (feature:itinerary, core:google, new read-only
+fakes in feature:trains and feature:flights) implement the reverse lookup.
+`core:model`, `core:database` schema and `TripRepository` are untouched. E2E:
+`CrossTabE2eTest` (seeded linked trip+ticket → "Part of" row → trip detail → leg
+sheet → "Open in Journeys" → ticket sheet); the full add-from-form hand-off is
+device-verified rather than automated (system file picker, live form).

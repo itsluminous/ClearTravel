@@ -21,7 +21,7 @@ Package root: `com.itsluminous.cleartravel`.
 | `core:designsystem` | `ClearTravelTheme` (dynamic color + #0B57D0 seed fallback), typography ≥16sp body, `EmptyState`, `ChipRow`, `ExplainableIcon`, `ClearTravelCard`, `ClearTravelFab`, `DocumentViewerScreen` (shared full-brightness image/PDF viewer) | done |
 | `core:model` | `SyncableEntity` (UUID + updatedAt + tombstone, ADR-002), `EntityIds`, `ThemeMode`, domain models/enums — **contract: changes need an ADR** | done |
 | `core:database` | Room entities/DAOs/converters, `ClearTravelDatabase` (schema v3: v2 `train_coaches`, v3 `travel_documents`; committed `schemas/` + `MigrationTest`) — **contract: changes need an ADR** | done |
-| `core:data` | Repository interfaces + Room-backed impls, `TrainStatusProvider`/`FlightStatusProvider` contracts (Hilt-bound), settings DataStore, backup export/merge (ADR-002, `docs/backup-format.md`) | done |
+| `core:data` | Repository interfaces + Room-backed impls, `TrainStatusProvider`/`FlightStatusProvider` contracts (Hilt-bound), settings DataStore, backup export/merge (ADR-002, `docs/backup-format.md`), `JourneyAddRequestBus` cross-tab seam (ADR-028) | done |
 | `core:notifications` | Channels (trains/flights/reminders), builders, deep links, POST_NOTIFICATIONS permission gate | done |
 | `core:google` | Google linking (Credential Manager), Calendar sync (dedicated "ClearTravel" calendar), Drive uploads/backups + restore ladder, sync workers | done (needs-user-setup: `GOOGLE_WEB_CLIENT_ID`, see `docs/google-setup.md`) |
 | `core:scrape` | Rule-driven WebView scraper engine (DOM storage on, `dismissSelectors`, ready-signal timeout → raw-page fallback); per-site JSON rule files in assets + HTML fixtures (ADR-003) | done |
@@ -35,8 +35,10 @@ Package root: `com.itsluminous.cleartravel`.
 | `feature:menu` | Menu tab: Settings (theme, presets, Google account), Backup/Restore (local + Drive), About | done |
 
 **Ownership boundaries:** feature modules depend ONLY on `core:*`, NEVER on each other;
-cross-feature interaction goes through `core:data` contracts. The app module is the
-only composition point (Journeys tab). `core:designsystem` never depends on
+cross-feature interaction goes through `core:data` contracts (e.g. the ADR-028
+`JourneyAddRequestBus` + `ItineraryRepository.observeItemsLinkedToJourney`) and the
+app shell's landing hooks (`JourneysDeepLink`, `TripsLanding`). The app module is the
+only composition point (Journeys tab, cross-tab coordination). `core:designsystem` never depends on
 data/database/features. UI never touches Room DAOs or WebView engines directly.
 
 ## Build / test / lint commands
