@@ -42,10 +42,15 @@ class FakeBackupManager(
 
     override suspend fun exportLatestToAppStorage(): ExportResult = ExportResult(Instant.EPOCH, 0, 0)
 
-    override suspend fun importPreview(uri: Uri): ImportPreview =
-        importPreviewResult ?: ImportPreview(1, "0.1.0", Instant.EPOCH, emptyMap())
+    override suspend fun importPreview(
+        uri: Uri,
+        sourcePassword: CharArray?,
+    ): ImportPreview = importPreviewResult ?: ImportPreview(1, "0.1.0", Instant.EPOCH, emptyMap())
 
-    override suspend fun importApply(uri: Uri): MergeSummary {
+    override suspend fun importApply(
+        uri: Uri,
+        sourcePassword: CharArray?,
+    ): MergeSummary {
         importApplied = uri
         return MergeSummary(1, 0, 0)
     }

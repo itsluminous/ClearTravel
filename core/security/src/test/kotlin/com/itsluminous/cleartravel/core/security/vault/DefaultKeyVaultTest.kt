@@ -98,6 +98,8 @@ class DefaultKeyVaultTest {
             assertThat(vault.portableKeyFor(foreignSalt, 1_000)).isNull()
 
             val derived = vault.derivePortableKey("other-password".toCharArray(), foreignSalt, 1_000)
+            assertThat(vault.portableKeyFor(foreignSalt, 1_000)).isNull() // derivation alone adopts nothing
+            vault.adoptPortableKey(derived)
             assertThat(vault.portableKeyFor(foreignSalt, 1_000)).isSameInstanceAs(derived)
             // Same password + same salt on another vault yields the same portable key.
             val other = DefaultKeyVault(InMemoryKeyFileStore(), iterations = 1_000, ioDispatcher = UnconfinedTestDispatcher())

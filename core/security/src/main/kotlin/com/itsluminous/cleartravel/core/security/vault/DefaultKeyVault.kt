@@ -103,13 +103,13 @@ class DefaultKeyVault(
         password: CharArray,
         salt: ByteArray,
         iterations: Int,
-    ): PortableKey {
-        val derived = derive(password, salt, iterations)
+    ): PortableKey = derive(password, salt, iterations).portable
+
+    override fun adoptPortableKey(key: PortableKey) {
         synchronized(adoptedKeys) {
-            adoptedKeys.removeAll { it.matches(salt, iterations) }
-            adoptedKeys += derived.portable
+            adoptedKeys.removeAll { it.matches(key.salt, key.iterations) }
+            adoptedKeys += key
         }
-        return derived.portable
     }
 
     override suspend fun enableBiometric(authenticatedCipher: Cipher) =

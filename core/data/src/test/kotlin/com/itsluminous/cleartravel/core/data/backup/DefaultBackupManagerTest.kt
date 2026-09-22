@@ -9,9 +9,16 @@ import com.itsluminous.cleartravel.core.database.ClearTravelDatabase
 import com.itsluminous.cleartravel.core.database.entity.toEntity
 import com.itsluminous.cleartravel.core.database.entity.toModel
 import com.itsluminous.cleartravel.core.model.TravelDocumentType
+import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
+import com.itsluminous.cleartravel.core.security.file.PortableCipher
+import com.itsluminous.cleartravel.core.security.vault.DefaultKeyVault
+import com.itsluminous.cleartravel.core.security.vault.InMemoryKeyFileStore
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.core.testing.inMemoryDatabase
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import org.junit.After
@@ -33,6 +40,7 @@ import java.util.zip.ZipOutputStream
  * export → wipe → import round trip, LWW merge in both directions, tombstone
  * replication, idempotence, attachment bundling rules, version gate, corruption.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class DefaultBackupManagerTest {
@@ -41,12 +49,54 @@ class DefaultBackupManagerTest {
     private lateinit var manager: DefaultBackupManager
     private val clock: Clock = Clock.fixed(Fixtures.NOW.plusSeconds(3600), ZoneOffset.UTC)
 
+    // ADR-031: an unlocked vault (password "pw") keys the file cipher and seals exports.
+    private lateinit var vault: DefaultKeyVault
+    private lateinit var cipher: LocalFileCipher
+
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
         db = inMemoryDatabase(context)
-        manager = DefaultBackupManager(context, db, clock)
+        vault = newVault(VAULT_PASSWORD)
+        cipher = LocalFileCipher(key = { vault.fileKey() })
+        manager = DefaultBackupManager(context, db, clock, vault, cipher)
     }
+
+    private fun newVault(password: String): DefaultKeyVault =
+        DefaultKeyVault(InMemoryKeyFileStore(), iterations = 1_000, ioDispatcher = UnconfinedTestDispatcher()).also {
+            runBlocking { it.setUp(password.toCharArray()) }
+        }
+
+    /** A manager over [freshDb] on THIS install (same vault → same portable salt → silent import). */
+    private fun managerFor(freshDb: ClearTravelDatabase): DefaultBackupManager =
+        DefaultBackupManager(context, freshDb, clock, vault, cipher)
+
+    /**
+     * A manager over [freshDb] on ANOTHER install whose vault was set up with
+     * [password]: a different random salt even for the same password, so a v2 import
+     * needs the source password once.
+     */
+    private fun foreignManagerFor(
+        freshDb: ClearTravelDatabase,
+        password: String,
+    ): Pair<DefaultBackupManager, LocalFileCipher> {
+        val otherVault = newVault(password)
+        val otherCipher = LocalFileCipher(key = { otherVault.fileKey() })
+        return DefaultBackupManager(context, freshDb, clock, otherVault, otherCipher) to otherCipher
+    }
+
+    /** Opens an exported v2 envelope as the plain ZIP inside it (using this vault's key). */
+    private fun openExport(file: File): ZipFile {
+        val plain = File(context.cacheDir, file.name + ".plain.zip")
+        PortableCipher.openDecrypted(file, vault.portableKey()).use { input -> plain.outputStream().use { input.copyTo(it) } }
+        return ZipFile(plain)
+    }
+
+    /** The plaintext of a restored on-device file (stored CTEF-encrypted since ADR-031). */
+    private fun plaintextOf(
+        file: File,
+        readerCipher: LocalFileCipher,
+    ): ByteArray = readerCipher.openDecrypted(file).use { it.readBytes() }
 
     @After
     fun tearDown() {
@@ -115,7 +165,7 @@ class DefaultBackupManagerTest {
 
             // "Wipe": a brand-new empty database.
             val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
-            val freshManager = DefaultBackupManager(context, freshDb, clock)
+            val freshManager = managerFor(freshDb)
             val summary = freshManager.importApply(uri)
 
             assertThat(summary).isEqualTo(MergeSummary(inserted = 14, updated = 0, skipped = 0))
@@ -254,14 +304,14 @@ class DefaultBackupManagerTest {
             manager.exportToUri(uri)
 
             // ZIP contains the bundled bytes.
-            ZipFile(File(context.cacheDir, "export.zip")).use { zip ->
+            openExport(File(context.cacheDir, "export.zip")).use { zip ->
                 val entry = zip.getEntry(BackupEntries.attachmentEntry(attachment.id))
                 assertThat(entry).isNotNull()
                 assertThat(zip.getInputStream(entry).readBytes()).isEqualTo(byteArrayOf(1, 2, 3, 4, 5))
             }
 
             val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
-            val freshManager = DefaultBackupManager(context, freshDb, clock)
+            val freshManager = managerFor(freshDb)
             freshManager.importApply(uri)
 
             val restored =
@@ -273,7 +323,9 @@ class DefaultBackupManagerTest {
             assertThat(restored.id).isEqualTo(attachment.id)
             assertThat(restored.updatedAt).isEqualTo(attachment.updatedAt)
             assertThat(restored.localPath).isNotEqualTo(sourceFile.absolutePath)
-            assertThat(File(restored.localPath).readBytes()).isEqualTo(byteArrayOf(1, 2, 3, 4, 5))
+            // Restored bytes are stored encrypted (ADR-031) and read back through the cipher.
+            assertThat(cipher.isEncrypted(File(restored.localPath))).isTrue()
+            assertThat(plaintextOf(File(restored.localPath), cipher)).isEqualTo(byteArrayOf(1, 2, 3, 4, 5))
             freshDb.close()
         }
 
@@ -286,12 +338,12 @@ class DefaultBackupManagerTest {
             val uri = exportFileUri()
             manager.exportToUri(uri)
 
-            ZipFile(File(context.cacheDir, "export.zip")).use { zip ->
+            openExport(File(context.cacheDir, "export.zip")).use { zip ->
                 assertThat(zip.getEntry(BackupEntries.attachmentEntry(attachment.id))).isNull()
             }
 
             val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
-            DefaultBackupManager(context, freshDb, clock).importApply(uri)
+            managerFor(freshDb).importApply(uri)
 
             // Restored as-is: drive id kept, path resolution deferred to the Google
             // milestone (documented seam, ADR-015).
@@ -321,7 +373,7 @@ class DefaultBackupManagerTest {
             val uri = exportFileUri()
             manager.exportToUri(uri)
 
-            ZipFile(File(context.cacheDir, "export.zip")).use { zip ->
+            openExport(File(context.cacheDir, "export.zip")).use { zip ->
                 assertThat(zip.getEntry(BackupEntries.TRAVEL_DOCUMENTS)).isNotNull()
                 val entry = zip.getEntry(BackupEntries.attachmentEntry(document.id))
                 assertThat(entry).isNotNull()
@@ -329,7 +381,7 @@ class DefaultBackupManagerTest {
             }
 
             val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
-            DefaultBackupManager(context, freshDb, clock).importApply(uri)
+            managerFor(freshDb).importApply(uri)
 
             val restored =
                 freshDb
@@ -344,7 +396,8 @@ class DefaultBackupManagerTest {
             val restoredFile = File(restored.filePath)
             assertThat(restoredFile.parentFile).isEqualTo(TravelDocumentStorage.directory(context.filesDir))
             assertThat(restoredFile.name).isEqualTo("${document.id}.pdf")
-            assertThat(restoredFile.readBytes()).isEqualTo(byteArrayOf(7, 6, 5, 4))
+            assertThat(cipher.isEncrypted(restoredFile)).isTrue()
+            assertThat(plaintextOf(restoredFile, cipher)).isEqualTo(byteArrayOf(7, 6, 5, 4))
             freshDb.close()
         }
 
@@ -356,12 +409,12 @@ class DefaultBackupManagerTest {
             val uri = exportFileUri()
             manager.exportToUri(uri)
 
-            ZipFile(File(context.cacheDir, "export.zip")).use { zip ->
+            openExport(File(context.cacheDir, "export.zip")).use { zip ->
                 assertThat(zip.getEntry(BackupEntries.attachmentEntry(document.id))).isNull()
             }
 
             val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
-            DefaultBackupManager(context, freshDb, clock).importApply(uri)
+            managerFor(freshDb).importApply(uri)
             val restored =
                 freshDb
                     .backupDao()
@@ -379,7 +432,7 @@ class DefaultBackupManagerTest {
             val full = File(context.cacheDir, "full.zip")
             manager.exportToUri(Uri.fromFile(full))
             val legacy = File(context.cacheDir, "legacy.zip")
-            ZipFile(full).use { source ->
+            openExport(full).use { source ->
                 ZipOutputStream(legacy.outputStream()).use { zip ->
                     for (entry in source.entries().asSequence()) {
                         if (entry.name == BackupEntries.TRAVEL_DOCUMENTS) continue
@@ -391,7 +444,7 @@ class DefaultBackupManagerTest {
             }
 
             val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
-            val summary = DefaultBackupManager(context, freshDb, clock).importApply(Uri.fromFile(legacy))
+            val summary = managerFor(freshDb).importApply(Uri.fromFile(legacy))
 
             assertThat(summary).isEqualTo(MergeSummary(inserted = 13, updated = 0, skipped = 0))
             assertThat(freshDb.backupDao().dumpTravelDocuments()).isEmpty()
@@ -425,7 +478,7 @@ class DefaultBackupManagerTest {
             val otherDb = inMemoryDatabase<ClearTravelDatabase>(context)
             otherDb.backupDao().upsertTravelDocuments(listOf(tombstoned.toEntity()))
             val tombstoneUri = exportFileUri("tombstone.zip")
-            DefaultBackupManager(context, otherDb, clock).exportToUri(tombstoneUri)
+            managerFor(otherDb).exportToUri(tombstoneUri)
             otherDb.close()
 
             val summary = manager.importApply(tombstoneUri)
@@ -448,7 +501,7 @@ class DefaultBackupManagerTest {
                 zip.putNextEntry(ZipEntry(BackupEntries.MANIFEST))
                 val manifest =
                     BackupManifest(
-                        schemaVersion = 2,
+                        schemaVersion = BackupManifest.SCHEMA_VERSION + 1,
                         appVersion = "9.9.9",
                         createdAt = Fixtures.NOW.toEpochMilli(),
                         entityCounts = emptyMap(),
@@ -461,7 +514,7 @@ class DefaultBackupManagerTest {
                 assertThrows(BackupException.UnsupportedSchemaVersion::class.java) {
                     kotlinx.coroutines.runBlocking { manager.importPreview(Uri.fromFile(file)) }
                 }
-            assertThat(previewError.found).isEqualTo(2)
+            assertThat(previewError.found).isEqualTo(BackupManifest.SCHEMA_VERSION + 1)
             assertThrows(BackupException.UnsupportedSchemaVersion::class.java) {
                 kotlinx.coroutines.runBlocking { manager.importApply(Uri.fromFile(file)) }
             }
@@ -476,7 +529,7 @@ class DefaultBackupManagerTest {
             val full = File(context.cacheDir, "full.zip")
             manager.exportToUri(Uri.fromFile(full))
             val legacy = File(context.cacheDir, "legacy.zip")
-            ZipFile(full).use { source ->
+            openExport(full).use { source ->
                 ZipOutputStream(legacy.outputStream()).use { zip ->
                     for (entry in source.entries().asSequence()) {
                         if (entry.name == BackupEntries.TRAIN_COACHES) continue
@@ -488,7 +541,7 @@ class DefaultBackupManagerTest {
             }
 
             val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
-            val freshManager = DefaultBackupManager(context, freshDb, clock)
+            val freshManager = managerFor(freshDb)
             val summary = freshManager.importApply(Uri.fromFile(legacy))
 
             assertThat(summary).isEqualTo(MergeSummary(inserted = 13, updated = 0, skipped = 0))
@@ -554,10 +607,10 @@ class DefaultBackupManagerTest {
             manager.exportToUri(uri)
 
             val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
-            val freshManager = DefaultBackupManager(context, freshDb, clock)
+            val freshManager = managerFor(freshDb)
             val preview = freshManager.importPreview(uri)
 
-            assertThat(preview.schemaVersion).isEqualTo(1)
+            assertThat(preview.schemaVersion).isEqualTo(BackupManifest.SCHEMA_VERSION)
             assertThat(preview.createdAt).isEqualTo(clock.instant())
             assertThat(preview.totalRows).isEqualTo(14)
             assertThat(preview.entityCounts[BackupEntries.KEY_TRIPS]).isEqualTo(2)
@@ -573,7 +626,7 @@ class DefaultBackupManagerTest {
             var tick = 0L
             repeat(5) {
                 val tickedClock = Clock.fixed(Fixtures.NOW.plusSeconds(3600 + tick), ZoneOffset.UTC)
-                DefaultBackupManager(context, db, tickedClock).exportLatestToAppStorage()
+                DefaultBackupManager(context, db, tickedClock, vault, cipher).exportLatestToAppStorage()
                 tick += 61 // distinct HHmmss names
             }
 
@@ -599,4 +652,116 @@ class DefaultBackupManagerTest {
             assertThat(info).isNotNull()
             assertThat(info!!.createdAt).isEqualTo(clock.instant())
         }
+
+    // ---- ADR-031: format v2 (portable envelope) ----
+
+    @Test
+    fun `v2 - export is a CTEB envelope, not a plain zip, and bundled bytes are plaintext inside`() =
+        runTest {
+            val sourceFile = File(context.cacheDir, "scan.pdf")
+            cipher.encryptTo(byteArrayOf(4, 4, 4).inputStream(), sourceFile) // stored encrypted, as on device
+            db.backupDao().upsertAttachments(
+                listOf(Fixtures.attachment(localPath = sourceFile.absolutePath, driveFileId = null).toEntity()),
+            )
+            val exported = File(context.cacheDir, "export.zip")
+            manager.exportToUri(Uri.fromFile(exported))
+
+            assertThat(PortableCipher.isEnvelope(exported)).isTrue()
+            assertThrows(java.util.zip.ZipException::class.java) { ZipFile(exported) }
+            openExport(exported).use { zip ->
+                val manifest = BackupCodec.readManifest(zip)
+                assertThat(manifest.schemaVersion).isEqualTo(2)
+                val entry = zip.entries().asSequence().first { it.name.startsWith("attachments/") }
+                assertThat(zip.getInputStream(entry).readBytes()).isEqualTo(byteArrayOf(4, 4, 4))
+            }
+        }
+
+    @Test
+    fun `v2 - another install needs the source password once, then preview and apply are silent`() =
+        runTest {
+            seedAllEntityTypes()
+            val uri = exportFileUri()
+            manager.exportToUri(uri)
+
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            val (foreign, _) = foreignManagerFor(freshDb, password = VAULT_PASSWORD) // same password, other salt
+
+            assertThrows(BackupException.PasswordRequired::class.java) {
+                runBlocking { foreign.importPreview(uri) }
+            }
+            assertThrows(BackupException.WrongPassword::class.java) {
+                runBlocking { foreign.importPreview(uri, "not-it".toCharArray()) }
+            }
+            val preview = foreign.importPreview(uri, VAULT_PASSWORD.toCharArray())
+            assertThat(preview.totalRows).isEqualTo(14)
+            // The derived key was adopted: apply needs no password.
+            val summary = foreign.importApply(uri)
+            assertThat(summary.inserted).isEqualTo(14)
+            freshDb.close()
+        }
+
+    @Test
+    fun `v2 - restored files are re-encrypted under the RESTORING install's key`() =
+        runTest {
+            val sourceFile = File(context.cacheDir, "passport.jpg")
+            cipher.encryptTo(byteArrayOf(1, 2, 3).inputStream(), sourceFile)
+            val document = Fixtures.travelDocument(filePath = sourceFile.absolutePath, driveFileId = null)
+            db.backupDao().upsertTravelDocuments(listOf(document.toEntity()))
+            val uri = exportFileUri()
+            manager.exportToUri(uri)
+
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            val (foreign, foreignCipher) = foreignManagerFor(freshDb, password = "other-device-password")
+            foreign.importApply(uri, VAULT_PASSWORD.toCharArray())
+
+            val restored =
+                File(
+                    freshDb
+                        .backupDao()
+                        .dumpTravelDocuments()
+                        .single()
+                        .toModel()
+                        .filePath,
+                )
+            assertThat(foreignCipher.isEncrypted(restored)).isTrue()
+            assertThat(plaintextOf(restored, foreignCipher)).isEqualTo(byteArrayOf(1, 2, 3))
+            // ...and NOT readable with the exporting install's file key.
+            assertThrows(javax.crypto.AEADBadTagException::class.java) { plaintextOf(restored, cipher) }
+            freshDb.close()
+        }
+
+    @Test
+    fun `v1 - a plain zip from a pre-encryption app still imports`() =
+        runTest {
+            seedAllEntityTypes()
+            val v1 = File(context.cacheDir, "v1.zip")
+            // Build the legacy artefact: the inner ZIP of an export, re-labelled schemaVersion 1.
+            val exported = File(context.cacheDir, "export.zip")
+            manager.exportToUri(Uri.fromFile(exported))
+            openExport(exported).use { source ->
+                ZipOutputStream(v1.outputStream()).use { zip ->
+                    for (entry in source.entries().asSequence()) {
+                        zip.putNextEntry(ZipEntry(entry.name))
+                        if (entry.name == BackupEntries.MANIFEST) {
+                            val manifest = BackupCodec.readManifest(source).copy(schemaVersion = 1)
+                            zip.write(BackupCodec.json.encodeToString(manifest).encodeToByteArray())
+                        } else {
+                            source.getInputStream(entry).use { it.copyTo(zip) }
+                        }
+                        zip.closeEntry()
+                    }
+                }
+            }
+            assertThat(PortableCipher.isEnvelope(v1)).isFalse()
+
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            val (foreign, _) = foreignManagerFor(freshDb, password = "whatever")
+            assertThat(foreign.importPreview(Uri.fromFile(v1)).schemaVersion).isEqualTo(1)
+            assertThat(foreign.importApply(Uri.fromFile(v1)).inserted).isEqualTo(14)
+            freshDb.close()
+        }
+
+    private companion object {
+        const val VAULT_PASSWORD = "pw"
+    }
 }

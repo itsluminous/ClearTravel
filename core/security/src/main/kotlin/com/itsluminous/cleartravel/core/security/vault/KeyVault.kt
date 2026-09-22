@@ -85,14 +85,18 @@ interface KeyVault {
     ): PortableKey?
 
     /**
-     * Derives (and adopts for the process lifetime) the portable key of a FOREIGN
-     * envelope — a backup or Drive file written under a different password/salt.
+     * Derives the portable key of a FOREIGN envelope — a backup or Drive file written
+     * under a different password/salt. Pure derivation; call [adoptPortableKey] once
+     * it has been PROVEN right (a successful decryption) so later reads are silent.
      */
     suspend fun derivePortableKey(
         password: CharArray,
         salt: ByteArray,
         iterations: Int,
     ): PortableKey
+
+    /** Remembers a verified foreign [key] for the process lifetime (never persisted). */
+    fun adoptPortableKey(key: PortableKey)
 
     // ---- Biometric unlock (wraps the DEK with a Keystore-held, auth-gated key) ----
 

@@ -54,12 +54,18 @@ private class FakeBackupManager : BackupManager {
 
     override suspend fun exportLatestToAppStorage(): ExportResult = exportToUri(Uri.EMPTY)
 
-    override suspend fun importPreview(uri: Uri): ImportPreview {
+    override suspend fun importPreview(
+        uri: Uri,
+        sourcePassword: CharArray?,
+    ): ImportPreview {
         previewError?.let { throw it }
         return preview
     }
 
-    override suspend fun importApply(uri: Uri): MergeSummary {
+    override suspend fun importApply(
+        uri: Uri,
+        sourcePassword: CharArray?,
+    ): MergeSummary {
         applyError?.let { throw it }
         appliedFrom += uri
         return mergeSummary

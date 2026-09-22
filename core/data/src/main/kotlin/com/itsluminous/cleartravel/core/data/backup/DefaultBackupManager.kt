@@ -4,19 +4,28 @@ import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
 import com.itsluminous.cleartravel.core.data.repository.TravelDocumentStorage
+import com.itsluminous.cleartravel.core.data.security.AppFileLayout
 import com.itsluminous.cleartravel.core.database.ClearTravelDatabase
 import com.itsluminous.cleartravel.core.database.entity.toEntity
 import com.itsluminous.cleartravel.core.database.entity.toModel
+import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
+import com.itsluminous.cleartravel.core.security.file.NotAnEnvelopeException
+import com.itsluminous.cleartravel.core.security.file.PortableCipher
+import com.itsluminous.cleartravel.core.security.vault.KeyVault
+import com.itsluminous.cleartravel.core.security.vault.PortableKey
+import com.itsluminous.cleartravel.core.security.vault.VaultLockedException
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.zip.ZipFile
+import javax.crypto.AEADBadTagException
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,6 +53,14 @@ object BackupFileNames {
  * bundling only local-only attachment files; import merges per-row last-write-wins
  * via the pure [BackupMerger] inside one Room transaction, writing winners through
  * the timestamp-preserving raw upserts.
+ *
+ * ADR-031 (format v2): the ZIP is sealed in a [PortableCipher] envelope under the
+ * vault's password-derived portable key — never the per-install DEK, so the file
+ * restores on any install that knows the password. Bundled files are decrypted from
+ * disk into the ZIP and re-encrypted on extraction. Import accepts v1 plain ZIPs
+ * (pre-encryption exports), v2 envelopes from this vault silently, and v2 envelopes
+ * from another password once the caller supplies it (the derived key is adopted for
+ * the process, so preview → apply prompts once).
  */
 @Singleton
 class DefaultBackupManager
@@ -52,6 +69,8 @@ class DefaultBackupManager
         @ApplicationContext private val context: Context,
         private val database: ClearTravelDatabase,
         private val clock: Clock,
+        private val keyVault: KeyVault,
+        private val fileCipher: LocalFileCipher,
     ) : BackupManager {
         private val backupDao get() = database.backupDao()
 
@@ -78,9 +97,12 @@ class DefaultBackupManager
                 result.exportResult
             }
 
-        override suspend fun importPreview(uri: Uri): ImportPreview =
+        override suspend fun importPreview(
+            uri: Uri,
+            sourcePassword: CharArray?,
+        ): ImportPreview =
             withContext(Dispatchers.IO) {
-                withBackupZip(uri) { zip ->
+                withBackupZip(uri, sourcePassword) { zip ->
                     val manifest = BackupCodec.readManifest(zip)
                     ImportPreview(
                         schemaVersion = manifest.schemaVersion,
@@ -91,9 +113,12 @@ class DefaultBackupManager
                 }
             }
 
-        override suspend fun importApply(uri: Uri): MergeSummary =
+        override suspend fun importApply(
+            uri: Uri,
+            sourcePassword: CharArray?,
+        ): MergeSummary =
             withContext(Dispatchers.IO) {
-                withBackupZip(uri) { zip ->
+                withBackupZip(uri, sourcePassword) { zip ->
                     val snapshot = BackupCodec.readSnapshot(zip)
                     database.withTransaction { mergeSnapshot(snapshot, zip) }
                 }
@@ -108,7 +133,7 @@ class DefaultBackupManager
                         ?: return@withContext null
                 val createdAt =
                     try {
-                        BackupCodec.openZip(newest).use { zip ->
+                        withPlainZip(newest, sourcePassword = null) { zip ->
                             Instant.ofEpochMilli(BackupCodec.readManifest(zip).createdAt)
                         }
                     } catch (e: BackupException) {
@@ -211,8 +236,13 @@ class DefaultBackupManager
                     attachments = attachmentDtos,
                     travelDocuments = documentDtos,
                 )
+            val portableKey = portableKeyOrThrow()
             try {
-                target.outputStream().use { out -> BackupCodec.writeZip(snapshot, bundledFiles + bundledDocumentFiles, out) }
+                // v2: the whole ZIP is sealed in the portable envelope; bundled files
+                // are decrypted from disk so the payload is plaintext inside it.
+                PortableCipher.encryptingStream(target.outputStream().buffered(), portableKey).use { out ->
+                    BackupCodec.writeZip(snapshot, bundledFiles + bundledDocumentFiles, out) { file -> fileCipher.openDecrypted(file) }
+                }
             } catch (e: IOException) {
                 throw BackupException.Io(e)
             }
@@ -232,7 +262,7 @@ class DefaultBackupManager
                 ?.forEach { it.delete() }
         }
 
-        private fun backupsDir(): File = File(context.filesDir, BACKUPS_DIR_NAME)
+        private fun backupsDir(): File = AppFileLayout.backups(context.filesDir)
 
         private fun appVersion(): String =
             try {
@@ -247,11 +277,12 @@ class DefaultBackupManager
         // ---- Import internals ----
 
         /** Copies [uri] to a temp file (ZIP reading needs random access) and opens it. */
-        private inline fun <T> withBackupZip(
+        private suspend fun <T> withBackupZip(
             uri: Uri,
-            block: (ZipFile) -> T,
+            sourcePassword: CharArray?,
+            block: suspend (ZipFile) -> T,
         ): T {
-            val temp = File.createTempFile("cleartravel-import", ".zip", context.cacheDir)
+            val temp = File.createTempFile("cleartravel-import", ".bin", context.cacheDir)
             try {
                 try {
                     context.contentResolver.openInputStream(uri)?.use { input ->
@@ -260,11 +291,74 @@ class DefaultBackupManager
                 } catch (e: IOException) {
                     throw BackupException.Io(e)
                 }
-                return BackupCodec.openZip(temp).use(block)
+                return withPlainZip(temp, sourcePassword, block)
             } finally {
                 temp.delete()
             }
         }
+
+        /**
+         * Opens [file] as a plain ZIP: a v2 envelope is decrypted into a second temp
+         * file first (own key → adopted key → [sourcePassword] → [BackupException.PasswordRequired]);
+         * anything else is treated as a v1 plain ZIP.
+         */
+        private suspend fun <T> withPlainZip(
+            file: File,
+            sourcePassword: CharArray?,
+            block: suspend (ZipFile) -> T,
+        ): T {
+            if (!PortableCipher.isEnvelope(file)) return BackupCodec.openZip(file).use { block(it) }
+            val plain = File.createTempFile("cleartravel-import", ".zip", context.cacheDir)
+            try {
+                decryptEnvelope(file, plain, sourcePassword)
+                return BackupCodec.openZip(plain).use { block(it) }
+            } finally {
+                plain.delete()
+            }
+        }
+
+        private suspend fun decryptEnvelope(
+            envelope: File,
+            plain: File,
+            sourcePassword: CharArray?,
+        ) {
+            val header =
+                try {
+                    PortableCipher.readHeader(envelope)
+                } catch (e: NotAnEnvelopeException) {
+                    throw BackupException.CorruptedBackup(e)
+                } catch (e: IOException) {
+                    throw BackupException.CorruptedBackup(e)
+                }
+            // An explicitly supplied password always wins over a cached key (a previous
+            // wrong attempt must not shadow the right one); a key is only remembered
+            // once it has actually opened the envelope.
+            val known = keyVault.portableKeyFor(header.salt, header.iterations)
+            val key: PortableKey =
+                sourcePassword?.let { keyVault.derivePortableKey(it, header.salt, header.iterations) }
+                    ?: known
+                    ?: throw BackupException.PasswordRequired()
+            try {
+                PortableCipher.openDecrypted(envelope, key).use { input ->
+                    plain.outputStream().buffered().use { out -> input.copyTo(out) }
+                }
+            } catch (e: AEADBadTagException) {
+                throw BackupException.WrongPassword()
+            } catch (e: IOException) {
+                throw BackupException.CorruptedBackup(e)
+            }
+            if (key !== known) keyVault.adoptPortableKey(key)
+        }
+
+        private fun portableKeyOrThrow(): PortableKey =
+            try {
+                keyVault.portableKey()
+            } catch (e: VaultLockedException) {
+                throw BackupException.Locked()
+            }
+
+        /** Extraction sink: restored bytes land CTEF-encrypted like every stored file. */
+        private val encryptingExtract: (InputStream, File) -> Unit = { input, target -> fileCipher.encryptTo(input, target) }
 
         /** Runs the LWW merge for every entity type; MUST be called in a transaction. */
         private suspend fun mergeSnapshot(
@@ -354,8 +448,8 @@ class DefaultBackupManager
                     val restored =
                         plan.toWrite.map { attachment ->
                             if (bundledById.containsKey(attachment.id)) {
-                                val target = File(File(context.filesDir, ATTACHMENTS_DIR_NAME), attachment.id)
-                                if (BackupCodec.extractAttachment(zip, attachment.id, target)) {
+                                val target = File(AppFileLayout.attachments(context.filesDir), attachment.id)
+                                if (BackupCodec.extractAttachment(zip, attachment.id, target, encryptingExtract)) {
                                     attachment.copy(localPath = target.absolutePath)
                                 } else {
                                     attachment
@@ -379,7 +473,7 @@ class DefaultBackupManager
                             if (bundledDocuments.containsKey(document.id)) {
                                 val fileName = TravelDocumentStorage.fileName(document.id, File(document.filePath).extension)
                                 val target = File(TravelDocumentStorage.directory(context.filesDir), fileName)
-                                if (BackupCodec.extractAttachment(zip, document.id, target)) {
+                                if (BackupCodec.extractAttachment(zip, document.id, target, encryptingExtract)) {
                                     document.copy(filePath = target.absolutePath)
                                 } else {
                                     document
@@ -397,7 +491,7 @@ class DefaultBackupManager
         companion object {
             /** App-storage backups kept after pruning (spec: keep the latest N). */
             const val MAX_LOCAL_BACKUPS = 3
-            internal const val BACKUPS_DIR_NAME = "backups"
-            internal const val ATTACHMENTS_DIR_NAME = "attachments"
+            internal const val BACKUPS_DIR_NAME = AppFileLayout.BACKUPS_DIR
+            internal const val ATTACHMENTS_DIR_NAME = AppFileLayout.ATTACHMENTS_DIR
         }
     }

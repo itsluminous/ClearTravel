@@ -24,8 +24,13 @@ data class BackupManifest(
     val totalRows: Int get() = entityCounts.values.sum()
 
     companion object {
-        /** The schema version this app writes and the newest it can read. */
-        const val SCHEMA_VERSION = 1
+        /**
+         * The schema version this app writes and the newest it can read.
+         * 2 since ADR-031: the ZIP travels inside a password-derived portable
+         * envelope (CTEB) and bundled files are plaintext INSIDE it. The inner layout
+         * is unchanged, so v1 plain ZIPs still import (`docs/backup-format.md`).
+         */
+        const val SCHEMA_VERSION = 2
     }
 }
 

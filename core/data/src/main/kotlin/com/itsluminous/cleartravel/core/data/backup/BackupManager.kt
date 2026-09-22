@@ -30,10 +30,20 @@ interface BackupManager {
      * Parses ONLY the manifest of the backup at [uri] — cheap enough to drive the
      * import confirmation dialog (date + per-entity counts) before any data changes.
      *
+     * A v2 backup (ADR-031) is decrypted with this vault's own portable key when it
+     * was written under the same password/salt; otherwise [sourcePassword] must carry
+     * the password it was written with (the key derived from it is remembered for the
+     * process, so the follow-up [importApply] needs no password again).
+     *
+     * @throws BackupException.PasswordRequired v2 backup from another password and no [sourcePassword].
+     * @throws BackupException.WrongPassword [sourcePassword] does not open the backup.
      * @throws BackupException.UnsupportedSchemaVersion for backups from newer apps.
      * @throws BackupException.CorruptedBackup when the file is not a readable backup.
      */
-    suspend fun importPreview(uri: Uri): ImportPreview
+    suspend fun importPreview(
+        uri: Uri,
+        sourcePassword: CharArray? = null,
+    ): ImportPreview
 
     /**
      * Imports the backup at [uri] by MERGING it into the local database — never a
@@ -41,11 +51,17 @@ interface BackupManager {
      * rows are inserted as-is (id + updatedAt preserved), local-only rows are kept,
      * same-id rows resolve entirely to the newer version including tombstone state.
      * Idempotent: importing the same file twice changes nothing the second time.
+     * Password semantics as in [importPreview].
      *
+     * @throws BackupException.PasswordRequired v2 backup from another password and no [sourcePassword].
+     * @throws BackupException.WrongPassword [sourcePassword] does not open the backup.
      * @throws BackupException.UnsupportedSchemaVersion for backups from newer apps.
      * @throws BackupException.CorruptedBackup when the file is not a readable backup.
      */
-    suspend fun importApply(uri: Uri): MergeSummary
+    suspend fun importApply(
+        uri: Uri,
+        sourcePassword: CharArray? = null,
+    ): MergeSummary
 
     /** Newest backup in app storage, or null when none exists yet. */
     suspend fun latestLocalBackup(): LocalBackupInfo?
@@ -121,4 +137,16 @@ sealed class BackupException(
     class Io(
         cause: Throwable? = null,
     ) : BackupException("Backup I/O failed", cause)
+
+    /**
+     * The backup is a v2 envelope (ADR-031) written under a password/salt this vault
+     * does not hold — the UI must ask for the source password and retry.
+     */
+    class PasswordRequired : BackupException("Backup needs its source password")
+
+    /** The supplied source password does not open the backup (GCM tag mismatch). */
+    class WrongPassword : BackupException("Wrong backup password")
+
+    /** The vault is locked, so no portable key is available to write/read a backup. */
+    class Locked : BackupException("Vault is locked")
 }

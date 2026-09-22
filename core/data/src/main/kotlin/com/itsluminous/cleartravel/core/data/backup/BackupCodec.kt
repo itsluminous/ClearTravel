@@ -6,6 +6,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.serializer
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
 import java.io.OutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
@@ -20,6 +21,10 @@ import java.util.zip.ZipOutputStream
  * empty lists — forward/backward tolerant) and strict where required: a missing or
  * unparseable manifest is [BackupException.CorruptedBackup], and a manifest with a
  * newer `schemaVersion` is [BackupException.UnsupportedSchemaVersion].
+ *
+ * ADR-031: bundled bytes are PLAINTEXT inside the ZIP (the whole ZIP is sealed in the
+ * portable envelope by the manager), so on-device files are decrypted through
+ * [openBundledFile] while bundling and re-encrypted through the extraction sink.
  */
 internal object BackupCodec {
     val json: Json =
@@ -28,11 +33,15 @@ internal object BackupCodec {
             encodeDefaults = true
         }
 
-    /** Writes the full backup ZIP; [bundledFiles] maps attachment/document id → source file. */
+    /**
+     * Writes the full backup ZIP; [bundledFiles] maps attachment/document id → source
+     * file, read through [openBundledFile] (the decrypting file cipher in production).
+     */
     fun writeZip(
         snapshot: BackupSnapshot,
         bundledFiles: Map<String, File>,
         out: OutputStream,
+        openBundledFile: (File) -> InputStream = { it.inputStream() },
     ) {
         ZipOutputStream(out.buffered()).use { zip ->
             zip.putTextEntry(BackupEntries.MANIFEST, json.encodeToString(snapshot.manifest))
@@ -51,7 +60,7 @@ internal object BackupCodec {
             zip.putTextEntry(BackupEntries.TRAVEL_DOCUMENTS, json.encodeToString(snapshot.travelDocuments))
             for ((attachmentId, file) in bundledFiles) {
                 zip.putNextEntry(ZipEntry(BackupEntries.attachmentEntry(attachmentId)))
-                file.inputStream().use { it.copyTo(zip) }
+                openBundledFile(file).use { it.copyTo(zip) }
                 zip.closeEntry()
             }
         }
@@ -99,17 +108,19 @@ internal object BackupCodec {
         }
     }
 
-    /** Extracts one bundled attachment's bytes to [target]; false when not bundled. */
+    /**
+     * Extracts one bundled attachment's bytes to [target] through [write] (the
+     * encrypting file cipher in production); false when not bundled.
+     */
     fun extractAttachment(
         zip: ZipFile,
         attachmentId: String,
         target: File,
+        write: (InputStream, File) -> Unit = { input, file -> file.outputStream().use { input.copyTo(it) } },
     ): Boolean {
         val entry = zip.getEntry(BackupEntries.attachmentEntry(attachmentId)) ?: return false
         target.parentFile?.mkdirs()
-        zip.getInputStream(entry).use { input ->
-            target.outputStream().use { output -> input.copyTo(output) }
-        }
+        zip.getInputStream(entry).use { input -> write(input, target) }
         return true
     }
 

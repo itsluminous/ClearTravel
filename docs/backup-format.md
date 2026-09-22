@@ -1,13 +1,44 @@
-# ClearTravel backup format (schema version 1)
+# ClearTravel backup format (schema version 2)
 
-The frozen external contract behind `BackupManager` (ADR-015). Everything here is
-versioned by `manifest.json`'s `schemaVersion`; readers MUST reject files whose
-`schemaVersion` is greater than the newest they know (typed
+The frozen external contract behind `BackupManager` (ADR-015, encrypted since
+ADR-031). Everything here is versioned by `manifest.json`'s `schemaVersion`; readers
+MUST reject files whose `schemaVersion` is greater than the newest they know (typed
 `BackupException.UnsupportedSchemaVersion`) and MUST accept and migrate older ones.
 
-## Container layout
+## Outer container: the portable envelope (v2, ADR-031)
 
-A backup is a plain ZIP:
+Since schema version 2 a backup file is **not** a bare ZIP but a `CTEB` portable
+envelope — the ZIP described below, encrypted with a key derived from the **app
+password** (never from the per-install Data Encryption Key, so a backup restores on
+any install that knows the password):
+
+```
+"CTEB" (4) | version = 1 (1) | iterations int32 BE (4) | salt (16) | chunkSize int32 BE (4) | nonce (8)
+| body: AES-256-GCM chunks of `chunkSize` plaintext bytes (last chunk shorter), each sealed with
+        IV = nonce ‖ chunkIndex(4, BE) and AAD = header ‖ isLast(1); 16-byte tag per chunk
+```
+
+- Key = the last 32 bytes of `PBKDF2-HMAC-SHA256(password, salt, iterations, 64 bytes)`
+  (the first 32 bytes are the vault's password KEK; both come from the single
+  derivation the app performs at unlock). `iterations` is 210 000 today; readers
+  honour whatever the header says.
+- The salt is the writing vault's salt, so an install restoring **its own** backups
+  decrypts silently. Any other salt — another device, a fresh install, a changed
+  password — surfaces as typed `BackupException.PasswordRequired`; the caller passes
+  the source password to `importPreview`/`importApply`, a wrong one is typed
+  `WrongPassword` (GCM tag failure on the first chunk), and a proven key is remembered
+  for the process so preview → apply prompts once.
+- A file **without** the `CTEB` magic is read as a v1 plain ZIP, so pre-encryption
+  exports stay importable forever. Writers never produce plain ZIPs any more.
+- Bundled attachment/document bytes are **plaintext inside** the envelope (they are
+  CTEF-encrypted on disk with the install's key; the exporter decrypts while
+  bundling, the importer re-encrypts under the restoring install's key on extraction).
+  Only the envelope protects them — by design, so the same password opens the whole
+  backup.
+
+## Inner container layout
+
+Inside the envelope (or, for v1 files, the file itself) is a plain ZIP:
 
 ```
 cleartravel-backup-YYYYMMDD-HHmm.zip
@@ -37,14 +68,15 @@ replicate to other devices, so soft-deleted rows travel with their `deletedAt` s
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "appVersion": "0.1.0",
   "createdAt": 1789344000000,
   "entityCounts": { "trips": 4, "train_tickets": 2, "...": 0 }
 }
 ```
 
-- `schemaVersion` — format version this file was written with (currently `1`).
+- `schemaVersion` — format version this file was written with (currently `2`; `1`
+  = plain ZIP with plaintext bundles, still readable).
 - `appVersion` — writing app's `versionName`, informational only.
 - `createdAt` — export wall-clock time, epoch millis.
 - `entityCounts` — rows per entity file (tombstones included); drives the import
@@ -118,21 +150,35 @@ Invariants:
 
 ```kotlin
 interface BackupManager {
-    suspend fun exportToUri(uri: Uri): ExportResult          // SAF export + app-storage copy
-    suspend fun exportLatestToAppStorage(): ExportResult     // filesDir/backups, pruned to 3
-    suspend fun importPreview(uri: Uri): ImportPreview       // manifest only, no writes
-    suspend fun importApply(uri: Uri): MergeSummary          // the LWW merge
-    suspend fun latestLocalBackup(): LocalBackupInfo?        // "last backup" UI info
+    suspend fun exportToUri(uri: Uri): ExportResult                                   // SAF export + app-storage copy
+    suspend fun exportLatestToAppStorage(): ExportResult                              // filesDir/backups, pruned to 3
+    suspend fun importPreview(uri: Uri, sourcePassword: CharArray? = null): ImportPreview  // manifest only, no writes
+    suspend fun importApply(uri: Uri, sourcePassword: CharArray? = null): MergeSummary     // the LWW merge
+    suspend fun latestLocalBackup(): LocalBackupInfo?                                 // "last backup" UI info
 }
 ```
 
 - Errors are typed: `BackupException.UnsupportedSchemaVersion`, `.CorruptedBackup`,
-  `.Io`.
+  `.Io`, and since v2 `.PasswordRequired` (envelope from another password/salt — retry
+  with `sourcePassword`), `.WrongPassword`, `.Locked` (export attempted while the vault
+  is locked — never reachable from the UI, which sits behind the app lock).
 - `exportToUri` also refreshes the app-storage copy, so the newest backup is always
   available for the Drive upload queue.
 - Drive integration (next milestone) composes these methods: upload the file produced
   by `exportLatestToAppStorage`, download a Drive backup to a local file/Uri and run
   it through `importPreview` → `importApply`. No engine changes required.
+
+## Version history
+
+| `schemaVersion` | Container | Bundled bytes | Introduced |
+|---|---|---|---|
+| 1 | plain ZIP | plaintext | ADR-015 |
+| 2 | `CTEB` password envelope around the same ZIP | plaintext inside the envelope | ADR-031 |
+
+Local backups written as v1 before the ADR-031 update are wrapped into envelopes by
+the one-time storage migration (bytes unchanged, manifest still says 1 — imports as
+v1 content through the v2 reader). Drive backups uploaded before the update stay plain
+until pruned.
 
 ## Versioning policy
 
