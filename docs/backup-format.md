@@ -24,9 +24,10 @@ cleartravel-backup-YYYYMMDD-HHmm.zip
 │   ├── train_route_stops.json
 │   ├── train_coaches.json             # added ADR-022 — absent in older backups (read as empty)
 │   ├── flight_journeys.json
-│   └── attachments.json
+│   ├── attachments.json
+│   └── travel_documents.json          # added ADR-027 — absent in older backups (read as empty)
 └── attachments/
-    └── <attachmentId>                 # raw file bytes, local-only attachments only
+    └── <attachmentId | documentId>    # raw file bytes, local-only attachments/documents only
 ```
 
 Every entity file is a **full dump including tombstoned rows** — deletions must
@@ -78,6 +79,18 @@ preserved verbatim). Drive-id-only rows are restored **as-is**: path resolution 
 deferred — this is the documented seam the Google milestone fills by downloading via
 `driveFileId` and fixing `localPath` (local file → Drive download → placeholder
 resolver ladder).
+
+### Travel documents (ADR-027)
+
+`entities/travel_documents.json` rows (`TravelDocumentDto`: `id`, `name`, `type`
+storage value, `filePath`, `mimeType`, `addedAt`, `expiryDate` ISO date or null,
+`note`, `driveFileId`, `bundled`, sync fields) follow the SAME bundling rule: a
+local-only row (`driveFileId == null` — every document today) whose file exists is
+bundled at `attachments/<documentId>` (ids are UUIDs, so the two id spaces never
+collide) with `"bundled": true`. On import a winning bundled row is extracted to
+`filesDir/documents/<documentId>.<ext>` — the extension of the original `filePath` is
+kept because the viewer decides PDF-vs-image by it — and `filePath` re-pointed. No
+`schemaVersion` bump: pre-ADR-027 backups import with zero documents.
 
 ## Merge semantics (import is a MERGE, never a wipe)
 

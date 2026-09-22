@@ -18,6 +18,8 @@ import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
 import com.itsluminous.cleartravel.core.model.TrainTicket
+import com.itsluminous.cleartravel.core.model.TravelDocument
+import com.itsluminous.cleartravel.core.model.TravelDocumentType
 import com.itsluminous.cleartravel.core.model.Trip
 import java.time.Instant
 import java.time.LocalDate
@@ -269,4 +271,18 @@ object Fixtures {
         updatedAt: Instant = NOW,
         deletedAt: Instant? = null,
     ): Attachment = Attachment(id, ownerType, ownerId, localPath, driveFileId, mimeType, updatedAt, deletedAt)
+
+    fun travelDocument(
+        id: String = EntityIds.newId(),
+        name: String = "Passport",
+        type: TravelDocumentType = TravelDocumentType.PASSPORT,
+        filePath: String = "/data/fixture/passport.jpg",
+        mimeType: String = "image/jpeg",
+        addedAt: Instant = NOW,
+        expiryDate: LocalDate? = null,
+        note: String = "",
+        driveFileId: String? = null,
+        updatedAt: Instant = NOW,
+        deletedAt: Instant? = null,
+    ): TravelDocument = TravelDocument(id, name, type, filePath, mimeType, addedAt, expiryDate, note, driveFileId, updatedAt, deletedAt)
 }

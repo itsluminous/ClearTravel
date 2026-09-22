@@ -20,7 +20,8 @@ import org.robolectric.annotation.Config
  * Proves every hand-written migration in [DatabaseMigrations] against the exported
  * schema history (ADR-022): a real v1 database file — populated with a ticket, a
  * passenger and a route stop — opens at the current version with the data intact,
- * and the freshly created `train_coaches` table is usable. `MigrationTestHelper`
+ * and the freshly created `train_coaches` (v2) and `travel_documents` (v3) tables are
+ * usable; a real v2 file with a coach row migrates to v3 likewise. `MigrationTestHelper`
  * validates the migrated schema against `schemas/<version>.json` exactly, so a
  * migration whose SQL drifts from the entity definition fails here, not on a
  * user's phone.
@@ -92,7 +93,7 @@ class MigrationTest {
                 )
             }
 
-            // Validates the migrated schema against schemas/2.json.
+            // Validates the migrated schema against schemas/<current>.json.
             helper.runMigrationsAndValidate(DB_NAME, DatabaseConstants.SCHEMA_VERSION, true, *DatabaseMigrations.ALL).close()
 
             val db =
@@ -114,6 +115,46 @@ class MigrationTest {
                 val coach = Fixtures.trainCoach(ticketId = ticket.id, code = "EN")
                 dao.upsertCoaches(listOf(coach.toEntity()))
                 assertThat(dao.observeCoaches(ticket.id).first()).containsExactly(coach.toEntity())
+
+                val documentDao = db.travelDocumentDao()
+                assertThat(documentDao.observeAll().first()).isEmpty()
+                val document = Fixtures.travelDocument()
+                documentDao.upsert(document.toEntity())
+                assertThat(documentDao.observeAll().first()).containsExactly(document.toEntity())
+            } finally {
+                db.close()
+            }
+        }
+
+    @Test
+    fun `v2 database migrates to v3 keeping coaches and gaining travel_documents`() =
+        runTest {
+            val coach = Fixtures.trainCoach(ticketId = Fixtures.FIXED_ID, code = "B4", sortOrder = 3)
+            helper.createDatabase(DB_NAME, 2).use { v2 ->
+                v2.execSQL(
+                    "INSERT INTO train_coaches (id, ticket_id, code, sort_order, updated_at, deleted_at) " +
+                        "VALUES (?, ?, ?, ?, ?, NULL)",
+                    arrayOf<Any?>(coach.id, coach.ticketId, coach.code, coach.sortOrder, Fixtures.NOW.toEpochMilli()),
+                )
+            }
+
+            helper.runMigrationsAndValidate(DB_NAME, DatabaseConstants.SCHEMA_VERSION, true, *DatabaseMigrations.ALL).close()
+
+            val db =
+                Room
+                    .databaseBuilder(
+                        ApplicationProvider.getApplicationContext(),
+                        ClearTravelDatabase::class.java,
+                        DB_NAME,
+                    ).addMigrations(*DatabaseMigrations.ALL)
+                    .allowMainThreadQueries()
+                    .build()
+            try {
+                assertThat(db.trainDao().observeCoaches(Fixtures.FIXED_ID).first()).containsExactly(coach.toEntity())
+                val document = Fixtures.travelDocument(expiryDate = Fixtures.TODAY.plusYears(5))
+                db.travelDocumentDao().upsert(document.toEntity())
+                assertThat(db.travelDocumentDao().getById(document.id)).isEqualTo(document.toEntity())
+                assertThat(db.travelDocumentDao().getPendingDriveUploads()).containsExactly(document.toEntity())
             } finally {
                 db.close()
             }

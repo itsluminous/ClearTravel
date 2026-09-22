@@ -29,6 +29,20 @@ object DatabaseMigrations {
             }
         }
 
+    /** v2 → v3 (ADR-027): the `travel_documents` table for the Documents tab. */
+    val MIGRATION_2_3: Migration =
+        object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `travel_documents` (" +
+                        "`id` TEXT NOT NULL, `name` TEXT NOT NULL, `type` TEXT NOT NULL, " +
+                        "`file_path` TEXT NOT NULL, `mime_type` TEXT NOT NULL, `added_at` INTEGER NOT NULL, " +
+                        "`expiry_date` TEXT, `note` TEXT NOT NULL, `drive_file_id` TEXT, " +
+                        "`updated_at` INTEGER NOT NULL, `deleted_at` INTEGER, PRIMARY KEY(`id`))",
+                )
+            }
+        }
+
     /** Every migration, in order — pass as `addMigrations(*DatabaseMigrations.ALL)`. */
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
 }

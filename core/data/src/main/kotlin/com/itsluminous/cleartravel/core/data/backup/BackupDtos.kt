@@ -214,6 +214,28 @@ data class AttachmentDto(
     val deletedAt: Long? = null,
 )
 
+/**
+ * Added in ADR-027 (additive — readers of older backups see an empty list). File bytes
+ * follow the attachment rule: bundled under `attachments/<id>` whenever the row is
+ * local-only (`driveFileId == null` — every document today) and the file exists.
+ */
+@Serializable
+data class TravelDocumentDto(
+    val id: String,
+    val name: String,
+    val type: String,
+    val filePath: String,
+    val mimeType: String = "",
+    val addedAt: Long,
+    val expiryDate: String? = null,
+    val note: String = "",
+    val driveFileId: String? = null,
+    /** True when the file bytes are bundled in the ZIP under `attachments/<id>`. */
+    val bundled: Boolean = false,
+    val updatedAt: Long,
+    val deletedAt: Long? = null,
+)
+
 /** Everything a backup carries besides attachment file bytes. */
 data class BackupSnapshot(
     val manifest: BackupManifest,
@@ -229,6 +251,7 @@ data class BackupSnapshot(
     val trainCoaches: List<TrainCoachDto> = emptyList(),
     val flightJourneys: List<FlightJourneyDto> = emptyList(),
     val attachments: List<AttachmentDto> = emptyList(),
+    val travelDocuments: List<TravelDocumentDto> = emptyList(),
 )
 
 /** ZIP entry names — the frozen file layout of a backup (ADR-015). */
@@ -246,6 +269,7 @@ object BackupEntries {
     const val TRAIN_COACHES = "entities/train_coaches.json"
     const val FLIGHT_JOURNEYS = "entities/flight_journeys.json"
     const val ATTACHMENTS = "entities/attachments.json"
+    const val TRAVEL_DOCUMENTS = "entities/travel_documents.json"
     const val ATTACHMENT_DIR = "attachments/"
 
     fun attachmentEntry(attachmentId: String): String = ATTACHMENT_DIR + attachmentId
@@ -263,4 +287,5 @@ object BackupEntries {
     const val KEY_TRAIN_COACHES = "train_coaches"
     const val KEY_FLIGHT_JOURNEYS = "flight_journeys"
     const val KEY_ATTACHMENTS = "attachments"
+    const val KEY_TRAVEL_DOCUMENTS = "travel_documents"
 }

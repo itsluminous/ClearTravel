@@ -3,6 +3,7 @@ package com.itsluminous.cleartravel.core.data.backup
 import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
+import com.itsluminous.cleartravel.core.data.repository.TravelDocumentStorage
 import com.itsluminous.cleartravel.core.database.ClearTravelDatabase
 import com.itsluminous.cleartravel.core.database.entity.toEntity
 import com.itsluminous.cleartravel.core.database.entity.toModel
@@ -147,6 +148,18 @@ class DefaultBackupManager
                     }.toMap()
             val attachmentDtos = attachments.map { it.toDto(bundled = bundledFiles.containsKey(it.id)) }
 
+            // Travel documents (ADR-027) follow the same bundling rule: local-only rows
+            // whose file exists ride along under attachments/<documentId>.
+            val documents = backupDao.dumpTravelDocuments().map { it.toModel() }
+            val bundledDocumentFiles =
+                documents
+                    .filter { it.driveFileId == null && it.deletedAt == null }
+                    .mapNotNull { document ->
+                        val file = File(document.filePath)
+                        if (file.isFile) document.id to file else null
+                    }.toMap()
+            val documentDtos = documents.map { it.toDto(bundled = bundledDocumentFiles.containsKey(it.id)) }
+
             val trips = backupDao.dumpTrips().map { it.toModel().toDto() }
             val itineraryItems = backupDao.dumpItineraryItems().map { it.toModel().toDto() }
             val checklists = backupDao.dumpChecklists().map { it.toModel().toDto() }
@@ -178,6 +191,7 @@ class DefaultBackupManager
                             BackupEntries.KEY_TRAIN_COACHES to trainCoaches.size,
                             BackupEntries.KEY_FLIGHT_JOURNEYS to flightJourneys.size,
                             BackupEntries.KEY_ATTACHMENTS to attachmentDtos.size,
+                            BackupEntries.KEY_TRAVEL_DOCUMENTS to documentDtos.size,
                         ),
                 )
             val snapshot =
@@ -195,9 +209,10 @@ class DefaultBackupManager
                     trainCoaches = trainCoaches,
                     flightJourneys = flightJourneys,
                     attachments = attachmentDtos,
+                    travelDocuments = documentDtos,
                 )
             try {
-                target.outputStream().use { out -> BackupCodec.writeZip(snapshot, bundledFiles, out) }
+                target.outputStream().use { out -> BackupCodec.writeZip(snapshot, bundledFiles + bundledDocumentFiles, out) }
             } catch (e: IOException) {
                 throw BackupException.Io(e)
             }
@@ -350,6 +365,30 @@ class DefaultBackupManager
                             }
                         }
                     backupDao.upsertAttachments(restored.map { it.toEntity() })
+                    summary += plan.summary
+                }
+
+            // Travel documents (ADR-027): same restore rule, into filesDir/documents/
+            // keeping the original extension (the viewer keys PDF rendering off it).
+            val bundledDocuments = snapshot.travelDocuments.filter { it.bundled }.associateBy { it.id }
+            BackupMerger
+                .merge(backupDao.dumpTravelDocuments().map { it.toModel() }, snapshot.travelDocuments.map { it.toModel() })
+                .also { plan ->
+                    val restored =
+                        plan.toWrite.map { document ->
+                            if (bundledDocuments.containsKey(document.id)) {
+                                val fileName = TravelDocumentStorage.fileName(document.id, File(document.filePath).extension)
+                                val target = File(TravelDocumentStorage.directory(context.filesDir), fileName)
+                                if (BackupCodec.extractAttachment(zip, document.id, target)) {
+                                    document.copy(filePath = target.absolutePath)
+                                } else {
+                                    document
+                                }
+                            } else {
+                                document
+                            }
+                        }
+                    backupDao.upsertTravelDocuments(restored.map { it.toEntity() })
                     summary += plan.summary
                 }
             return summary

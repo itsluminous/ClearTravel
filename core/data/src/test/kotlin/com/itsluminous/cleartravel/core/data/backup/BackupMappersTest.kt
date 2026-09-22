@@ -5,6 +5,7 @@ import com.itsluminous.cleartravel.core.model.CommuteMode
 import com.itsluminous.cleartravel.core.model.FlightStatus
 import com.itsluminous.cleartravel.core.model.ItineraryItemType
 import com.itsluminous.cleartravel.core.model.JourneyType
+import com.itsluminous.cleartravel.core.model.TravelDocumentType
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import org.junit.Test
 
@@ -90,6 +91,22 @@ class BackupMappersTest {
         val attachment = Fixtures.attachment(driveFileId = "drive-123", deletedAt = deletedAt)
         assertThat(attachment.toDto(bundled = false).toModel()).isEqualTo(attachment)
         assertThat(attachment.toDto(bundled = true).toModel()).isEqualTo(attachment)
+    }
+
+    @Test
+    fun `travel document round-trips including expiry and unknown type fallback`() {
+        val document =
+            Fixtures.travelDocument(
+                type = TravelDocumentType.VISA,
+                expiryDate = Fixtures.TODAY.plusYears(2),
+                note = "Schengen, multi-entry",
+                deletedAt = deletedAt,
+            )
+        assertThat(document.toDto(bundled = true).toModel()).isEqualTo(document)
+        assertThat(document.toDto(bundled = false).toModel()).isEqualTo(document)
+
+        val fromTheFuture = document.toDto(bundled = false).copy(type = "hologram")
+        assertThat(fromTheFuture.toModel().type).isEqualTo(TravelDocumentType.OTHER)
     }
 
     @Test

@@ -28,7 +28,7 @@ internal object BackupCodec {
             encodeDefaults = true
         }
 
-    /** Writes the full backup ZIP; [bundledFiles] maps attachment id → source file. */
+    /** Writes the full backup ZIP; [bundledFiles] maps attachment/document id → source file. */
     fun writeZip(
         snapshot: BackupSnapshot,
         bundledFiles: Map<String, File>,
@@ -48,6 +48,7 @@ internal object BackupCodec {
             zip.putTextEntry(BackupEntries.TRAIN_COACHES, json.encodeToString(snapshot.trainCoaches))
             zip.putTextEntry(BackupEntries.FLIGHT_JOURNEYS, json.encodeToString(snapshot.flightJourneys))
             zip.putTextEntry(BackupEntries.ATTACHMENTS, json.encodeToString(snapshot.attachments))
+            zip.putTextEntry(BackupEntries.TRAVEL_DOCUMENTS, json.encodeToString(snapshot.travelDocuments))
             for ((attachmentId, file) in bundledFiles) {
                 zip.putNextEntry(ZipEntry(BackupEntries.attachmentEntry(attachmentId)))
                 file.inputStream().use { it.copyTo(zip) }
@@ -91,6 +92,7 @@ internal object BackupCodec {
                 trainCoaches = readList(zip, BackupEntries.TRAIN_COACHES),
                 flightJourneys = readList(zip, BackupEntries.FLIGHT_JOURNEYS),
                 attachments = readList(zip, BackupEntries.ATTACHMENTS),
+                travelDocuments = readList(zip, BackupEntries.TRAVEL_DOCUMENTS),
             )
         } catch (e: SerializationException) {
             throw BackupException.CorruptedBackup(e)

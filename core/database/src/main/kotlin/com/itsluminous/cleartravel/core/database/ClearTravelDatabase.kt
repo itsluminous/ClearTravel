@@ -11,6 +11,7 @@ import com.itsluminous.cleartravel.core.database.dao.ChecklistPresetDao
 import com.itsluminous.cleartravel.core.database.dao.FlightDao
 import com.itsluminous.cleartravel.core.database.dao.ItineraryDao
 import com.itsluminous.cleartravel.core.database.dao.TrainDao
+import com.itsluminous.cleartravel.core.database.dao.TravelDocumentDao
 import com.itsluminous.cleartravel.core.database.dao.TripDao
 import com.itsluminous.cleartravel.core.database.entity.AttachmentEntity
 import com.itsluminous.cleartravel.core.database.entity.ChecklistEntity
@@ -23,13 +24,15 @@ import com.itsluminous.cleartravel.core.database.entity.TrainCoachEntity
 import com.itsluminous.cleartravel.core.database.entity.TrainPassengerEntity
 import com.itsluminous.cleartravel.core.database.entity.TrainRouteStopEntity
 import com.itsluminous.cleartravel.core.database.entity.TrainTicketEntity
+import com.itsluminous.cleartravel.core.database.entity.TravelDocumentEntity
 import com.itsluminous.cleartravel.core.database.entity.TripEntity
 
 /**
  * The single on-device Room database — the offline-first source of truth for every
  * feature (ADR-004). Schema history is exported to `core/database/schemas/` and
  * committed; bump [DatabaseConstants.SCHEMA_VERSION] and add a [DatabaseMigrations]
- * entry on every version bump (v2: `train_coaches`, ADR-022).
+ * entry on every version bump (v2: `train_coaches`, ADR-022; v3: `travel_documents`,
+ * ADR-027).
  */
 @Database(
     entities = [
@@ -45,6 +48,7 @@ import com.itsluminous.cleartravel.core.database.entity.TripEntity
         TrainCoachEntity::class,
         FlightJourneyEntity::class,
         AttachmentEntity::class,
+        TravelDocumentEntity::class,
     ],
     version = DatabaseConstants.SCHEMA_VERSION,
     exportSchema = true,
@@ -64,6 +68,9 @@ abstract class ClearTravelDatabase : RoomDatabase() {
     abstract fun flightDao(): FlightDao
 
     abstract fun attachmentDao(): AttachmentDao
+
+    /** Travel documents (ADR-027, schema v3). */
+    abstract fun travelDocumentDao(): TravelDocumentDao
 
     /** Backup engine only (ADR-015): full dumps incl. tombstones + raw upserts. */
     abstract fun backupDao(): BackupDao

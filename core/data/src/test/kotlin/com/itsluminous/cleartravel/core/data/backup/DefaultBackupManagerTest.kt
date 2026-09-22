@@ -4,11 +4,14 @@ import android.content.Context
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import com.itsluminous.cleartravel.core.data.repository.TravelDocumentStorage
 import com.itsluminous.cleartravel.core.database.ClearTravelDatabase
 import com.itsluminous.cleartravel.core.database.entity.toEntity
 import com.itsluminous.cleartravel.core.database.entity.toModel
+import com.itsluminous.cleartravel.core.model.TravelDocumentType
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.core.testing.inMemoryDatabase
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.encodeToString
 import org.junit.After
@@ -70,6 +73,7 @@ class DefaultBackupManagerTest {
         val coach = Fixtures.trainCoach(ticketId = ticket.id, code = "EN")
         val flight = Fixtures.flightJourney(boardingPassPath = "/nonexistent/bp.pdf")
         val attachment = Fixtures.attachment(ownerId = ticket.id, localPath = "/nonexistent/file.pdf")
+        val document = Fixtures.travelDocument(filePath = "/nonexistent/passport.jpg", expiryDate = Fixtures.TODAY.plusYears(9))
         dao.upsertTrips(listOf(trip.toEntity(), tombstonedTrip.toEntity()))
         dao.upsertItineraryItems(listOf(item.toEntity()))
         dao.upsertChecklists(listOf(checklist.toEntity()))
@@ -82,6 +86,7 @@ class DefaultBackupManagerTest {
         dao.upsertTrainCoaches(listOf(coach.toEntity()))
         dao.upsertFlightJourneys(listOf(flight.toEntity()))
         dao.upsertAttachments(listOf(attachment.toEntity()))
+        dao.upsertTravelDocuments(listOf(document.toEntity()))
         return mapOf(
             "trip" to trip,
             "tombstonedTrip" to tombstonedTrip,
@@ -96,6 +101,7 @@ class DefaultBackupManagerTest {
             "coach" to coach,
             "flight" to flight,
             "attachment" to attachment,
+            "document" to document,
         )
     }
 
@@ -105,14 +111,14 @@ class DefaultBackupManagerTest {
             val seeded = seedAllEntityTypes()
             val uri = exportFileUri()
             val export = manager.exportToUri(uri)
-            assertThat(export.totalRows).isEqualTo(13)
+            assertThat(export.totalRows).isEqualTo(14)
 
             // "Wipe": a brand-new empty database.
             val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
             val freshManager = DefaultBackupManager(context, freshDb, clock)
             val summary = freshManager.importApply(uri)
 
-            assertThat(summary).isEqualTo(MergeSummary(inserted = 13, updated = 0, skipped = 0))
+            assertThat(summary).isEqualTo(MergeSummary(inserted = 14, updated = 0, skipped = 0))
             val dao = freshDb.backupDao()
             assertThat(dao.dumpTrips().map { it.toModel() })
                 .containsExactly(seeded["trip"], seeded["tombstonedTrip"])
@@ -127,6 +133,7 @@ class DefaultBackupManagerTest {
             assertThat(dao.dumpTrainCoaches().single().toModel()).isEqualTo(seeded["coach"])
             assertThat(dao.dumpFlightJourneys().single().toModel()).isEqualTo(seeded["flight"])
             assertThat(dao.dumpAttachments().single().toModel()).isEqualTo(seeded["attachment"])
+            assertThat(dao.dumpTravelDocuments().single().toModel()).isEqualTo(seeded["document"])
             freshDb.close()
         }
 
@@ -141,8 +148,8 @@ class DefaultBackupManagerTest {
             val second = manager.importApply(uri)
 
             assertThat(first.inserted).isEqualTo(0)
-            assertThat(first.skipped).isEqualTo(13)
-            assertThat(second).isEqualTo(MergeSummary(inserted = 0, updated = 0, skipped = 13))
+            assertThat(first.skipped).isEqualTo(14)
+            assertThat(second).isEqualTo(MergeSummary(inserted = 0, updated = 0, skipped = 14))
         }
 
     @Test
@@ -300,6 +307,140 @@ class DefaultBackupManagerTest {
         }
 
     @Test
+    fun `travel documents - local file is bundled and restored under filesDir documents keeping its extension`() =
+        runTest {
+            val sourceFile = File(context.cacheDir, "passport-scan.pdf").apply { writeBytes(byteArrayOf(7, 6, 5, 4)) }
+            val document =
+                Fixtures.travelDocument(
+                    type = TravelDocumentType.PASSPORT,
+                    filePath = sourceFile.absolutePath,
+                    mimeType = "application/pdf",
+                    expiryDate = Fixtures.TODAY.plusYears(8),
+                )
+            db.backupDao().upsertTravelDocuments(listOf(document.toEntity()))
+            val uri = exportFileUri()
+            manager.exportToUri(uri)
+
+            ZipFile(File(context.cacheDir, "export.zip")).use { zip ->
+                assertThat(zip.getEntry(BackupEntries.TRAVEL_DOCUMENTS)).isNotNull()
+                val entry = zip.getEntry(BackupEntries.attachmentEntry(document.id))
+                assertThat(entry).isNotNull()
+                assertThat(zip.getInputStream(entry).readBytes()).isEqualTo(byteArrayOf(7, 6, 5, 4))
+            }
+
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            DefaultBackupManager(context, freshDb, clock).importApply(uri)
+
+            val restored =
+                freshDb
+                    .backupDao()
+                    .dumpTravelDocuments()
+                    .single()
+                    .toModel()
+            assertThat(restored.id).isEqualTo(document.id)
+            assertThat(restored.updatedAt).isEqualTo(document.updatedAt)
+            assertThat(restored.expiryDate).isEqualTo(document.expiryDate)
+            assertThat(restored.type).isEqualTo(TravelDocumentType.PASSPORT)
+            val restoredFile = File(restored.filePath)
+            assertThat(restoredFile.parentFile).isEqualTo(TravelDocumentStorage.directory(context.filesDir))
+            assertThat(restoredFile.name).isEqualTo("${document.id}.pdf")
+            assertThat(restoredFile.readBytes()).isEqualTo(byteArrayOf(7, 6, 5, 4))
+            freshDb.close()
+        }
+
+    @Test
+    fun `travel documents - missing file is exported as row only and restored un-bundled`() =
+        runTest {
+            val document = Fixtures.travelDocument(filePath = "/nonexistent/visa.jpg")
+            db.backupDao().upsertTravelDocuments(listOf(document.toEntity()))
+            val uri = exportFileUri()
+            manager.exportToUri(uri)
+
+            ZipFile(File(context.cacheDir, "export.zip")).use { zip ->
+                assertThat(zip.getEntry(BackupEntries.attachmentEntry(document.id))).isNull()
+            }
+
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            DefaultBackupManager(context, freshDb, clock).importApply(uri)
+            val restored =
+                freshDb
+                    .backupDao()
+                    .dumpTravelDocuments()
+                    .single()
+                    .toModel()
+            assertThat(restored).isEqualTo(document)
+            freshDb.close()
+        }
+
+    @Test
+    fun `pre-ADR-027 backup without a travel_documents entry imports with zero documents`() =
+        runTest {
+            seedAllEntityTypes()
+            val full = File(context.cacheDir, "full.zip")
+            manager.exportToUri(Uri.fromFile(full))
+            val legacy = File(context.cacheDir, "legacy.zip")
+            ZipFile(full).use { source ->
+                ZipOutputStream(legacy.outputStream()).use { zip ->
+                    for (entry in source.entries().asSequence()) {
+                        if (entry.name == BackupEntries.TRAVEL_DOCUMENTS) continue
+                        zip.putNextEntry(ZipEntry(entry.name))
+                        source.getInputStream(entry).use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                }
+            }
+
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            val summary = DefaultBackupManager(context, freshDb, clock).importApply(Uri.fromFile(legacy))
+
+            assertThat(summary).isEqualTo(MergeSummary(inserted = 13, updated = 0, skipped = 0))
+            assertThat(freshDb.backupDao().dumpTravelDocuments()).isEmpty()
+            assertThat(freshDb.backupDao().dumpTrainCoaches()).hasSize(1)
+            freshDb.close()
+        }
+
+    @Test
+    fun `travel documents merge last-write-wins and replicate tombstones`() =
+        runTest {
+            val seeded = seedAllEntityTypes()
+            val exported = seeded["document"] as com.itsluminous.cleartravel.core.model.TravelDocument
+            val uri = exportFileUri()
+            manager.exportToUri(uri)
+
+            // Local rename is NEWER than the backup copy → survives the import.
+            val newerLocal = exported.copy(name = "Passport (renewed)", updatedAt = Fixtures.NOW.plusSeconds(10))
+            db.backupDao().upsertTravelDocuments(listOf(newerLocal.toEntity()))
+            assertThat(manager.importApply(uri).updated).isEqualTo(0)
+            assertThat(
+                db
+                    .backupDao()
+                    .dumpTravelDocuments()
+                    .single()
+                    .toModel()
+                    .name,
+            ).isEqualTo("Passport (renewed)")
+
+            // A NEWER tombstone in a second backup deletes the local live row.
+            val tombstoned = newerLocal.copy(updatedAt = Fixtures.NOW.plusSeconds(20), deletedAt = Fixtures.NOW.plusSeconds(20))
+            val otherDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            otherDb.backupDao().upsertTravelDocuments(listOf(tombstoned.toEntity()))
+            val tombstoneUri = exportFileUri("tombstone.zip")
+            DefaultBackupManager(context, otherDb, clock).exportToUri(tombstoneUri)
+            otherDb.close()
+
+            val summary = manager.importApply(tombstoneUri)
+            assertThat(summary.updated).isEqualTo(1)
+            val local =
+                db
+                    .backupDao()
+                    .dumpTravelDocuments()
+                    .single()
+                    .toModel()
+            assertThat(local.deletedAt).isEqualTo(tombstoned.deletedAt)
+            assertThat(db.travelDocumentDao().observeAll().first()).isEmpty()
+        }
+
+    @Test
     fun `version gate - newer schemaVersion is rejected with a typed error`() =
         runTest {
             val file = File(context.cacheDir, "future.zip")
@@ -350,7 +491,7 @@ class DefaultBackupManagerTest {
             val freshManager = DefaultBackupManager(context, freshDb, clock)
             val summary = freshManager.importApply(Uri.fromFile(legacy))
 
-            assertThat(summary).isEqualTo(MergeSummary(inserted = 12, updated = 0, skipped = 0))
+            assertThat(summary).isEqualTo(MergeSummary(inserted = 13, updated = 0, skipped = 0))
             assertThat(freshDb.backupDao().dumpTrainCoaches()).isEmpty()
             assertThat(freshDb.backupDao().dumpTrainRouteStops()).hasSize(1)
             freshDb.close()
@@ -418,7 +559,7 @@ class DefaultBackupManagerTest {
 
             assertThat(preview.schemaVersion).isEqualTo(1)
             assertThat(preview.createdAt).isEqualTo(clock.instant())
-            assertThat(preview.totalRows).isEqualTo(13)
+            assertThat(preview.totalRows).isEqualTo(14)
             assertThat(preview.entityCounts[BackupEntries.KEY_TRIPS]).isEqualTo(2)
             assertThat(preview.entityCounts[BackupEntries.KEY_TRAIN_TICKETS]).isEqualTo(1)
             // Preview must not import anything.

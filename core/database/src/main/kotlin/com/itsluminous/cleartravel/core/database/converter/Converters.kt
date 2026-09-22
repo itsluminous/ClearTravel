@@ -7,6 +7,7 @@ import com.itsluminous.cleartravel.core.model.FlightStatus
 import com.itsluminous.cleartravel.core.model.ItineraryItemType
 import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.core.model.PlaceCategory
+import com.itsluminous.cleartravel.core.model.TravelDocumentType
 import java.time.Instant
 import java.time.LocalDate
 
@@ -62,4 +63,10 @@ object Converters {
 
     @TypeConverter
     fun stringToAttachmentOwnerType(value: String): AttachmentOwnerType = AttachmentOwnerType.fromStorage(value)
+
+    @TypeConverter
+    fun travelDocumentTypeToString(value: TravelDocumentType): String = value.storageValue
+
+    @TypeConverter
+    fun stringToTravelDocumentType(value: String): TravelDocumentType = TravelDocumentType.fromStorage(value)
 }

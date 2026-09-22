@@ -11,6 +11,7 @@ import com.itsluminous.cleartravel.core.data.repository.FlightRepository
 import com.itsluminous.cleartravel.core.data.repository.ItineraryRepository
 import com.itsluminous.cleartravel.core.data.repository.SettingsRepository
 import com.itsluminous.cleartravel.core.data.repository.TrainRepository
+import com.itsluminous.cleartravel.core.data.repository.TravelDocumentRepository
 import com.itsluminous.cleartravel.core.data.repository.TripRepository
 import com.itsluminous.cleartravel.core.data.repository.offline.DefaultSettingsRepository
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineAttachmentRepository
@@ -19,6 +20,7 @@ import com.itsluminous.cleartravel.core.data.repository.offline.OfflineChecklist
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineFlightRepository
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineItineraryRepository
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTrainRepository
+import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTravelDocumentRepository
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTripRepository
 import dagger.Binds
 import dagger.Module
@@ -57,6 +59,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindAttachmentRepository(impl: OfflineAttachmentRepository): AttachmentRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindTravelDocumentRepository(impl: OfflineTravelDocumentRepository): TravelDocumentRepository
 
     @Binds
     @Singleton

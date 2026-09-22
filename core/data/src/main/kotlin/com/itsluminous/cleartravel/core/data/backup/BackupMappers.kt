@@ -17,6 +17,8 @@ import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
 import com.itsluminous.cleartravel.core.model.TrainTicket
+import com.itsluminous.cleartravel.core.model.TravelDocument
+import com.itsluminous.cleartravel.core.model.TravelDocumentType
 import com.itsluminous.cleartravel.core.model.Trip
 import java.time.Instant
 import java.time.LocalDate
@@ -394,6 +396,39 @@ fun AttachmentDto.toModel(): Attachment =
         localPath = localPath,
         driveFileId = driveFileId,
         mimeType = mimeType,
+        updatedAt = updatedAt.toInstant(),
+        deletedAt = deletedAt?.toInstant(),
+    )
+
+// ---- Travel documents (ADR-027) ----
+
+fun TravelDocument.toDto(bundled: Boolean): TravelDocumentDto =
+    TravelDocumentDto(
+        id = id,
+        name = name,
+        type = type.storageValue,
+        filePath = filePath,
+        mimeType = mimeType,
+        addedAt = addedAt.toEpochMilli(),
+        expiryDate = expiryDate?.toString(),
+        note = note,
+        driveFileId = driveFileId,
+        bundled = bundled,
+        updatedAt = updatedAt.toEpochMilli(),
+        deletedAt = deletedAt?.toEpochMilli(),
+    )
+
+fun TravelDocumentDto.toModel(): TravelDocument =
+    TravelDocument(
+        id = id,
+        name = name,
+        type = TravelDocumentType.fromStorage(type),
+        filePath = filePath,
+        mimeType = mimeType,
+        addedAt = addedAt.toInstant(),
+        expiryDate = expiryDate?.toDate(),
+        note = note,
+        driveFileId = driveFileId,
         updatedAt = updatedAt.toInstant(),
         deletedAt = deletedAt?.toInstant(),
     )

@@ -14,6 +14,7 @@ import com.itsluminous.cleartravel.core.database.entity.TrainCoachEntity
 import com.itsluminous.cleartravel.core.database.entity.TrainPassengerEntity
 import com.itsluminous.cleartravel.core.database.entity.TrainRouteStopEntity
 import com.itsluminous.cleartravel.core.database.entity.TrainTicketEntity
+import com.itsluminous.cleartravel.core.database.entity.TravelDocumentEntity
 import com.itsluminous.cleartravel.core.database.entity.TripEntity
 
 /**
@@ -70,6 +71,9 @@ interface BackupDao {
     @Query("SELECT * FROM attachments")
     suspend fun dumpAttachments(): List<AttachmentEntity>
 
+    @Query("SELECT * FROM travel_documents")
+    suspend fun dumpTravelDocuments(): List<TravelDocumentEntity>
+
     // ---- Timestamp-preserving upserts ----
 
     @Upsert
@@ -107,4 +111,7 @@ interface BackupDao {
 
     @Upsert
     suspend fun upsertAttachments(rows: List<AttachmentEntity>)
+
+    @Upsert
+    suspend fun upsertTravelDocuments(rows: List<TravelDocumentEntity>)
 }

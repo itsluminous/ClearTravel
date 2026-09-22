@@ -14,6 +14,7 @@ import com.itsluminous.cleartravel.core.database.dao.ChecklistPresetDao
 import com.itsluminous.cleartravel.core.database.dao.FlightDao
 import com.itsluminous.cleartravel.core.database.dao.ItineraryDao
 import com.itsluminous.cleartravel.core.database.dao.TrainDao
+import com.itsluminous.cleartravel.core.database.dao.TravelDocumentDao
 import com.itsluminous.cleartravel.core.database.dao.TripDao
 import dagger.Module
 import dagger.Provides
@@ -82,4 +83,7 @@ object DatabaseModule {
 
     @Provides
     fun provideAttachmentDao(database: ClearTravelDatabase): AttachmentDao = database.attachmentDao()
+
+    @Provides
+    fun provideTravelDocumentDao(database: ClearTravelDatabase): TravelDocumentDao = database.travelDocumentDao()
 }
