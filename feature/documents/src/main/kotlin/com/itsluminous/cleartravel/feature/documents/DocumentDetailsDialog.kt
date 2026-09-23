@@ -26,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.itsluminous.cleartravel.core.designsystem.component.ChipRow
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
+import com.itsluminous.cleartravel.core.designsystem.component.InputDialogProperties
 import com.itsluminous.cleartravel.core.designsystem.component.LocalDatePickerDialog
 import com.itsluminous.cleartravel.core.model.TravelDocumentType
 import java.time.LocalDate
@@ -64,6 +65,7 @@ internal fun DocumentDetailsDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = InputDialogProperties,
         title = { Text(stringResource(if (initial == null) R.string.documents_add_title else R.string.documents_edit_title)) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {

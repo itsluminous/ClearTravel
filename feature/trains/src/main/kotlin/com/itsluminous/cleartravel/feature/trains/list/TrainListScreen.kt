@@ -56,6 +56,7 @@ import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.designsystem.component.FullWidthFilterChip
 import com.itsluminous.cleartravel.core.designsystem.component.FullWidthFilterRow
+import com.itsluminous.cleartravel.core.designsystem.component.InputDialogProperties
 import com.itsluminous.cleartravel.core.model.TrainTicket
 import com.itsluminous.cleartravel.feature.trains.R
 import java.time.Instant
@@ -239,6 +240,7 @@ private fun PasteTextDialog(
     var text by rememberSaveable { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = InputDialogProperties,
         modifier = modifier,
         title = { Text(stringResource(R.string.trains_paste_dialog_title)) },
         text = {

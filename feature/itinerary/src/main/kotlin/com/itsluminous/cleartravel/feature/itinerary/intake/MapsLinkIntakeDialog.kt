@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.InputDialogProperties
 import com.itsluminous.cleartravel.core.model.Trip
 import com.itsluminous.cleartravel.feature.itinerary.R
 
@@ -85,6 +86,7 @@ internal fun MapsLinkIntakeDialog(
     val fallbackName = stringResource(R.string.itinerary_maps_unknown_place)
     AlertDialog(
         onDismissRequest = onCancel,
+        properties = InputDialogProperties,
         title = { Text(stringResource(R.string.itinerary_maps_intake_title)) },
         text = {
             Column {

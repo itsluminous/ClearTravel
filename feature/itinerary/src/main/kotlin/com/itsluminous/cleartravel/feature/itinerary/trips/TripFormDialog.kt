@@ -34,6 +34,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.itsluminous.cleartravel.core.designsystem.component.ChipRow
+import com.itsluminous.cleartravel.core.designsystem.component.InputDialogProperties
 import com.itsluminous.cleartravel.core.designsystem.component.LocalDatePickerDialog
 import com.itsluminous.cleartravel.core.model.Trip
 import com.itsluminous.cleartravel.feature.itinerary.R
@@ -86,6 +87,7 @@ internal fun TripFormDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = InputDialogProperties,
         title = {
             Text(
                 stringResource(

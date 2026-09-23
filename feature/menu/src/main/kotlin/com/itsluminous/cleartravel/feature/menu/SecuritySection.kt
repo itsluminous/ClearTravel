@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
+import com.itsluminous.cleartravel.core.designsystem.component.InputDialogProperties
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordField
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordFieldRole
 import com.itsluminous.cleartravel.core.security.biometric.BiometricUnlock
@@ -189,6 +190,7 @@ private fun ChangePasswordDialog(
     var confirm by rememberSaveable { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = InputDialogProperties,
         title = { Text(stringResource(R.string.menu_security_change_password)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

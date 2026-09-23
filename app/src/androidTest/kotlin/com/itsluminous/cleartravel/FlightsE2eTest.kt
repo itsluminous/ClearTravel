@@ -10,19 +10,25 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.itsluminous.cleartravel.core.data.repository.FlightRepository
+import com.itsluminous.cleartravel.core.model.FlightJourney
 import dagger.hilt.android.testing.HiltAndroidRule
 import dagger.hilt.android.testing.HiltAndroidTest
+import kotlinx.coroutines.runBlocking
 import org.junit.Before
 import org.junit.BeforeClass
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import javax.inject.Inject
+import com.itsluminous.cleartravel.core.designsystem.R as DesignR
 import com.itsluminous.cleartravel.feature.flights.R as FlightsR
 
 /**
  * Flights happy path (hermetic — in-memory Room, no scrape/OCR touched): add a
  * flight manually, open its card, and see the route in the detail sheet; adding the
- * same airline + number + date again is refused (ADR-025).
+ * same airline + number + date again is refused (ADR-025); the card's boarding-pass
+ * marker opens the pass viewer.
  */
 @HiltAndroidTest
 @RunWith(AndroidJUnit4::class)
@@ -33,9 +39,21 @@ class FlightsE2eTest {
     @get:Rule(order = 1)
     val composeRule = createAndroidComposeRule<MainActivity>()
 
+    @Inject
+    lateinit var flightRepository: FlightRepository
+
     @Before
     fun setUp() {
         hiltRule.inject()
+        runBlocking {
+            flightRepository.save(
+                FlightJourney(
+                    airlineIata = PASS_AIRLINE,
+                    flightNumber = PASS_FLIGHT_NUMBER,
+                    boardingPassPath = PASS_PATH,
+                ),
+            )
+        }
     }
 
     @Test
@@ -135,8 +153,31 @@ class FlightsE2eTest {
         composeRule.onAllNodesWithText("$DUPLICATE_AIRLINE 0$DUPLICATE_FLIGHT_NUMBER").assertCountEquals(0)
     }
 
+    /**
+     * The card's "Boarding pass attached" marker is a control, not a badge: a tap opens
+     * the pass in the shared viewer (user report 2026-09-23 — it used to do nothing).
+     * The seeded path does not exist on disk, so the viewer shows its title plus the
+     * missing-file explanation instead of an image.
+     */
+    @Test
+    fun boardingPassMarkerOnCard_opensViewer() {
+        composeRule.onNodeWithText(composeRule.string(R.string.nav_journeys)).performClick()
+        composeRule.onNodeWithText(composeRule.string(R.string.journeys_segment_flights)).performClick()
+        composeRule.waitForText("$PASS_AIRLINE $PASS_FLIGHT_NUMBER")
+
+        composeRule
+            .onNodeWithContentDescription(composeRule.string(FlightsR.string.flights_icon_boarding_pass))
+            .performClick()
+
+        composeRule.waitForText(composeRule.string(FlightsR.string.flights_pass_viewer_title))
+        composeRule.waitForText(composeRule.string(DesignR.string.designsystem_viewer_missing))
+    }
+
     private companion object {
         const val AIRLINE = "6E"
+        const val PASS_AIRLINE = "UK"
+        const val PASS_FLIGHT_NUMBER = "955"
+        const val PASS_PATH = "/nonexistent/e2e-boarding-pass.png"
         const val DUPLICATE_AIRLINE = "AI"
         const val DUPLICATE_FLIGHT_NUMBER = "777"
         const val FLIGHT_NUMBER = "2345"

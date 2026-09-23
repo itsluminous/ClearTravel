@@ -2632,3 +2632,86 @@ seed identical, valid, unique ids equal to `seededItemId`), `DefaultBackupManage
 the backup's live rows, seeded rows tombstoned, an unmentioned preset untouched; two
 ADR-040 installs merge by derived id with no growth). Device-verified in
 `docs/validation-report.md` (2026-09-23).
+
+## ADR-041 — UX fixes: tappable boarding-pass marker, app-wide IME insets at the shell, input dialogs ignore outside taps (2026-09-23)
+
+**Context.** Three user reports on 2026-09-23: (1) the flight card's "Boarding pass
+attached" icon did nothing when tapped; (2) "on all the screens in the app" the keyboard
+covers the field being typed into; (3) with gesture navigation, an edge swipe while a
+dialog (new trip, new checklist, …) is open "registers as a tap outside", closes the
+dialog and throws away what was typed.
+
+**Root causes.**
+
+1. `FlightCardBody` rendered the marker as an `ExplainableIcon` with no `onClick`. The
+   wrapper's `combinedClickable` still consumes the tap, so it neither opened anything
+   nor fell through to the card's own click.
+2. `MainActivity` calls `enableEdgeToEdge()` (decor no longer fits system windows), so
+   the manifest's `windowSoftInputMode="adjustResize"` — which was already set — does
+   not resize the window when the IME appears; Compose must apply the IME inset itself.
+   Nothing did: Material 3 `Scaffold`'s default `contentWindowInsets` is
+   `systemBarsForVisualComponents` (no IME), and with a `bottomBar` present the
+   Scaffold ignores even those for the bottom (`ScaffoldLayout`: bottom padding = bar
+   height). The only IME handling in the app was a per-screen `imePadding()` on the
+   Documents search box (ADR-033).
+3. `android.app.Dialog.onTouchEvent` cancels the dialog on an **outside `ACTION_DOWN`**
+   (`Window.shouldCloseOnTouch`); Compose's `DialogWrapper` forwards that as
+   `onDismissRequest` when `dismissOnClickOutside` is true (the default). A gesture-nav
+   edge swipe is delivered to the app as a normal touch that starts at the screen edge —
+   outside the dialog — until SystemUI recognises it as back. So the DOWN dismissed the
+   dialog immediately, and the now-recognised back gesture then hit whatever was
+   underneath: on a tab root that is the activity, which **finished** (device
+   reproduction: New trip dialog → edge swipe → launcher home screen).
+
+**Decisions.**
+
+1. **The marker is a control.** `FlightCardBody` takes `onViewPass: ((path) -> Unit)?`;
+   the list card passes the same `onViewPass` the detail sheet's "View boarding pass"
+   button uses (→ `FlightsRoute.PassViewer` → the shared `DocumentViewerScreen`). Tint
+   primary + 40 dp target like the other card actions; explanation text now reads
+   "Boarding pass attached - tap to view". The share image (`showFreshness = false`)
+   never rendered the marker and is unchanged. Audit of every `ExplainableIcon` without
+   `onClick`: the remaining three (document type icon, itinerary category icon, drag
+   handle) are type markers, not attachments — left alone.
+2. **IME insets are applied once, at the shell.** `ClearTravelApp`'s NavHost modifier is
+   `.padding(padding).consumeWindowInsets(padding).imePadding()`: the tab content
+   shrinks by `ime − bottomBarHeight`, i.e. its bottom edge meets the keyboard's top,
+   and the IME inset is marked consumed so nested feature `Scaffold`s (which all pad by
+   their own `padding` anyway) can never pad twice. The `NavigationBar` deliberately
+   stays at the window bottom, hidden behind the keyboard, rather than floating above
+   it. Trees outside the shell handle themselves: `LockScaffold` (setup / unlock /
+   preparing / wizard steps) adds `.imePadding()`; the externally hosted forms in
+   `MainActivity` get `windowInsetsPadding(WindowInsets.safeDrawing)` (train form — a
+   plain scrolling column with no Scaffold, so it also needed the system bars) or
+   `imePadding()` (flight form / status check — Scaffolds already handle the bars).
+   `DocumentSearchField`'s own `imePadding()` is removed (now a no-op — inset consumed
+   upstream). Dialogs (`decorFitsSystemWindows = true` → platform `adjustResize` on the
+   dialog window) and `ModalBottomSheet` (content padded by
+   `safeDrawing.only(Bottom)`, which includes the IME) already behaved and are untouched.
+   Compose's text fields bring themselves into view once the scrollable shrinks, so no
+   `BringIntoViewRequester` plumbing was needed (device: the LAST passenger field of the
+   train form moved from y 1614–1785 to 1178–1349 px, above the IME top at 1517).
+3. **Rule: a dialog that holds typed input never dismisses on an outside tap.**
+   `core:designsystem` gains `InputDialogProperties =
+   DialogProperties(dismissOnClickOutside = false)` (back still dismisses; every such
+   dialog has an explicit Cancel). Applied to the nine input dialogs: `TextEditDialog`
+   (checklist item / preset item edit), `CreateChecklistDialog`, `DocumentDetailsDialog`,
+   `MapsLinkIntakeDialog`, `TripFormDialog`, `BackupPasswordDialog`,
+   `CreatePresetDialog`, `ChangePasswordDialog`, `PasteTextDialog`. Pure confirmations
+   (delete ×7, disconnect Google, fresh-install restore, import confirm, share import
+   add/update/failed, shared-file intake), choice lists (append preset, Drive backup
+   list) and the date/time pickers keep the default tap-outside dismissal — nothing is
+   lost there and the M3 date picker's typed mode is one tap to redo. Net effect on
+   device: while typing (IME up) an edge swipe now only hides the keyboard and the
+   dialog keeps its text; with the keyboard down the swipe is a normal back → the dialog
+   closes (platform standard) and the app stays where it was instead of exiting.
+   Documented as UI convention in `AGENTS.md` rule 9.
+
+**Consequences.** No schema, repository or backup change. e2e:
+`FlightsE2eTest.boardingPassMarkerOnCard_opensViewer` (seeded flight with a
+non-existent `boardingPassPath` → tap the marker → viewer title + missing-file text),
+`TripsE2eTest.newTripDialog_keepsTypedInputOnOutsideTap_backDismisses` (raw
+UiAutomation tap at screen x = 8 px outside the dialog window → dialog and typed name
+still there → back → gone), `E2e.tapScreen` helper. No existing test relied on
+tap-outside dismissal or on the old inset layout. Device validation in
+`docs/validation-report.md` (2026-09-23).

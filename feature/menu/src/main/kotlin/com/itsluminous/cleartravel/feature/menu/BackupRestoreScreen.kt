@@ -41,6 +41,7 @@ import com.itsluminous.cleartravel.core.data.backup.ImportPreview
 import com.itsluminous.cleartravel.core.designsystem.DateFormats
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
+import com.itsluminous.cleartravel.core.designsystem.component.InputDialogProperties
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordField
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordFieldRole
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupInfo
@@ -376,6 +377,7 @@ private fun BackupPasswordDialog(
     var password by rememberSaveable { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = InputDialogProperties,
         title = { Text(stringResource(R.string.menu_backup_password_title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

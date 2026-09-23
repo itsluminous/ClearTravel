@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
+import com.itsluminous.cleartravel.core.designsystem.component.InputDialogProperties
 import com.itsluminous.cleartravel.core.model.ChecklistPreset
 
 /** The checklist list: every checklist as a progress card, FAB to create a new one. */
@@ -144,6 +145,7 @@ private fun CreateChecklistDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = InputDialogProperties,
         title = { Text(stringResource(R.string.checklist_create_title)) },
         text = {
             Column(modifier = Modifier.verticalScroll(rememberScrollState())) {

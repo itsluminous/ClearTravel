@@ -45,6 +45,7 @@ import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
+import com.itsluminous.cleartravel.core.designsystem.component.InputDialogProperties
 import com.itsluminous.cleartravel.core.model.ChecklistPreset
 
 /**
@@ -216,6 +217,7 @@ private fun CreatePresetDialog(
     var name by rememberSaveable { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
+        properties = InputDialogProperties,
         title = { Text(stringResource(R.string.menu_preset_create_title)) },
         text = {
             OutlinedTextField(

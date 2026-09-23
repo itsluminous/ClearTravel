@@ -37,6 +37,7 @@ fun TextEditDialog(
     AlertDialog(
         modifier = modifier,
         onDismissRequest = onDismiss,
+        properties = InputDialogProperties,
         title = { Text(title) },
         text = {
             OutlinedTextField(

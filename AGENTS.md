@@ -112,6 +112,16 @@ exist and the full gate passes.
    date formats, dialogs) lives in `core:designsystem`, never as private per-feature
    copies (ADR-036); picker-backed read-only fields observe their own
    `InteractionSource`, never a transparent overlay.
+   **Dialogs (ADR-041):** any dialog with a text field passes
+   `properties = InputDialogProperties` (no dismiss on an outside tap — a gesture-nav
+   edge swipe lands as an outside touch first; back and the explicit Cancel still
+   close it). Pure confirmations, choice lists and pickers keep the default
+   tap-outside dismissal.
+   **Keyboard (ADR-041):** IME insets are applied ONCE, in the app shell
+   (`ClearTravelApp` NavHost `imePadding()` after `consumeWindowInsets`), plus
+   `LockScaffold` and the externally hosted forms in `MainActivity`. Never add
+   `imePadding()`/`WindowInsets.ime` inside a tab screen — it is already consumed;
+   scrollable forms bring the focused field into view on their own.
 
 ## Working conventions
 

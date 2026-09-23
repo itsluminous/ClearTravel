@@ -1,6 +1,9 @@
 package com.itsluminous.cleartravel
 
 import android.os.Build
+import android.os.SystemClock
+import android.view.InputDevice
+import android.view.MotionEvent
 import androidx.annotation.StringRes
 import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
@@ -20,6 +23,25 @@ import com.itsluminous.cleartravel.core.designsystem.R as DesignR
 /** Shared plumbing for the e2e suite. */
 object E2e {
     const val WAIT_TIMEOUT_MILLIS = 15_000L
+
+    /**
+     * Injects a raw touch tap at SCREEN coordinates through UiAutomation — it reaches
+     * whichever window is on top (a dialog's own window included), unlike Compose's
+     * semantics-driven clicks, which only address nodes.
+     */
+    fun tapScreen(
+        x: Float,
+        y: Float,
+    ) {
+        val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+        val downTime = SystemClock.uptimeMillis()
+        listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP).forEach { action ->
+            val event = MotionEvent.obtain(downTime, SystemClock.uptimeMillis(), action, x, y, 0)
+            event.source = InputDevice.SOURCE_TOUCHSCREEN
+            automation.injectInputEvent(event, true)
+            event.recycle()
+        }
+    }
 
     /**
      * Pre-grants POST_NOTIFICATIONS so the shell's one-time permission request never
