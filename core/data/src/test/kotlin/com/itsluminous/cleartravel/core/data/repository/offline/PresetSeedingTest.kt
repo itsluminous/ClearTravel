@@ -29,13 +29,14 @@ import java.time.ZoneOffset
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
 class PresetSeedingTest {
+    private lateinit var context: Context
     private lateinit var db: ClearTravelDatabase
     private lateinit var repository: OfflineChecklistPresetRepository
     private val clock: Clock = Clock.fixed(Fixtures.NOW, ZoneOffset.UTC)
 
     @Before
     fun setUp() {
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        context = ApplicationProvider.getApplicationContext()
         db = inMemoryDatabase(context)
         repository = OfflineChecklistPresetRepository(db.checklistPresetDao(), AssetBuiltInPresetSource(context), clock)
     }
@@ -79,6 +80,31 @@ class PresetSeedingTest {
             presets.forEach { preset ->
                 assertThat(repository.getItems(preset.id)).isNotEmpty()
             }
+        }
+
+    @Test
+    fun `ADR-040 - seeded item ids are derived from preset id and index, identical across installs`() =
+        runTest {
+            repository.seedBuiltInPresets()
+            val otherDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            val other = OfflineChecklistPresetRepository(otherDb.checklistPresetDao(), AssetBuiltInPresetSource(context), clock)
+            other.seedBuiltInPresets()
+
+            repository.observePresets().first().forEach { preset ->
+                val ids = repository.getItems(preset.id).map { it.id }
+                assertThat(ids).isEqualTo(other.getItems(preset.id).map { it.id })
+                assertThat(ids).isEqualTo(ids.indices.map { OfflineChecklistPresetRepository.seededItemId(preset.id, it) })
+                ids.forEach { assertThat(EntityIds.isValid(it)).isTrue() }
+            }
+            assertThat(
+                repository
+                    .observePresets()
+                    .first()
+                    .flatMap { repository.getItems(it.id) }
+                    .map { it.id }
+                    .toSet(),
+            ).hasSize(repository.observePresets().first().sumOf { repository.getItems(it.id).size })
+            otherDb.close()
         }
 
     @Test

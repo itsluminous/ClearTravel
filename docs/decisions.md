@@ -50,6 +50,10 @@ how the code works; **amended** = active, but a later ADR changed part of it (na
 | 034 | Viewer & lock polish — enrolment fix, 1-minute lock default, no forced brightness, fullscreen + landscape rail | active |
 | 035 | Itinerary place search (Nominatim), view-in-map, flights date picker, maps-compose 6.7.0 | active |
 | 036 | Cleanup pass — shared UI components, deferred follow-ups closed | active |
+| 037 | Scheduled automatic backup (local always, Drive when enabled) | active |
+| 038 | Drive folder identity + convergence, backup listing across folders, boarding passes in local backups | active |
+| 039 | Self-contained share links (trips, checklists, flights) with ID-stable upsert; flight card quick actions | active |
+| 040 | Deterministic built-in preset item ids; restore collapses pre-040 seeded duplicates | active — amends 006 seeding |
 
 ---
 
@@ -2575,3 +2579,50 @@ checklist insert/update with replaced check states, owner-trip resolution).
 **Follow-ups.** Flight import could later upsert by id for the same-person
 multi-device case; a trip share could optionally bundle its checklists; a web
 landing page for `/share/` links (the domain currently has none).
+
+## ADR-040 — Deterministic built-in preset item ids; restore collapses seeded duplicates (2026-09-23)
+
+**Context.** Found in the ADR-038 on-device validation of the bug-4 scenario (export →
+`pm clear` → onboarding restore from the file): after the restore every built-in
+preset showed each item TWICE ("0 of 12 done" on a fresh Medicines checklist, 20
+rows in Domestic trip). Not new — every restore into a fresh install since backups
+began carrying presets (ADR-015) did this; it simply had never been walked on a
+device before.
+
+**Root cause.** `seedBuiltInPresets()` gave built-in preset ITEMS random UUIDs
+(`EntityIds.newId()`) while the presets themselves have fixed ids from the asset.
+A fresh install seeds its own items (Room `onCreate`), then the restore merges the
+backup's items — same preset id, different item ids — and the ADR-015 merge (by id,
+never wipe) correctly inserts them all. Two installs never agreed on item ids, so
+their backups could never de-duplicate.
+
+**Decisions.**
+
+1. **Seeded item ids are derived, not random.**
+   `OfflineChecklistPresetRepository.seededItemId(presetId, index)` =
+   `UUID.nameUUIDFromBytes("cleartravel:preset-item:<presetId>:<index>")` (a
+   canonical v3 UUID, so `EntityIds.isValid` holds and it travels through backups
+   and share links unchanged). Every ADR-040 install seeds identical rows; a backup
+   from one merged into another matches by id and inserts nothing. Existing installs
+   are untouched (seeding is skipped when the preset row exists, even tombstoned —
+   ADR-021 edits stay) — their backups simply keep the random ids they already have.
+2. **Restore collapses the pre-040 case.** `DefaultBackupManager.mergeSnapshot` ends
+   with `collapseSeededBuiltInPresetItems(snapshot)`: for every built-in preset the
+   backup carries items for, each LIVE row on this install whose id is a *seeded* id
+   the backup does not mention is tombstoned (`deletedAt = updatedAt = now`, so the
+   tombstone wins any later merge). The backup's rows are the user's history
+   (renames, deletions, additions, ordering — ADR-021) and are what the restored
+   install must show; the freshly seeded copies are noise. A backup that says
+   nothing about a preset leaves that preset's seeded rows alone. `DefaultBackupManager`
+   gains a `BuiltInPresetSource` constructor dependency to know the seeded ids.
+
+**Consequences.** No schema or backup-format change. Idempotence and LWW semantics
+of ADR-015 unchanged (the collapse only ever writes tombstones for seeded ids absent
+from the backup, so a second import of the same file is still a no-op). A backup from
+an ADR-040 install restored by a PRE-040 app still duplicates (the old app has no
+collapse) — acceptable, forward-only. Tests: `PresetSeedingTest` +1 (two installs
+seed identical, valid, unique ids equal to `seededItemId`), `DefaultBackupManagerTest`
++2 (pre-040 backup with a rename + a deletion into a freshly seeded install → exactly
+the backup's live rows, seeded rows tombstoned, an unmentioned preset untouched; two
+ADR-040 installs merge by derived id with no growth). Device-verified in
+`docs/validation-report.md` (2026-09-23).

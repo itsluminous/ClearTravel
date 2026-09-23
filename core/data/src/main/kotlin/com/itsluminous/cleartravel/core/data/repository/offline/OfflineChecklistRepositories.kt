@@ -15,6 +15,7 @@ import com.itsluminous.cleartravel.core.model.EntityIds
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.Clock
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -178,7 +179,7 @@ class OfflineChecklistPresetRepository
                 val items =
                     definition.items.mapIndexed { index, text ->
                         ChecklistPresetItem(
-                            id = EntityIds.newId(),
+                            id = seededItemId(definition.id, index),
                             presetId = definition.id,
                             text = text,
                             sortOrder = index,
@@ -187,5 +188,18 @@ class OfflineChecklistPresetRepository
                     }
                 presetDao.upsertItems(items.map { it.toEntity() })
             }
+        }
+
+        companion object {
+            /**
+             * ADR-040: the id of the [index]-th seeded item of built-in preset [presetId]
+             * is DERIVED, not random, so every install seeds the same row ids and a
+             * backup merged into a freshly seeded install matches them by id instead of
+             * inserting a second copy of every built-in item.
+             */
+            fun seededItemId(
+                presetId: String,
+                index: Int,
+            ): String = UUID.nameUUIDFromBytes("cleartravel:preset-item:$presetId:$index".toByteArray(Charsets.UTF_8)).toString()
         }
     }

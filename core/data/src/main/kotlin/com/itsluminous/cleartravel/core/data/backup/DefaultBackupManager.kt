@@ -3,7 +3,9 @@ package com.itsluminous.cleartravel.core.data.backup
 import android.content.Context
 import android.net.Uri
 import androidx.room.withTransaction
+import com.itsluminous.cleartravel.core.data.preset.BuiltInPresetSource
 import com.itsluminous.cleartravel.core.data.repository.TravelDocumentStorage
+import com.itsluminous.cleartravel.core.data.repository.offline.OfflineChecklistPresetRepository
 import com.itsluminous.cleartravel.core.data.security.AppFileLayout
 import com.itsluminous.cleartravel.core.database.ClearTravelDatabase
 import com.itsluminous.cleartravel.core.database.entity.toEntity
@@ -71,6 +73,7 @@ class DefaultBackupManager
         private val clock: Clock,
         private val keyVault: KeyVault,
         private val fileCipher: LocalFileCipher,
+        private val builtInPresetSource: BuiltInPresetSource,
     ) : BackupManager {
         private val backupDao get() = database.backupDao()
 
@@ -379,6 +382,37 @@ class DefaultBackupManager
         /** Extraction sink: restored bytes land CTEF-encrypted like every stored file. */
         private val encryptingExtract: (InputStream, File) -> Unit = { input, target -> fileCipher.encryptTo(input, target) }
 
+        /**
+         * ADR-040: built-in preset items seeded before ADR-040 carried RANDOM ids, so a
+         * backup from such an install merged into a freshly seeded one (the fresh-install
+         * restore path) inserted a second copy of every built-in item. Seeded ids are
+         * derived now ([OfflineChecklistPresetRepository.seededItemId]); when the backup
+         * carries its OWN rows for a built-in preset, that preset's contents are the
+         * backup's, so every live seeded row the backup does not mention is tombstoned
+         * (`updatedAt = now`, so the tombstone wins later merges). A backup that says
+         * nothing about a preset leaves the seeded rows alone.
+         */
+        private suspend fun collapseSeededBuiltInPresetItems(snapshot: BackupSnapshot) {
+            val backupItemIds = snapshot.checklistPresetItems.map { it.id }.toSet()
+            val presetsInBackup = snapshot.checklistPresetItems.map { it.presetId }.toSet()
+            if (presetsInBackup.isEmpty()) return
+            val seededIds =
+                builtInPresetSource
+                    .load()
+                    .filter { it.id in presetsInBackup }
+                    .flatMap { definition ->
+                        definition.items.indices.map { OfflineChecklistPresetRepository.seededItemId(definition.id, it) }
+                    }.toSet()
+            if (seededIds.isEmpty()) return
+            val now = clock.instant()
+            val tombstones =
+                backupDao
+                    .dumpChecklistPresetItems()
+                    .filter { it.deletedAt == null && it.id in seededIds && it.id !in backupItemIds }
+                    .map { it.copy(deletedAt = now, updatedAt = now) }
+            if (tombstones.isNotEmpty()) backupDao.upsertChecklistPresetItems(tombstones)
+        }
+
         /** Runs the LWW merge for every entity type; MUST be called in a transaction. */
         private suspend fun mergeSnapshot(
             snapshot: BackupSnapshot,
@@ -424,6 +458,7 @@ class DefaultBackupManager
                     backupDao.upsertChecklistPresetItems(plan.toWrite.map { it.toEntity() })
                     summary += plan.summary
                 }
+            collapseSeededBuiltInPresetItems(snapshot)
             BackupMerger
                 .merge(backupDao.dumpTrainTickets().map { it.toModel() }, snapshot.trainTickets.map { it.toModel() })
                 .also { plan ->

@@ -4,7 +4,10 @@ import android.content.Context
 import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import com.itsluminous.cleartravel.core.data.preset.AssetBuiltInPresetSource
+import com.itsluminous.cleartravel.core.data.preset.BuiltInPresetSource
 import com.itsluminous.cleartravel.core.data.repository.TravelDocumentStorage
+import com.itsluminous.cleartravel.core.data.repository.offline.OfflineChecklistPresetRepository
 import com.itsluminous.cleartravel.core.data.security.AppFileLayout
 import com.itsluminous.cleartravel.core.database.ClearTravelDatabase
 import com.itsluminous.cleartravel.core.database.entity.toEntity
@@ -54,14 +57,16 @@ class DefaultBackupManagerTest {
     // ADR-031: an unlocked vault (password "pw") keys the file cipher and seals exports.
     private lateinit var vault: DefaultKeyVault
     private lateinit var cipher: LocalFileCipher
+    private lateinit var presetSource: BuiltInPresetSource
 
     @Before
     fun setUp() {
         context = ApplicationProvider.getApplicationContext()
+        presetSource = AssetBuiltInPresetSource(context)
         db = inMemoryDatabase(context)
         vault = newVault(VAULT_PASSWORD)
         cipher = LocalFileCipher(key = { vault.fileKey() })
-        manager = DefaultBackupManager(context, db, clock, vault, cipher)
+        manager = DefaultBackupManager(context, db, clock, vault, cipher, presetSource)
     }
 
     private fun newVault(password: String): DefaultKeyVault =
@@ -71,7 +76,7 @@ class DefaultBackupManagerTest {
 
     /** A manager over [freshDb] on THIS install (same vault → same portable salt → silent import). */
     private fun managerFor(freshDb: ClearTravelDatabase): DefaultBackupManager =
-        DefaultBackupManager(context, freshDb, clock, vault, cipher)
+        DefaultBackupManager(context, freshDb, clock, vault, cipher, presetSource)
 
     /**
      * A manager over [freshDb] on ANOTHER install whose vault was set up with
@@ -84,7 +89,7 @@ class DefaultBackupManagerTest {
     ): Pair<DefaultBackupManager, LocalFileCipher> {
         val otherVault = newVault(password)
         val otherCipher = LocalFileCipher(key = { otherVault.fileKey() })
-        return DefaultBackupManager(context, freshDb, clock, otherVault, otherCipher) to otherCipher
+        return DefaultBackupManager(context, freshDb, clock, otherVault, otherCipher, presetSource) to otherCipher
     }
 
     /** Opens an exported v2 envelope as the plain ZIP inside it (using this vault's key). */
@@ -276,6 +281,68 @@ class DefaultBackupManagerTest {
             assertThat(row.deletedAt).isEqualTo(Fixtures.NOW.plusSeconds(60))
             assertThat(db.tripDao().getById(Fixtures.FIXED_ID)).isNull()
         }
+
+    @Test
+    fun `ADR-040 - a pre-ADR-040 backup restored into a freshly seeded install does not duplicate built-in preset items`() =
+        runTest {
+            // The "old install": built-in preset seeded with RANDOM item ids (pre-ADR-040),
+            // one item renamed by the user, one deleted.
+            val definition = presetSource.load().first { it.name == "Medicines" }
+            val oldDao = db.backupDao()
+            oldDao.upsertChecklistPresets(
+                listOf(Fixtures.checklistPreset(id = definition.id, name = definition.name, builtIn = true).toEntity()),
+            )
+            val oldItems =
+                definition.items.mapIndexed { index, text ->
+                    Fixtures.checklistPresetItem(presetId = definition.id, text = text, sortOrder = index)
+                }
+            val renamed = oldItems[0].copy(text = "Paracetamol 500 mg", updatedAt = Fixtures.NOW.plusSeconds(10))
+            val removed = oldItems[1].copy(deletedAt = Fixtures.NOW.plusSeconds(20), updatedAt = Fixtures.NOW.plusSeconds(20))
+            oldDao.upsertChecklistPresetItems((listOf(renamed, removed) + oldItems.drop(2)).map { it.toEntity() })
+            val uri = exportFileUri()
+            manager.exportToUri(uri)
+
+            // The "new install": seeded by the repository (derived ids, ADR-040), then the restore.
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            OfflineChecklistPresetRepository(freshDb.checklistPresetDao(), presetSource, clock).seedBuiltInPresets()
+            assertThat(freshDb.checklistPresetDao().getItems(definition.id)).hasSize(definition.items.size)
+            managerFor(freshDb).importApply(uri)
+
+            val live = freshDb.checklistPresetDao().getItems(definition.id).map { it.toModel() }
+            assertThat(live.map { it.text }).containsExactly("Paracetamol 500 mg", *definition.items.drop(2).toTypedArray())
+            assertThat(live.map { it.id }).containsExactlyElementsIn(listOf(renamed.id) + oldItems.drop(2).map { it.id })
+            // The seeded rows are tombstoned, not deleted: a later merge keeps them dead.
+            val seeded = freshDb.backupDao().dumpChecklistPresetItems().filter { it.id in seededIds(definition.id, definition.items.size) }
+            assertThat(seeded).hasSize(definition.items.size)
+            assertThat(seeded.all { it.deletedAt != null }).isTrue()
+            // Presets the backup says nothing about keep their seeded items.
+            val other = presetSource.load().first { it.name == "Trek" }
+            assertThat(freshDb.checklistPresetDao().getItems(other.id)).hasSize(other.items.size)
+            freshDb.close()
+        }
+
+    @Test
+    fun `ADR-040 - two ADR-040 installs merge built-in preset items by derived id`() =
+        runTest {
+            val definition = presetSource.load().first { it.name == "Medicines" }
+            OfflineChecklistPresetRepository(db.checklistPresetDao(), presetSource, clock).seedBuiltInPresets()
+            val uri = exportFileUri()
+            manager.exportToUri(uri)
+
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            OfflineChecklistPresetRepository(freshDb.checklistPresetDao(), presetSource, clock).seedBuiltInPresets()
+            managerFor(freshDb).importApply(uri)
+
+            val live = freshDb.checklistPresetDao().getItems(definition.id)
+            assertThat(live).hasSize(definition.items.size)
+            assertThat(live.map { it.id }).containsExactlyElementsIn(seededIds(definition.id, definition.items.size))
+            freshDb.close()
+        }
+
+    private fun seededIds(
+        presetId: String,
+        count: Int,
+    ): List<String> = (0 until count).map { OfflineChecklistPresetRepository.seededItemId(presetId, it) }
 
     @Test
     fun `local-only rows survive an import untouched`() =
@@ -774,7 +841,7 @@ class DefaultBackupManagerTest {
             var tick = 0L
             repeat(5) {
                 val tickedClock = Clock.fixed(Fixtures.NOW.plusSeconds(3600 + tick), ZoneOffset.UTC)
-                DefaultBackupManager(context, db, tickedClock, vault, cipher).exportLatestToAppStorage()
+                DefaultBackupManager(context, db, tickedClock, vault, cipher, presetSource).exportLatestToAppStorage()
                 tick += 61 // distinct HHmmss names
             }
 
