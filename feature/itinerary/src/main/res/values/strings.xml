@@ -148,4 +148,11 @@
     <string name="itinerary_place_search_hint">Search a place</string>
     <string name="itinerary_place_search_clear">Clear search</string>
     <string name="itinerary_place_search_no_results">No places found - try a different search or pan the map.</string>
+
+    <!-- ADR-039: share a trip as a self-contained link -->
+    <string name="itinerary_share_trip">Share trip</string>
+    <string name="itinerary_share_text">Here\'s my trip \"%1$s\" - open it in Clear Travel: %2$s</string>
+    <string name="itinerary_share_chooser_title">Share trip</string>
+    <string name="itinerary_share_too_long">This trip is too big to share as a link - try sharing fewer places</string>
+    <string name="itinerary_share_missing">Couldn\'t share - this trip no longer exists</string>
 </resources>

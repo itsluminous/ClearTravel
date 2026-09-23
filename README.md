@@ -36,6 +36,14 @@ optional Google account link for Calendar/Drive sync.
   sheet lists the trips it is part of, one tap apart.
 - **Packing checklists** — per-trip checklists built from editable preset templates
   (append multiple presets, track packed counts).
+- **Share trips, checklists and flights as links** — a trip (with its whole
+  itinerary), a checklist (with its check states) or a flight is shared as a
+  self-contained `cleartravel.itsluminous.com/share/…` link (no server involved).
+  Opening it in Clear Travel asks before adding; re-sharing an edited trip or
+  checklist **updates** the recipient's copy in place instead of duplicating it,
+  and a shared flight lands in a prefilled add form. Flight cards also gain quick
+  actions: check status, web check-in (told when the airline window opens or has
+  closed), share as image + link.
 - **Travel documents** — keep scans of your passport, visas, ID, insurance and
   tickets as encrypted local files with typed labels and optional expiry dates
   (expiring-soon and expired flags), find them with a live search box, and open them

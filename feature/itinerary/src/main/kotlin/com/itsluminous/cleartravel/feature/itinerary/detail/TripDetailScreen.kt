@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.EventNote
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -65,6 +67,9 @@ import com.itsluminous.cleartravel.feature.itinerary.icon
 import com.itsluminous.cleartravel.feature.itinerary.labelRes
 import com.itsluminous.cleartravel.feature.itinerary.logic.ItineraryDay
 import com.itsluminous.cleartravel.feature.itinerary.logic.dayColorArgb
+import com.itsluminous.cleartravel.feature.itinerary.share.TripShareViewModel
+import com.itsluminous.cleartravel.feature.itinerary.share.handleTripShareOutcome
+import kotlinx.coroutines.launch
 
 /** Timeline vs map — the two toggles of the same trip screen. */
 private const val VIEW_TIMELINE = 0
@@ -81,6 +86,7 @@ internal fun TripDetailScreen(
     viewModel: TripDetailViewModel = hiltViewModel(),
     /** ADR-028: a linked journey was tapped in the item sheet — the shell opens it in Journeys. */
     onOpenJourney: (JourneyType, String) -> Unit = { _, _ -> },
+    shareViewModel: TripShareViewModel = hiltViewModel(),
 ) {
     val trip by viewModel.trip.collectAsStateWithLifecycle()
     val days by viewModel.days.collectAsStateWithLifecycle()
@@ -94,6 +100,7 @@ internal fun TripDetailScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     LaunchedEffect(message) {
         val current = message ?: return@LaunchedEffect
         viewModel.consumeMessage()
@@ -125,6 +132,20 @@ internal fun TripDetailScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.itinerary_back),
+                        )
+                    }
+                },
+                actions = {
+                    trip?.let { current ->
+                        // ADR-039: share the trip as a self-contained link.
+                        ExplainableIcon(
+                            icon = Icons.Filled.Share,
+                            explanationRes = R.string.itinerary_share_trip,
+                            onClick = {
+                                shareViewModel.share(current.id) { outcome ->
+                                    scope.launch { handleTripShareOutcome(context, snackbarHostState, outcome) }
+                                }
+                            },
                         )
                     }
                 },

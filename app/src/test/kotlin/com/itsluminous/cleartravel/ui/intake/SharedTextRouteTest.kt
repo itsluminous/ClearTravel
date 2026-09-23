@@ -1,6 +1,10 @@
 package com.itsluminous.cleartravel.ui.intake
 
 import com.google.common.truth.Truth.assertThat
+import com.itsluminous.cleartravel.core.data.share.ShareLinkCodec
+import com.itsluminous.cleartravel.core.data.share.SharePayloadMappers
+import com.itsluminous.cleartravel.core.data.share.ShareUrlResult
+import com.itsluminous.cleartravel.core.testing.Fixtures
 import org.junit.Test
 
 /** ADR-029 part D: one `text/plain` share filter, two destinations. */
@@ -25,6 +29,16 @@ class SharedTextRouteTest {
     fun `other links are not mistaken for maps links`() {
         assertThat(routeSharedText("https://www.irctc.co.in/nget/train-search"))
             .isInstanceOf(SharedTextRoute.TrainText::class.java)
+    }
+
+    @Test
+    fun `a Clear Travel share link inside forwarded text routes to the share import`() {
+        val url = (ShareLinkCodec.buildShareUrl(SharePayloadMappers.toPayload(Fixtures.trip(), emptyList())) as ShareUrlResult.Ok).url
+        val text = "Here's my trip \"Tokyo\" - open it in Clear Travel: $url"
+
+        assertThat(routeSharedText(text)).isEqualTo(SharedTextRoute.ShareLink(url))
+        // Even next to a Maps link, the app's own link wins.
+        assertThat(routeSharedText("$text https://maps.app.goo.gl/AbCdEf")).isEqualTo(SharedTextRoute.ShareLink(url))
     }
 
     @Test

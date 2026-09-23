@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsluminous.cleartravel.core.data.repository.ChecklistPresetRepository
 import com.itsluminous.cleartravel.core.data.repository.ChecklistRepository
+import com.itsluminous.cleartravel.core.data.share.ShareLinkCodec
+import com.itsluminous.cleartravel.core.data.share.SharePayloadMappers
+import com.itsluminous.cleartravel.core.data.share.ShareUrlResult
 import com.itsluminous.cleartravel.core.designsystem.component.moved
 import com.itsluminous.cleartravel.core.model.Checklist
 import com.itsluminous.cleartravel.core.model.ChecklistItem
@@ -31,6 +34,15 @@ sealed interface ChecklistDetailEvent {
 
     /** The checklist was deleted; navigate back to the list. */
     data object Deleted : ChecklistDetailEvent
+
+    /** ADR-039: the share link is ready — hand it to the share sheet with the checklist's name. */
+    data class ShareReady(
+        val checklistName: String,
+        val url: String,
+    ) : ChecklistDetailEvent
+
+    /** ADR-039: the link would exceed the URL ceiling — suggest fewer items. */
+    data object ShareTooLong : ChecklistDetailEvent
 }
 
 /** State + actions for one checklist's full-screen detail view. */
@@ -127,6 +139,22 @@ class ChecklistDetailViewModel
                 val added = checklistRepository.appendPreset(checklistId, presetId)
                 eventChannel.send(ChecklistDetailEvent.PresetAppended(added.size))
             }
+        }
+
+        /**
+         * ADR-039: builds the self-contained share link — checklist + every item with
+         * its CHECKED state, under the original ids so a re-share updates the
+         * recipient's copy — and reports it as an event.
+         */
+        fun share() {
+            val current = checklist.value ?: return
+            val payload = SharePayloadMappers.toPayload(current, items.value)
+            val event =
+                when (val result = ShareLinkCodec.buildShareUrl(payload)) {
+                    is ShareUrlResult.Ok -> ChecklistDetailEvent.ShareReady(checklistName = current.name, url = result.url)
+                    is ShareUrlResult.TooLong -> ChecklistDetailEvent.ShareTooLong
+                }
+            viewModelScope.launch { eventChannel.send(event) }
         }
 
         fun deleteChecklist() {

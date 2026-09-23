@@ -18,6 +18,7 @@ import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -44,6 +45,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.CardShare
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.designsystem.component.ReorderHandle
@@ -100,6 +102,14 @@ internal fun ChecklistDetailScreen(
                     snackbarHostState.showSnackbar(message)
                 }
                 ChecklistDetailEvent.Deleted -> onBack()
+                is ChecklistDetailEvent.ShareReady ->
+                    CardShare.send(
+                        context = context,
+                        text = context.getString(R.string.checklist_share_text, event.checklistName, event.url),
+                        chooserTitle = context.getString(R.string.checklist_share_chooser_title),
+                    )
+                ChecklistDetailEvent.ShareTooLong ->
+                    snackbarHostState.showSnackbar(context.getString(R.string.checklist_share_too_long))
             }
         }
     }
@@ -117,6 +127,11 @@ internal fun ChecklistDetailScreen(
                     )
                 },
                 actions = {
+                    ExplainableIcon(
+                        icon = Icons.Filled.Share,
+                        explanationRes = R.string.checklist_share,
+                        onClick = viewModel::share,
+                    )
                     ExplainableIcon(
                         icon = Icons.AutoMirrored.Filled.PlaylistAdd,
                         explanationRes = R.string.checklist_append_preset,

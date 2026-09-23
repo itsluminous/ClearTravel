@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Unarchive
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ElevatedCard
@@ -34,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -53,6 +55,9 @@ import com.itsluminous.cleartravel.feature.itinerary.R
 import com.itsluminous.cleartravel.feature.itinerary.formatMedium
 import com.itsluminous.cleartravel.feature.itinerary.labelRes
 import com.itsluminous.cleartravel.feature.itinerary.parseCoverColor
+import com.itsluminous.cleartravel.feature.itinerary.share.TripShareViewModel
+import com.itsluminous.cleartravel.feature.itinerary.share.handleTripShareOutcome
+import kotlinx.coroutines.launch
 
 /** Wraps the trip being edited (null = a brand-new trip) so one state drives the form. */
 private data class TripFormTarget(
@@ -65,6 +70,7 @@ internal fun TripsScreen(
     onOpenTrip: (String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: TripsViewModel = hiltViewModel(),
+    shareViewModel: TripShareViewModel = hiltViewModel(),
 ) {
     val activeTrips by viewModel.activeTrips.collectAsStateWithLifecycle()
     val archivedTrips by viewModel.archivedTrips.collectAsStateWithLifecycle()
@@ -76,6 +82,7 @@ internal fun TripsScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     LaunchedEffect(message) {
         val current = message ?: return@LaunchedEffect
         viewModel.consumeMessage()
@@ -131,6 +138,12 @@ internal fun TripsScreen(
                         TripCard(
                             trip = trip,
                             onClick = { onOpenTrip(trip.id) },
+                            onShare = {
+                                // ADR-039: self-contained link (fields + itinerary) via the share sheet.
+                                shareViewModel.share(trip.id) { outcome ->
+                                    scope.launch { handleTripShareOutcome(context, snackbarHostState, outcome) }
+                                }
+                            },
                             onEdit = { formTarget = TripFormTarget(trip = trip) },
                             onToggleArchive = { viewModel.setArchived(trip.id, !trip.archived) },
                             onDelete = { deleteTarget = trip },
@@ -179,6 +192,7 @@ internal fun TripsScreen(
 private fun TripCard(
     trip: Trip,
     onClick: () -> Unit,
+    onShare: () -> Unit,
     onEdit: () -> Unit,
     onToggleArchive: () -> Unit,
     onDelete: () -> Unit,
@@ -213,6 +227,12 @@ private fun TripCard(
                     )
                 }
             }
+            ExplainableIcon(
+                icon = Icons.Filled.Share,
+                explanationRes = R.string.itinerary_share_trip,
+                targetSize = 40.dp,
+                onClick = onShare,
+            )
             ExplainableIcon(
                 icon = Icons.Filled.Edit,
                 explanationRes = R.string.itinerary_edit_trip,

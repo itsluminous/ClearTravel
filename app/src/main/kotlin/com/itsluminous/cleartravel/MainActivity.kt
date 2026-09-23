@@ -22,6 +22,8 @@ import androidx.core.content.IntentCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.data.share.ShareImportResult
+import com.itsluminous.cleartravel.core.data.share.ShareLinkError
 import com.itsluminous.cleartravel.core.designsystem.component.LocalDocumentFileReader
 import com.itsluminous.cleartravel.core.designsystem.theme.ClearTravelTheme
 import com.itsluminous.cleartravel.core.model.ThemeMode
@@ -30,6 +32,7 @@ import com.itsluminous.cleartravel.core.notifications.NotificationChannelRegistr
 import com.itsluminous.cleartravel.core.notifications.NotificationPermissions
 import com.itsluminous.cleartravel.feature.applock.AppLockGate
 import com.itsluminous.cleartravel.feature.applock.AppLockLifecycleObserver
+import com.itsluminous.cleartravel.feature.checklist.ChecklistLanding
 import com.itsluminous.cleartravel.feature.flights.FlightsEntryRequest
 import com.itsluminous.cleartravel.feature.flights.FlightsExternalEntry
 import com.itsluminous.cleartravel.feature.itinerary.TripsLanding
@@ -48,6 +51,11 @@ import com.itsluminous.cleartravel.ui.intake.SharedFileIntakeViewModel
 import com.itsluminous.cleartravel.ui.intake.SharedTextRoute
 import com.itsluminous.cleartravel.ui.intake.routeSharedText
 import com.itsluminous.cleartravel.ui.security.EncryptedDocumentFileReader
+import com.itsluminous.cleartravel.ui.share.ShareImportHost
+import com.itsluminous.cleartravel.ui.share.ShareImportRequest
+import com.itsluminous.cleartravel.ui.share.ShareImportViewModel
+import com.itsluminous.cleartravel.ui.share.ShareLinkRoute
+import com.itsluminous.cleartravel.ui.share.routeShareLink
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -100,6 +108,15 @@ class MainActivity : FragmentActivity() {
     /** Shared text carrying a Google Maps link, awaiting the "Add place" intake (ADR-029 part D). */
     private val pendingMapsLink = mutableStateOf<String?>(null)
 
+    /** A decoded shared trip/checklist awaiting the import confirm dialog (ADR-039). */
+    private val pendingShareImport = mutableStateOf<ShareImportRequest?>(null)
+
+    /** A share link that could not be decoded — explained in a dialog (ADR-039). */
+    private val pendingShareFailure = mutableStateOf<ShareLinkError?>(null)
+
+    /** Pending Checklist-tab landing (ADR-039: an imported shared checklist); cleared once consumed. */
+    private val pendingChecklistLanding = mutableStateOf<ChecklistLanding?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // AndroidX splash (Theme.ClearTravel.Splash): must be installed before
         // super.onCreate() so the handoff to postSplashScreenTheme is seamless.
@@ -116,6 +133,7 @@ class MainActivity : FragmentActivity() {
         val themeViewModel: ThemeViewModel by viewModels()
         val intakeViewModel: SharedFileIntakeViewModel by viewModels()
         val pickCoordinator: JourneyPickCoordinator by viewModels()
+        val shareImportViewModel: ShareImportViewModel by viewModels()
         setContent {
             val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
             // ADR-028: an itinerary leg asked for a new journey → land on Journeys in
@@ -135,7 +153,7 @@ class MainActivity : FragmentActivity() {
                             startupTasks.runOnAppOpen()
                         },
                     ) {
-                        ShellContent(themeViewModel, intakeViewModel, pickCoordinator)
+                        ShellContent(themeViewModel, intakeViewModel, pickCoordinator, shareImportViewModel)
                     }
                 }
             }
@@ -148,6 +166,7 @@ class MainActivity : FragmentActivity() {
         themeViewModel: ThemeViewModel,
         intakeViewModel: SharedFileIntakeViewModel,
         pickCoordinator: JourneyPickCoordinator,
+        shareImportViewModel: ShareImportViewModel,
     ) {
         // Runs only once the gate is open (password set, storage prepared, first-run
         // wizard finished): the system permission dialog must never sit over the
@@ -198,8 +217,28 @@ class MainActivity : FragmentActivity() {
                         pickCoordinator.complete(result)
                         pendingTripsLanding.value = TripsLanding(tripId = null)
                     },
+                    checklistLanding = pendingChecklistLanding.value,
+                    onChecklistLandingConsumed = { pendingChecklistLanding.value = null },
                 )
         }
+        // ADR-039: shared trip/checklist → confirm → upsert by id → land on it.
+        ShareImportHost(
+            viewModel = shareImportViewModel,
+            request = pendingShareImport.value,
+            failure = pendingShareFailure.value,
+            onDone = { result ->
+                pendingShareImport.value = null
+                when (result) {
+                    is ShareImportResult.Trip -> pendingTripsLanding.value = TripsLanding(tripId = result.tripId)
+                    is ShareImportResult.Checklist ->
+                        pendingChecklistLanding.value = ChecklistLanding(checklistId = result.checklistId)
+                }
+            },
+            onDismissed = {
+                pendingShareImport.value = null
+                pendingShareFailure.value = null
+            },
+        )
         SharedFileIntakeHost(
             viewModel = intakeViewModel,
             sharedFile = pendingSharedFile.value,
@@ -226,10 +265,11 @@ class MainActivity : FragmentActivity() {
     }
 
     /**
-     * Routes an arriving intent: ACTION_SEND text (a Google Maps link → the "Add
-     * place" intake, ADR-029; anything else → train SMS form directly), ACTION_SEND
-     * image/PDF (→ intake dialog), ACTION_VIEW PNR link (→ train form carrying the
-     * PNR), else a notification deep link.
+     * Routes an arriving intent: ACTION_SEND text (a Clear Travel share link → the
+     * share import, ADR-039; a Google Maps link → the "Add place" intake, ADR-029;
+     * anything else → train SMS form directly), ACTION_SEND image/PDF (→ intake
+     * dialog), ACTION_VIEW share link (→ import confirm / prefilled flight form) or
+     * PNR link (→ train form carrying the PNR), else a notification deep link.
      */
     private fun consumeIntent(intent: Intent?) {
         intent ?: return
@@ -237,6 +277,7 @@ class MainActivity : FragmentActivity() {
             Intent.ACTION_SEND -> {
                 if (intent.type == MIME_TEXT_PLAIN) {
                     when (val route = routeSharedText(intent.getStringExtra(Intent.EXTRA_TEXT))) {
+                        is SharedTextRoute.ShareLink -> consumeShareLink(route.link)
                         is SharedTextRoute.MapsLink -> pendingMapsLink.value = route.text
                         is SharedTextRoute.TrainText -> pendingEntry.value = ExternalEntry.Trains(TrainsEntryRequest.Text(route.text))
                         null -> Unit
@@ -249,6 +290,7 @@ class MainActivity : FragmentActivity() {
                 return
             }
             Intent.ACTION_VIEW -> {
+                if (consumeShareLink(intent.dataString)) return
                 TicketShareLinks.parsePnr(intent.dataString)?.let { pnr ->
                     pendingEntry.value = ExternalEntry.Trains(TrainsEntryRequest.Pnr(pnr))
                     return
@@ -256,6 +298,22 @@ class MainActivity : FragmentActivity() {
             }
         }
         JourneysDeepLink.fromIntent(intent)?.let { pendingDeepLink.value = it }
+    }
+
+    /**
+     * ADR-039: a `share/<kind>/<blob>` link. Flights go straight into the prefilled
+     * add form (the form is the review); trips and checklists into the confirm
+     * dialog; undecodable links into the explanation dialog. False when [link] is
+     * not a share link at all.
+     */
+    private fun consumeShareLink(link: String?): Boolean {
+        when (val route = routeShareLink(link) ?: return false) {
+            is ShareLinkRoute.Flight -> pendingEntry.value = ExternalEntry.Flights(FlightsEntryRequest.Shared(route.payload))
+            is ShareLinkRoute.Trip -> pendingShareImport.value = ShareImportRequest.Trip(route.payload)
+            is ShareLinkRoute.Checklist -> pendingShareImport.value = ShareImportRequest.Checklist(route.payload)
+            is ShareLinkRoute.Failed -> pendingShareFailure.value = route.error
+        }
+        return true
     }
 
     private companion object {

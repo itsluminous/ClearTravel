@@ -23,4 +23,31 @@
     <string name="intake_option_booking_confirmation">Flight booking confirmation</string>
     <string name="intake_confirm">Continue</string>
     <string name="intake_cancel">Cancel</string>
+
+    <!-- ADR-039: shared trip / checklist import (confirm before writing). -->
+    <string name="share_import_working_title">Reading shared link…</string>
+    <string name="share_import_trip_add_title">Add shared trip?</string>
+    <string name="share_import_trip_add_message">Add trip \"%1$s\" (%2$s) to your Trips?</string>
+    <string name="share_import_trip_update_title">Update your trip?</string>
+    <string name="share_import_trip_update_message">Update your existing trip \"%1$s\" with the shared version (%2$s)? Its places will be replaced by the shared ones - places you added yourself will be removed, journey links you made are kept.</string>
+    <string name="share_import_checklist_add_title">Add shared checklist?</string>
+    <string name="share_import_checklist_add_message">Add checklist \"%1$s\" (%2$s) to your Checklists?</string>
+    <string name="share_import_checklist_update_title">Update your checklist?</string>
+    <string name="share_import_checklist_update_message">Update your existing checklist \"%1$s\" with the shared version (%2$s)? Your check states will be replaced by the shared ones, and items you added yourself will be removed.</string>
+    <plurals name="share_import_places">
+        <item quantity="one">%d place</item>
+        <item quantity="other">%d places</item>
+    </plurals>
+    <plurals name="share_import_items">
+        <item quantity="one">%d item</item>
+        <item quantity="other">%d items</item>
+    </plurals>
+    <string name="share_import_add">Add</string>
+    <string name="share_import_update">Update</string>
+    <string name="share_import_cancel">Cancel</string>
+    <string name="share_import_ok">OK</string>
+    <string name="share_import_failed_title">Couldn\'t open shared link</string>
+    <string name="share_import_failed_corrupted">This link is damaged or incomplete. Ask the sender to share it again.</string>
+    <string name="share_import_failed_version">This link was made by a newer version of Clear Travel. Update the app to open it.</string>
+    <string name="share_import_failed_invalid">This link doesn\'t contain anything Clear Travel can add.</string>
 </resources>

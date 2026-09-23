@@ -3,6 +3,9 @@ package com.itsluminous.cleartravel.feature.checklist
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
+import com.itsluminous.cleartravel.core.data.share.ChecklistSharePayload
+import com.itsluminous.cleartravel.core.data.share.ShareDecodeResult
+import com.itsluminous.cleartravel.core.data.share.ShareLinkCodec
 import com.itsluminous.cleartravel.core.model.Checklist
 import com.itsluminous.cleartravel.core.model.ChecklistItem
 import com.itsluminous.cleartravel.core.testing.MainDispatcherRule
@@ -36,6 +39,26 @@ class ChecklistDetailViewModelTest {
             },
         )
     }
+
+    @Test
+    fun `share emits a link carrying the checklist's ids and checked states`() =
+        runTest {
+            seedItems("Tent", "Boots", "Headlamp")
+            val viewModel = viewModel()
+            val items = viewModel.items.value
+            viewModel.setItemChecked(items[1].id, checked = true)
+
+            viewModel.events.test {
+                viewModel.share()
+                val event = awaitItem() as ChecklistDetailEvent.ShareReady
+
+                assertThat(event.checklistName).isEqualTo("Trek packing")
+                val payload = (ShareLinkCodec.decode(event.url) as ShareDecodeResult.Ok).payload as ChecklistSharePayload
+                assertThat(payload.id).isEqualTo(checklist.id)
+                assertThat(payload.items.map { it.id }).containsExactlyElementsIn(items.map { it.id }).inOrder()
+                assertThat(payload.items.map { it.checked }).containsExactly(false, true, false).inOrder()
+            }
+        }
 
     @Test
     fun `items emits checklist items in sort order`() =

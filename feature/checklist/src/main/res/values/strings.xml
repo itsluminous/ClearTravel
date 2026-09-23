@@ -38,4 +38,10 @@
     <string name="checklist_delete_confirm_title">Delete checklist?</string>
     <string name="checklist_delete_confirm_message">“%1$s” and all of its items will be removed.</string>
     <string name="checklist_delete_confirm">Delete</string>
+
+    <!-- ADR-039: share a checklist as a self-contained link -->
+    <string name="checklist_share">Share checklist</string>
+    <string name="checklist_share_text">Here\'s my checklist \"%1$s\" - open it in Clear Travel: %2$s</string>
+    <string name="checklist_share_chooser_title">Share checklist</string>
+    <string name="checklist_share_too_long">This checklist is too long to share as a link - try fewer items</string>
 </resources>

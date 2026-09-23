@@ -878,7 +878,7 @@ steering (2026-09-21):
   line instead. Schema untouched. The band, body and pill composables are shared
   with the share image so the picture matches the list.
 - **Share = image + caption.** The card's share action renders a self-contained
-  `ShareTicketCard` (no action icons) OFF-SCREEN into a PNG (`ShareImageRenderer`:
+  `ShareTicketCard` (no action icons) OFF-SCREEN into a PNG (`ShareImageRenderer`, since ADR-039 `core:designsystem`'s `CardShare`:
   a throw-away INVISIBLE `ComposeView` attached to the activity decor view, measured
   at 1080 px, laid out, drawn onto a software canvas and removed — all synchronously
   in one main-thread call, so it never reaches a visible frame). Chosen over
@@ -2456,3 +2456,122 @@ upload converges so listing/pruning see one set), `DefaultBackupManagerTest` +3
 `boarding_passes/<flightId>.<ext>`, decrypts to the same bytes, mirror attachment
 re-pointed; pre-ADR-038 backup whose mirror attachment was bundled re-points the
 flight; missing boarding-pass file exports row-only), `BackupMappersTest` +1.
+
+## ADR-039 — Self-contained share links (trips, checklists, flights) with ID-stable upsert; flight card quick actions (2026-09-23)
+
+**Context.** Trains could already be shared as a card image + PNR link (ADR-020),
+but that link only carries a PNR because the IRCTC status page is the source of
+truth. Trips, checklists and flights have no such page: what a recipient needs IS
+the data. The user also asked that re-sharing an edited trip should UPDATE the
+recipient's copy (not duplicate it), that a shared checklist carries its check
+states, and that the flight card gets the train card's quick-action column with a
+web check-in button that knows whether the airline's window is open.
+
+**Decisions.**
+
+1. **Payload format (`core:data/share`, pure).** kotlinx-serialization DTOs
+   `TripSharePayload`, `ChecklistSharePayload`, `FlightSharePayload`, each with a
+   mandatory `v` (format version, currently 1) — the only field never omitted:
+   `Json { encodeDefaults = false; ignoreUnknownKeys = true }` drops defaults on the
+   wire and tolerates future keys on read. Conventions: `LocalDate` as ISO strings,
+   instants as epoch SECONDS, enums as their `storageValue` (unknown → `fromStorage`
+   fallback, so a new category never breaks an old app). Ids are the sender's
+   ORIGINAL entity UUIDs (ADR-002) — that is what makes the upsert id-stable.
+   - Trip: `id, name, destination, startDate, endDate, coverEmoji, coverColor,
+     items[]` where an item is `id, dayIndex, date, orderInDay, type, name,
+     latitude, longitude, plannedTime, note, category, link, commuteMode,
+     fromName, toName`. **No `linkedJourneyId`/`linkedJourneyType`, no
+     `googleEventId`** — journey links and calendar ids are device-local.
+   - Checklist: `id, name, tripId?, items[] {id, text, checked, sortOrder}` —
+     checked state travels (user requirement).
+   - Flight: `airlineIata, flightNumber, date, depAirport, arrAirport, schedDep,
+     schedArr, depTerminal, arrTerminal`. **No id, no PNR/seat/cabin**: those are
+     personal; the recipient fills their own in.
+2. **Encoding = JSON → raw DEFLATE (best compression, `nowrap`) → Base64 URL-safe
+   without padding.** Two link shapes (the ADR-020 dual-link pattern, both declared
+   as `ACTION_VIEW` filters on `MainActivity`, not autoVerify):
+   `https://cleartravel.itsluminous.com/share/<kind>/<blob>` (what we put in text)
+   and `cleartravel://share/<kind>/<blob>`, `<kind>` ∈ `trip | checklist | flight`.
+   The host is the app's custom domain (edf7185), shared with the PNR links.
+   Decoding never throws: `ShareDecodeResult.Failed(ShareLinkError)` with
+   `CORRUPTED` (bad base64/deflate/JSON, missing mandatory fields, wrong kind),
+   `UNSUPPORTED_VERSION` (`v` newer than this build) or `INVALID_CONTENT`
+   (non-canonical UUIDs, blank names, duplicate item ids). Inflation is capped at
+   512 KB so a hostile blob cannot balloon memory.
+3. **Size guard.** `ShareLinkCodec.MAX_URL_LENGTH = 8000`: Android's binder limit
+   (~500 KB per intent) is irrelevant; the practical ceilings are chat apps and
+   browsers, which mangle URLs in the tens of KB. Measured in
+   `ShareLinkCodecTest` (fixture places with a ~70-char note each): **1 item →
+   538 chars, 5 → 802, 10 → 1 054, 20 → 1 527; a 30-item checklist → 1 372**. A
+   trip past the ceiling (~150+ places) is refused with `ShareUrlResult.TooLong`
+   and the UI shows a "too big — try sharing fewer places" snackbar instead of a
+   broken link.
+4. **Import = ID-STABLE UPSERT (`SharedContentImporter`, `core:data`).**
+   - *Aggregate:* a LIVE local row with the payload id → fields replaced
+     (device-local `archived` kept); none → inserted. A tombstoned row with that
+     id is resurrected by the upsert ("they re-shared it after I deleted it").
+   - *Items:* upsert by ITEM id (ids stay the sender's, so a third share still
+     matches); every live local item of the aggregate whose id is ABSENT from the
+     payload is soft-deleted (ADR-002 tombstone). The payload is the whole truth
+     of the aggregate's contents — items the recipient added themselves are
+     dropped on an update, and the confirm dialog says so.
+   - *Device-local fields survive* on same-id itinerary items:
+     `linkedJourneyId`/`linkedJourneyType` (the recipient's own journeys) and
+     `googleEventId`.
+   - *Checklist check state is REPLACED* by the shared one.
+   - A checklist's `tripId` is kept only when that trip exists live locally;
+     otherwise it lands standalone (a same-id update keeps the local owner when
+     the payload's trip is unknown here).
+   - *Flights are not upserted:* a flight link prefills the add form
+     (`FlightsEntryRequest.Shared` → `FlightFormState.fromSharePayload`, times in
+     the device zone) and the user saves through the normal path, so the ADR-025
+     duplicate guard applies and personal fields are the recipient's own.
+   No repository interface changed: the importer composes existing
+   `getTrip`/`observeItemsForTrip`/`saveAll`/`delete` and
+   `observeChecklist`/`observeItems`/`saveItems`/`deleteItem`.
+5. **Shell routing (app).** `consumeIntent` tries `routeShareLink` first for
+   `ACTION_VIEW` (before the PNR parser) and `routeSharedText` now recognises a
+   share link inside forwarded `text/plain` (`SharedTextRoute.ShareLink`, wins over
+   Maps links). Trips/checklists → `ShareImportHost` (Loading → Confirm "Add trip
+   \"Tokyo\" (3 places)?" / "Update your existing checklist \"…\"? Your check states
+   will be replaced…" → Importing → Done) → land on the entity: `TripsLanding`
+   (ADR-028) or the new `ChecklistLanding` hook (`checklistGraph(landing,
+   onLandingConsumed)`, same shape). Flights → `ExternalEntry.Flights(Shared)`.
+   Everything sits inside `ShellContent`, i.e. behind the `AppLockGate` (ADR-031):
+   nothing decodes into Room before unlock. Cold and warm starts both go through
+   `consumeIntent`.
+6. **Share UI.** Trip list card + trip detail top bar (`TripShareViewModel`, shared by
+   both) and checklist detail top bar (`ChecklistDetailEvent.ShareReady`) get a
+   Share `ExplainableIcon` → `ACTION_SEND` text with a short module-local message +
+   the https link. `CardShare` (`core:designsystem`) now holds the off-screen
+   renderer (moved from `feature:trains`' `ShareImageRenderer`), the cache-file +
+   `FileProvider` step and the send intent, so trains and flights share one
+   implementation (ADR-036).
+7. **Flight card quick actions (part A).** The flight card gets the train card's
+   right-side column: *Check status* (existing scrape flow), *Web check-in* and
+   *Share*. Web check-in is gated by the pure `decideCheckInGate(flight, rules,
+   now, fallbackUrl)` over `computeCheckInWindow` + `checkin-windows.json`:
+   `Open(url)` inside the window (or no schedule to gate on — opens as before),
+   `NotYetOpen(opensAt)` → snackbar "Check-in opens 24 Sep, 06:10", `Closed` →
+   "Web check-in has closed for this flight", `Departed` (status DEPARTED/LANDED
+   or the clock past `estDep ?: schedDep`) → "This flight has already departed".
+   Share renders `ShareFlightCard` (the list card's body without actions or the
+   freshness line) to PNG + a caption whose link is the flight payload; render
+   failure degrades to text-only with a snackbar. `FlightListViewModel` gains
+   `CheckInRuleSource` + `Clock` (Hilt-provided).
+
+**Tests (40 new).** `core:data`: `ShareLinkCodecTest` (15 — round trips for all
+three kinds, dual-link parse, prose extraction, garbage/truncated/wrong-kind →
+CORRUPTED, version gate both ways, INVALID_CONTENT cases, enum fallback, measured
+sizes, TooLong guard) and `SharedContentImporterTest` (10, Robolectric + real
+Room repos — insert, same-id update with tombstoned extras and stable ids,
+preserved journey link/calendar id, archived kept, resurrection after delete,
+checklist insert/update with replaced check states, owner-trip resolution).
+`feature:flights`: `CheckInGateTest` (8), `FlightShareTextTest` (4),
+`FlightListViewModelTest` +1. `feature:itinerary`: `TripShareViewModelTest` (2).
+`feature:checklist`: `ChecklistDetailViewModelTest` +1. `app`:
+`ShareLinkRouteTest` (3), `SharedTextRouteTest` +1.
+
+**Follow-ups.** Flight import could later upsert by id for the same-person
+multi-device case; a trip share could optionally bundle its checklists; a web
+landing page for `/share/` links (the domain currently has none).

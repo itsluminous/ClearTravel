@@ -34,6 +34,7 @@ import com.itsluminous.cleartravel.core.designsystem.component.LocalShellChrome
 import com.itsluminous.cleartravel.core.designsystem.component.ShellChromeController
 import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.feature.checklist.CHECKLIST_ROUTE
+import com.itsluminous.cleartravel.feature.checklist.ChecklistLanding
 import com.itsluminous.cleartravel.feature.checklist.checklistGraph
 import com.itsluminous.cleartravel.feature.documents.DOCUMENTS_ROUTE
 import com.itsluminous.cleartravel.feature.documents.documentsGraph
@@ -80,6 +81,9 @@ fun ClearTravelApp(
     onOpenJourney: (JourneyType, String) -> Unit = { _, _ -> },
     onOpenTrip: (tripId: String) -> Unit = {},
     onJourneyAddDone: (JourneyAddResult) -> Unit = {},
+    /** ADR-039: an imported shared checklist → the Checklist tab showing it. */
+    checklistLanding: ChecklistLanding? = null,
+    onChecklistLandingConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -101,6 +105,9 @@ fun ClearTravelApp(
     }
     LaunchedEffect(tripsLanding) {
         if (tripsLanding != null) switchTab(TRIPS_ROUTE)
+    }
+    LaunchedEffect(checklistLanding) {
+        if (checklistLanding != null) switchTab(CHECKLIST_ROUTE)
     }
 
     // ADR-034: the fullscreen document viewer asks for a chrome-free shell.
@@ -146,7 +153,10 @@ fun ClearTravelApp(
                     onJourneyAddDone = onJourneyAddDone,
                     onOpenTrip = onOpenTrip,
                 )
-                checklistGraph()
+                checklistGraph(
+                    landing = checklistLanding,
+                    onLandingConsumed = onChecklistLandingConsumed,
+                )
                 documentsGraph()
                 menuGraph()
             }
