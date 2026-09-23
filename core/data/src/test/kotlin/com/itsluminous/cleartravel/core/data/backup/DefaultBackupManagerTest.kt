@@ -5,9 +5,11 @@ import android.net.Uri
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.data.repository.TravelDocumentStorage
+import com.itsluminous.cleartravel.core.data.security.AppFileLayout
 import com.itsluminous.cleartravel.core.database.ClearTravelDatabase
 import com.itsluminous.cleartravel.core.database.entity.toEntity
 import com.itsluminous.cleartravel.core.database.entity.toModel
+import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.model.TravelDocumentType
 import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
 import com.itsluminous.cleartravel.core.security.file.PortableCipher
@@ -103,6 +105,7 @@ class DefaultBackupManagerTest {
         db.close()
         File(context.filesDir, DefaultBackupManager.BACKUPS_DIR_NAME).deleteRecursively()
         File(context.filesDir, DefaultBackupManager.ATTACHMENTS_DIR_NAME).deleteRecursively()
+        AppFileLayout.boardingPasses(context.filesDir).deleteRecursively()
     }
 
     private fun exportFileUri(name: String = "export.zip"): Uri = Uri.fromFile(File(context.cacheDir, name))
@@ -355,6 +358,151 @@ class DefaultBackupManagerTest {
                     .toModel()
             assertThat(restored.driveFileId).isEqualTo("drive-42")
             assertThat(restored.localPath).isEqualTo(sourceFile.absolutePath)
+            freshDb.close()
+        }
+
+    // ---- ADR-038: boarding passes ----
+
+    @Test
+    fun `boarding pass - flight file is bundled, restored at boarding_passes flightId ext, mirror attachment re-pointed`() =
+        runTest {
+            // On the exporting device the pass lives at another path (here: cacheDir) and
+            // is CTEF-encrypted like every stored file; its ADR-016 mirror row already
+            // has a Drive id, which used to exclude the bytes from the backup entirely.
+            val sourceFile = File(context.cacheDir, "old-device-pass.pdf")
+            cipher.encryptTo(byteArrayOf(8, 0, 8, 0).inputStream(), sourceFile)
+            val flight = Fixtures.flightJourney(boardingPassPath = sourceFile.absolutePath)
+            val mirror =
+                Fixtures.attachment(
+                    ownerType = AttachmentOwnerType.FLIGHT,
+                    ownerId = flight.id,
+                    localPath = sourceFile.absolutePath,
+                    driveFileId = "drive-7",
+                )
+            db.backupDao().upsertFlightJourneys(listOf(flight.toEntity()))
+            db.backupDao().upsertAttachments(listOf(mirror.toEntity()))
+            val uri = exportFileUri()
+            manager.exportToUri(uri)
+
+            openExport(File(context.cacheDir, "export.zip")).use { zip ->
+                val entry = zip.getEntry(BackupEntries.boardingPassEntry(flight.id))
+                assertThat(entry).isNotNull()
+                assertThat(zip.getInputStream(entry).readBytes()).isEqualTo(byteArrayOf(8, 0, 8, 0))
+                assertThat(zip.getEntry(BackupEntries.attachmentEntry(mirror.id))).isNull() // not bundled twice
+            }
+
+            // Wipe: new database AND the file is gone (reinstall / other device).
+            assertThat(sourceFile.delete()).isTrue()
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            managerFor(freshDb).importApply(uri)
+
+            val restoredFlight =
+                freshDb
+                    .backupDao()
+                    .dumpFlightJourneys()
+                    .single()
+                    .toModel()
+            val restoredFile = File(restoredFlight.boardingPassPath!!)
+            assertThat(restoredFile.isFile).isTrue()
+            assertThat(restoredFile.parentFile).isEqualTo(AppFileLayout.boardingPasses(context.filesDir))
+            assertThat(restoredFile.name).isEqualTo("${flight.id}.pdf")
+            assertThat(cipher.isEncrypted(restoredFile)).isTrue()
+            assertThat(plaintextOf(restoredFile, cipher)).isEqualTo(byteArrayOf(8, 0, 8, 0))
+            assertThat(restoredFlight.copy(boardingPassPath = flight.boardingPassPath)).isEqualTo(flight)
+            // The mirror row follows the file (same path → the detail sheet lists ONE
+            // boarding pass, the upload engine registers nothing new) and keeps its Drive id.
+            val restoredMirror =
+                freshDb
+                    .backupDao()
+                    .dumpAttachments()
+                    .single()
+                    .toModel()
+            assertThat(restoredMirror.localPath).isEqualTo(restoredFile.absolutePath)
+            assertThat(restoredMirror.driveFileId).isEqualTo("drive-7")
+            assertThat(restoredMirror.updatedAt).isEqualTo(mirror.updatedAt)
+            freshDb.close()
+        }
+
+    @Test
+    fun `boarding pass - missing file is exported row-only and the recorded path kept`() =
+        runTest {
+            val flight = Fixtures.flightJourney(boardingPassPath = "/nonexistent/bp.pdf")
+            db.backupDao().upsertFlightJourneys(listOf(flight.toEntity()))
+            val uri = exportFileUri()
+            manager.exportToUri(uri)
+
+            openExport(File(context.cacheDir, "export.zip")).use { zip ->
+                assertThat(zip.getEntry(BackupEntries.boardingPassEntry(flight.id))).isNull()
+                val dto = BackupCodec.readSnapshot(zip).flightJourneys.single()
+                assertThat(dto.boardingPassBundled).isFalse()
+            }
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            managerFor(freshDb).importApply(uri)
+            assertThat(
+                freshDb
+                    .backupDao()
+                    .dumpFlightJourneys()
+                    .single()
+                    .toModel(),
+            ).isEqualTo(flight)
+            freshDb.close()
+        }
+
+    @Test
+    fun `pre-ADR-038 backup - a bundled mirror attachment re-points the flight's boarding pass`() =
+        runTest {
+            // Legacy layout: no boarding_passes/ entry, no flag, but the ADR-016 mirror row
+            // was local-only at export time and therefore bundled under attachments/<id>.
+            val sourceFile = File(context.cacheDir, "legacy-pass.jpg")
+            cipher.encryptTo(byteArrayOf(3, 1, 4).inputStream(), sourceFile)
+            val flight = Fixtures.flightJourney(boardingPassPath = sourceFile.absolutePath)
+            val mirror =
+                Fixtures.attachment(ownerType = AttachmentOwnerType.FLIGHT, ownerId = flight.id, localPath = sourceFile.absolutePath)
+            db.backupDao().upsertFlightJourneys(listOf(flight.toEntity()))
+            db.backupDao().upsertAttachments(listOf(mirror.toEntity()))
+            val full = File(context.cacheDir, "full.zip")
+            manager.exportToUri(Uri.fromFile(full))
+            val legacy = File(context.cacheDir, "legacy.zip")
+            val legacyFlights = BackupCodec.json.encodeToString(listOf(flight.toDto(boardingPassBundled = false))).encodeToByteArray()
+            val legacyAttachments = BackupCodec.json.encodeToString(listOf(mirror.toDto(bundled = true))).encodeToByteArray()
+            openExport(full).use { source ->
+                ZipOutputStream(legacy.outputStream()).use { zip ->
+                    for (entry in source.entries().asSequence()) {
+                        if (entry.name.startsWith(BackupEntries.BOARDING_PASS_DIR)) continue
+                        zip.putNextEntry(ZipEntry(entry.name))
+                        when (entry.name) {
+                            BackupEntries.FLIGHT_JOURNEYS -> zip.write(legacyFlights)
+                            BackupEntries.ATTACHMENTS -> zip.write(legacyAttachments)
+                            else -> source.getInputStream(entry).use { it.copyTo(zip) }
+                        }
+                        zip.closeEntry()
+                    }
+                    zip.putNextEntry(ZipEntry(BackupEntries.attachmentEntry(mirror.id)))
+                    zip.write(byteArrayOf(3, 1, 4))
+                    zip.closeEntry()
+                }
+            }
+            assertThat(sourceFile.delete()).isTrue()
+
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            managerFor(freshDb).importApply(Uri.fromFile(legacy))
+
+            val restoredMirror =
+                freshDb
+                    .backupDao()
+                    .dumpAttachments()
+                    .single()
+                    .toModel()
+            val restoredFlight =
+                freshDb
+                    .backupDao()
+                    .dumpFlightJourneys()
+                    .single()
+                    .toModel()
+            val restoredFile = File(restoredFlight.boardingPassPath!!)
+            assertThat(restoredFile.absolutePath).isEqualTo(restoredMirror.localPath)
+            assertThat(restoredFile.parentFile).isEqualTo(File(context.filesDir, DefaultBackupManager.ATTACHMENTS_DIR_NAME))
+            assertThat(plaintextOf(restoredFile, cipher)).isEqualTo(byteArrayOf(3, 1, 4))
             freshDb.close()
         }
 

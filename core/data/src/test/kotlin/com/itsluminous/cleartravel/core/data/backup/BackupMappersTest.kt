@@ -84,6 +84,9 @@ class BackupMappersTest {
                 deletedAt = deletedAt,
             )
         assertThat(flight.toDto().toModel()).isEqualTo(flight)
+        // ADR-038: the bundled flag is transport-only, like the attachment one.
+        assertThat(flight.toDto(boardingPassBundled = true).toModel()).isEqualTo(flight)
+        assertThat(flight.toDto().boardingPassBundled).isFalse()
     }
 
     @Test

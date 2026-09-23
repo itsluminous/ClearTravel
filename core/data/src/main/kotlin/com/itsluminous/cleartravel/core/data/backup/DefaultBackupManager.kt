@@ -163,13 +163,30 @@ class DefaultBackupManager
 
         private suspend fun exportInto(target: File): ExportResult {
             val createdAt = clock.instant()
+
+            // Boarding passes (ADR-038): the flight row's file rides along under
+            // boarding_passes/<flightId> whenever it exists — regardless of any Drive
+            // mirror attachment row, so a LOCAL backup is self-contained.
+            val flights = backupDao.dumpFlightJourneys().map { it.toModel() }
+            val bundledBoardingPasses =
+                flights
+                    .filter { it.deletedAt == null && it.boardingPassPath != null }
+                    .mapNotNull { flight ->
+                        val file = File(flight.boardingPassPath!!)
+                        if (file.isFile) flight.id to file else null
+                    }.toMap()
+            val bundledBoardingPassPaths = bundledBoardingPasses.values.map { it.absolutePath }.toSet()
+            val flightJourneys = flights.map { it.toDto(boardingPassBundled = bundledBoardingPasses.containsKey(it.id)) }
+
             val attachments = backupDao.dumpAttachments().map { it.toModel() }
             val bundledFiles =
                 attachments
                     .filter { it.driveFileId == null && it.deletedAt == null }
                     .mapNotNull { attachment ->
                         val file = File(attachment.localPath)
-                        if (file.isFile) attachment.id to file else null
+                        // An ADR-016 mirror of a bundled boarding pass is not bundled twice;
+                        // the import re-points it at the restored boarding pass instead.
+                        if (file.isFile && file.absolutePath !in bundledBoardingPassPaths) attachment.id to file else null
                     }.toMap()
             val attachmentDtos = attachments.map { it.toDto(bundled = bundledFiles.containsKey(it.id)) }
 
@@ -195,7 +212,6 @@ class DefaultBackupManager
             val trainPassengers = backupDao.dumpTrainPassengers().map { it.toModel().toDto() }
             val trainRouteStops = backupDao.dumpTrainRouteStops().map { it.toModel().toDto() }
             val trainCoaches = backupDao.dumpTrainCoaches().map { it.toModel().toDto() }
-            val flightJourneys = backupDao.dumpFlightJourneys().map { it.toModel().toDto() }
 
             val manifest =
                 BackupManifest(
@@ -240,8 +256,11 @@ class DefaultBackupManager
             try {
                 // v2: the whole ZIP is sealed in the portable envelope; bundled files
                 // are decrypted from disk so the payload is plaintext inside it.
+                val bundledEntries =
+                    (bundledFiles + bundledDocumentFiles).mapKeys { (id, _) -> BackupEntries.attachmentEntry(id) } +
+                        bundledBoardingPasses.mapKeys { (flightId, _) -> BackupEntries.boardingPassEntry(flightId) }
                 PortableCipher.encryptingStream(target.outputStream().buffered(), portableKey).use { out ->
-                    BackupCodec.writeZip(snapshot, bundledFiles + bundledDocumentFiles, out) { file -> fileCipher.openDecrypted(file) }
+                    BackupCodec.writeZip(snapshot, bundledEntries, out) { file -> fileCipher.openDecrypted(file) }
                 }
             } catch (e: IOException) {
                 throw BackupException.Io(e)
@@ -429,17 +448,38 @@ class DefaultBackupManager
                     backupDao.upsertTrainCoaches(plan.toWrite.map { it.toEntity() })
                     summary += plan.summary
                 }
-            BackupMerger
-                .merge(backupDao.dumpFlightJourneys().map { it.toModel() }, snapshot.flightJourneys.map { it.toModel() })
-                .also { plan ->
-                    backupDao.upsertFlightJourneys(plan.toWrite.map { it.toEntity() })
-                    summary += plan.summary
+            // Old (exporting-device) path → restored local path, for every file this
+            // import lands on disk. Lets the boarding pass and its ADR-016 mirror
+            // attachment row keep pointing at the SAME file after a restore.
+            val pathRemap = mutableMapOf<String, String>()
+
+            // Flights (ADR-038): a winner with bundled boarding-pass bytes gets them
+            // restored at filesDir/boarding_passes/<flightId>.<ext> — the very place the
+            // importer stores them — and boardingPassPath re-pointed.
+            val bundledBoardingPasses = snapshot.flightJourneys.filter { it.boardingPassBundled }.associateBy { it.id }
+            val flightPlan =
+                BackupMerger.merge(backupDao.dumpFlightJourneys().map { it.toModel() }, snapshot.flightJourneys.map { it.toModel() })
+            val flightsWithPasses =
+                flightPlan.toWrite.map { flight ->
+                    val oldPath = flight.boardingPassPath
+                    if (oldPath != null && bundledBoardingPasses.containsKey(flight.id)) {
+                        val target = File(AppFileLayout.boardingPasses(context.filesDir), "${flight.id}.${File(oldPath).extension}")
+                        if (BackupCodec.extractEntry(zip, BackupEntries.boardingPassEntry(flight.id), target, encryptingExtract)) {
+                            pathRemap[oldPath] = target.absolutePath
+                            flight.copy(boardingPassPath = target.absolutePath)
+                        } else {
+                            flight
+                        }
+                    } else {
+                        flight
+                    }
                 }
 
             // Attachments: winners with bundled bytes are restored into app storage
             // and their localPath re-pointed at the restored copy (paths are device-
-            // local by nature; id/updatedAt/tombstone stay untouched). Drive-id-only
-            // rows keep their original path — the Google milestone resolves them by
+            // local by nature; id/updatedAt/tombstone stay untouched). A row whose path
+            // was remapped above (a boarding-pass mirror) follows the remap. Drive-id-
+            // only rows keep their original path — the Google milestone resolves them by
             // driveFileId on restore (documented seam, ADR-015).
             val bundledById = snapshot.attachments.filter { it.bundled }.associateBy { it.id }
             BackupMerger
@@ -450,17 +490,32 @@ class DefaultBackupManager
                             if (bundledById.containsKey(attachment.id)) {
                                 val target = File(AppFileLayout.attachments(context.filesDir), attachment.id)
                                 if (BackupCodec.extractAttachment(zip, attachment.id, target, encryptingExtract)) {
+                                    pathRemap.putIfAbsent(attachment.localPath, target.absolutePath)
                                     attachment.copy(localPath = target.absolutePath)
                                 } else {
                                     attachment
                                 }
                             } else {
-                                attachment
+                                pathRemap[attachment.localPath]?.let { attachment.copy(localPath = it) } ?: attachment
                             }
                         }
                     backupDao.upsertAttachments(restored.map { it.toEntity() })
                     summary += plan.summary
                 }
+
+            // Pre-ADR-038 backups carry no boarding-pass bundle, but may have bundled
+            // the mirror attachment row: point the flight at THAT restored file.
+            val flights =
+                flightsWithPasses.map { flight ->
+                    val oldPath = flight.boardingPassPath
+                    if (oldPath != null && !bundledBoardingPasses.containsKey(flight.id)) {
+                        pathRemap[oldPath]?.let { flight.copy(boardingPassPath = it) } ?: flight
+                    } else {
+                        flight
+                    }
+                }
+            backupDao.upsertFlightJourneys(flights.map { it.toEntity() })
+            summary += flightPlan.summary
 
             // Travel documents (ADR-027): same restore rule, into filesDir/documents/
             // keeping the original extension (the viewer keys PDF rendering off it).

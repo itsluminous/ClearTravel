@@ -196,6 +196,13 @@ data class FlightJourneyDto(
     val boardingPassPath: String? = null,
     val checkInUrl: String? = null,
     val googleEventId: String? = null,
+    /**
+     * ADR-038: true when the boarding-pass file's bytes are bundled in the ZIP under
+     * `boarding_passes/<flightId>` — whenever the file existed at export time,
+     * regardless of any Drive mirror row (the local backup must be self-contained).
+     * Absent in older backups (= false): the path is restored as recorded.
+     */
+    val boardingPassBundled: Boolean = false,
     val updatedAt: Long,
     val deletedAt: Long? = null,
 )
@@ -277,7 +284,12 @@ object BackupEntries {
     const val TRAVEL_DOCUMENTS = "entities/travel_documents.json"
     const val ATTACHMENT_DIR = "attachments/"
 
+    /** ADR-038: bundled boarding-pass bytes, keyed by flight id (older readers ignore the directory). */
+    const val BOARDING_PASS_DIR = "boarding_passes/"
+
     fun attachmentEntry(attachmentId: String): String = ATTACHMENT_DIR + attachmentId
+
+    fun boardingPassEntry(flightId: String): String = BOARDING_PASS_DIR + flightId
 
     /** Manifest count keys, one per entity file. */
     const val KEY_TRIPS = "trips"

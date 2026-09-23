@@ -311,7 +311,7 @@ fun TrainCoachDto.toModel(): TrainCoach =
 
 // ---- Flights ----
 
-fun FlightJourney.toDto(): FlightJourneyDto =
+fun FlightJourney.toDto(boardingPassBundled: Boolean = false): FlightJourneyDto =
     FlightJourneyDto(
         id = id,
         airlineIata = airlineIata,
@@ -338,6 +338,7 @@ fun FlightJourney.toDto(): FlightJourneyDto =
         boardingPassPath = boardingPassPath,
         checkInUrl = checkInUrl,
         googleEventId = googleEventId,
+        boardingPassBundled = boardingPassBundled,
         updatedAt = updatedAt.toEpochMilli(),
         deletedAt = deletedAt?.toEpochMilli(),
     )

@@ -57,8 +57,10 @@ cleartravel-backup-YYYYMMDD-HHmm.zip
 │   ├── flight_journeys.json
 │   ├── attachments.json
 │   └── travel_documents.json          # added ADR-027 — absent in older backups (read as empty)
-└── attachments/
-    └── <attachmentId | documentId>    # raw file bytes, local-only attachments/documents only
+├── attachments/
+│   └── <attachmentId | documentId>    # raw file bytes, local-only attachments/documents only
+└── boarding_passes/
+    └── <flightId>                     # added ADR-038 — the flight row's boarding-pass bytes
 ```
 
 Every entity file is a **full dump including tombstoned rows** — deletions must
@@ -124,6 +126,35 @@ collide) with `"bundled": true`. On import a winning bundled row is extracted to
 kept because the viewer decides PDF-vs-image by it — and `filePath` re-pointed. No
 `schemaVersion` bump: pre-ADR-027 backups import with zero documents.
 
+### Boarding passes (ADR-038)
+
+A flight's boarding pass is a FILE referenced by `FlightJourneyDto.boardingPassPath`
+(`files/boarding_passes/<flightId>.<ext>` on the writing device), not an attachment
+row — so until ADR-038 it was never bundled and a restored flight pointed at a file
+that did not exist. Now:
+
+- Export: whenever the file exists at `boardingPassPath` for a live flight, its bytes
+  are bundled at `boarding_passes/<flightId>` and the row carries
+  `"boardingPassBundled": true` — **regardless of any Drive mirror row**: the Drive
+  upload engine registers each boarding pass as a FLIGHT attachment row keyed by the
+  same `localPath` (ADR-016), and that row's `driveFileId` used to keep the bytes out
+  of the backup entirely. Such a mirror row is NOT bundled a second time under
+  `attachments/<attachmentId>`.
+- Import: a winning flight row with `boardingPassBundled: true` has its bytes
+  extracted to `filesDir/boarding_passes/<flightId>.<ext>` (the extension of the
+  recorded path, so the viewer still tells PDF from image) — the exact location the
+  in-app importer writes to — and `boardingPassPath` re-pointed. A winning attachment
+  row whose `localPath` equals the flight's OLD `boardingPassPath` is re-pointed to
+  the same restored file, so the detail sheet's by-path de-duplication still shows
+  one boarding pass and the upload engine registers nothing new.
+- Older backups (no flag): the path is restored as recorded. If such a backup bundled
+  the mirror attachment row (it was local-only at export time), the flight is
+  re-pointed to that restored `attachments/<attachmentId>` file instead — the only
+  case where the bytes are actually available.
+
+No `schemaVersion` bump: the field defaults to `false` and the `boarding_passes/`
+directory is an unknown ZIP entry to pre-ADR-038 readers, which ignore it.
+
 ## Merge semantics (import is a MERGE, never a wipe)
 
 Implemented once, generically, in `BackupMerger` and applied per entity type inside a
@@ -188,5 +219,8 @@ until pruned.
   ADR-022) → **no** version bump either: readers treat a missing entity file as an
   empty list, so a pre-ADR-022 backup imports with zero coaches and a newer backup
   imports into an older app minus the unknown file.
+- Additive BYTE directories (`boarding_passes/` from ADR-038) → **no** version bump:
+  readers only look up entries they know by name; older readers leave the bytes
+  unused and keep the recorded path.
 - Renames/removals/semantic changes → bump `schemaVersion`, add a migration in the
   reader, document here and in a new ADR.
