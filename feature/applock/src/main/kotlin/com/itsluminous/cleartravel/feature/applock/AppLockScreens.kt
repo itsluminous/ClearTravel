@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -343,6 +344,11 @@ private fun PreparationFailedText() {
     )
 }
 
+/**
+ * The lock/wizard screens' frame: a scrolling column that shrinks above the keyboard
+ * ([imePadding]) — these screens sit outside the app shell's Scaffold, so they apply
+ * the IME inset themselves (the activity is edge-to-edge; see `ClearTravelApp`).
+ */
 @Composable
 internal fun LockScaffold(
     modifier: Modifier = Modifier,
@@ -353,6 +359,7 @@ internal fun LockScaffold(
             modifier =
                 Modifier
                     .fillMaxSize()
+                    .imePadding()
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 24.dp, vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,

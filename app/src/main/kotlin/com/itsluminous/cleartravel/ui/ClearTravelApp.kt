@@ -3,6 +3,7 @@ package com.itsluminous.cleartravel.ui
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Checklist
@@ -112,6 +113,15 @@ fun ClearTravelApp(
 
     // ADR-034: the fullscreen document viewer asks for a chrome-free shell.
     val shellChrome = remember { ShellChromeController() }
+    // IME handling lives HERE, once (user report 2026-09-23: "the keyboard covers the
+    // field on every screen"). The activity is edge-to-edge, so `adjustResize` does not
+    // resize the window: Compose has to apply the IME inset itself, and the M3
+    // Scaffold's default `contentWindowInsets` only covers the system bars — with a
+    // bottom bar present it ignores even those. The tab content below therefore pads
+    // itself by the IME height (minus the bottom bar it already sits above) and marks
+    // the IME inset consumed, so nested feature Scaffolds never pad twice. The
+    // NavigationBar deliberately stays where it is, hidden behind the keyboard,
+    // instead of floating above it.
     Scaffold(
         modifier = modifier.fillMaxSize(),
         bottomBar = {
@@ -140,7 +150,8 @@ fun ClearTravelApp(
                     Modifier
                         .fillMaxSize()
                         .padding(padding)
-                        .consumeWindowInsets(padding),
+                        .consumeWindowInsets(padding)
+                        .imePadding(),
             ) {
                 tripsGraph(
                     landing = tripsLanding,

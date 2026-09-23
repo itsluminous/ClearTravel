@@ -10,6 +10,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -17,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.IntentCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -175,14 +181,17 @@ class MainActivity : FragmentActivity() {
         when (val entry = pendingEntry.value) {
             // External entry: a feature's add form rendered over the shell
             // until saved/cancelled; keyed by nonce so a repeated request
-            // re-creates (and re-prefills) the form.
+            // re-creates (and re-prefills) the form. Outside the shell's Scaffold,
+            // so the host applies the keyboard inset itself (and, for the plain
+            // train form, the system bars: safeDrawing = system bars + cutout + IME).
             // When the hosted form finishes, the shell lands on Journeys with
             // the matching segment — showing what was just added (ADR-024)
             // instead of the default Trips tab.
             is ExternalEntry.Trains ->
                 key(entry.nonce) {
-                    Surface {
+                    Surface(modifier = Modifier.fillMaxSize()) {
                         TrainsExternalEntry(
+                            modifier = Modifier.windowInsetsPadding(WindowInsets.safeDrawing),
                             request = entry.request,
                             onDone = { result ->
                                 pendingDeepLink.value = JourneysDeepLink.forTrainsEntry(result)
@@ -193,8 +202,10 @@ class MainActivity : FragmentActivity() {
                 }
             is ExternalEntry.Flights ->
                 key(entry.nonce) {
-                    Surface {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        // Its screens are Scaffolds (system bars handled); only the IME is added.
                         FlightsExternalEntry(
+                            modifier = Modifier.imePadding(),
                             request = entry.request,
                             onDone = { result ->
                                 pendingDeepLink.value = JourneysDeepLink.forFlightsEntry(result)

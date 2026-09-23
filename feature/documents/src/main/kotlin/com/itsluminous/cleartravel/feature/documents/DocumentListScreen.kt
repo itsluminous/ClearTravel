@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -130,11 +129,11 @@ internal fun DocumentListScreen(
                 DocumentSearchField(
                     query = query,
                     onQueryChange = { query = it },
+                    // The keyboard never covers the box: the app shell applies (and
+                    // consumes) the IME inset for every tab, so no per-screen padding.
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            // The keyboard must not cover the box it is typing into.
-                            .imePadding()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
