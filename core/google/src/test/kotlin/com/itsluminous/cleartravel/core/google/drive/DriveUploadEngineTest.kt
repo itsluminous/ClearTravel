@@ -128,27 +128,6 @@ class FakeDriveClient : DriveClient {
             .sortedByDescending { it.createdAt }
             .map { DriveFileInfo(it.fileId, it.name, it.bytes.size.toLong(), it.createdAt) }
 
-    override suspend fun moveFile(
-        fileId: String,
-        fromParentId: String,
-        toParentId: String,
-    ) {
-        if (failMoves) throw IllegalStateException("move failed")
-        moveCalls++
-        val index = files.indexOfFirst { it.fileId == fileId && it.parentId == fromParentId }
-        check(index >= 0) { "no file $fileId under $fromParentId" }
-        files[index] = files[index].copy(parentId = toParentId)
-    }
-
-    override suspend fun trashFile(fileId: String) {
-        val index = folderRecords.indexOfFirst { it.folderId == fileId }
-        if (index >= 0) {
-            folderRecords[index] = folderRecords[index].copy(trashed = true)
-        } else {
-            files.removeIf { it.fileId == fileId }
-        }
-    }
-
     override suspend fun deleteFile(fileId: String) {
         files.removeIf { it.fileId == fileId }
     }

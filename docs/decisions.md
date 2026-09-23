@@ -2461,6 +2461,12 @@ upload converges so listing/pruning see one set), `DefaultBackupManagerTest` +3
 re-pointed; pre-ADR-038 backup whose mirror attachment was bundled re-points the
 flight; missing boarding-pass file exports row-only), `BackupMappersTest` +1.
 
+**Update (2026-09-23):** the duplicate-folder *convergence* pass (move files out of
+duplicates, trash empties) was removed before any release shipped it — there is no
+existing user base to migrate, and the operator cleaned the affected Drive manually.
+What remains of ADR-038: the mutex-serialised resolve, deterministic oldest-first
+folder adoption, and union-of-folders reads for backup listing.
+
 ## ADR-039 — Self-contained share links (trips, checklists, flights) with ID-stable upsert; flight card quick actions (2026-09-23)
 
 **Context.** Trains could already be shared as a card image + PNR link (ADR-020),

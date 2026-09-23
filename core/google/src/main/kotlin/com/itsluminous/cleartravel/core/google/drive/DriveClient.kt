@@ -74,16 +74,6 @@ interface DriveClient {
         namePrefix: String = "",
     ): List<DriveFileInfo>
 
-    /** Re-parents [fileId] from [fromParentId] into [toParentId] (ADR-038 folder convergence). */
-    suspend fun moveFile(
-        fileId: String,
-        fromParentId: String,
-        toParentId: String,
-    )
-
-    /** Moves an app-created file or folder to the Drive trash; already-gone is not an error. */
-    suspend fun trashFile(fileId: String)
-
     /** Permanently deletes a file the app created; already-gone is not an error. */
     suspend fun deleteFile(fileId: String)
 }
@@ -209,26 +199,6 @@ class RestDriveClient
                         createdAt = parseRfc3339(obj["createdTime"]?.jsonPrimitive?.content),
                     )
                 }
-        }
-
-        override suspend fun moveFile(
-            fileId: String,
-            fromParentId: String,
-            toParentId: String,
-        ) {
-            val url =
-                "$FILES_URL/${encode(fileId)}?addParents=${encode(toParentId)}" +
-                    "&removeParents=${encode(fromParentId)}&fields=id"
-            val response =
-                http.request("PATCH", url, token(), contentType = JSON_CONTENT_TYPE, body = "{}".toByteArray())
-            if (!response.isSuccess) throw GoogleApiException(response.code, response.body)
-        }
-
-        override suspend fun trashFile(fileId: String) {
-            val body = buildJsonObject { put("trashed", true) }.toString().toByteArray()
-            val response =
-                http.request("PATCH", "$FILES_URL/${encode(fileId)}?fields=id", token(), contentType = JSON_CONTENT_TYPE, body = body)
-            if (!response.isSuccess && response.code != 404) throw GoogleApiException(response.code, response.body)
         }
 
         override suspend fun deleteFile(fileId: String) {

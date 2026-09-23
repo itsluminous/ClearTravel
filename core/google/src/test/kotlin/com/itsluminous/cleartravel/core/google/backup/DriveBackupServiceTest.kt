@@ -242,7 +242,7 @@ class DriveBackupServiceTest {
         }
 
     @Test
-    fun `an upload into a duplicated account converges the folders so listing and pruning see ONE set`() =
+    fun `an upload into a duplicated account lands in the OLDEST folder and listing unions all`() =
         runTest {
             val oldest = drive.seedFolder("ClearTravel")
             val duplicate = drive.seedFolder("ClearTravel")
@@ -252,14 +252,10 @@ class DriveBackupServiceTest {
 
             assertThat(service().uploadLatestBackup()).isEqualTo(DriveBackupUploadResult.Uploaded)
 
-            assertThat(drive.folders.keys).containsExactly(oldest)
-            assertThat(drive.files.map { it.parentId }.toSet()).containsExactly(oldest)
-            assertThat(drive.files.map { it.name })
-                .containsExactly(
-                    "cleartravel-backup-20260101-0101.zip",
-                    "boarding.pdf.cteb",
-                    "cleartravel-backup-20260102-0101.zip",
-                )
+            // New writes land in the deterministic oldest folder; old files stay put.
+            assertThat(drive.files.single { it.name == "cleartravel-backup-20260102-0101.zip" }.parentId)
+                .isEqualTo(oldest)
+            // Reads union every same-name folder, so nothing is lost.
             assertThat(service().listBackups().map { it.fileName })
                 .containsExactly(
                     "cleartravel-backup-20260102-0101.zip",
