@@ -100,10 +100,14 @@ class DefaultDriveBackupService(
         if (!snapshot.isLinked) return emptyList()
         return try {
             // Listing must never CREATE the folder — a fresh link with no uploads yet
-            // simply has no backups.
-            val folderId = folderResolver.existingFolderIds().firstOrNull() ?: return emptyList()
-            driveClient
-                .listFiles(folderId, DriveBackupService.BACKUP_NAME_PREFIX)
+            // simply has no backups. It searches EVERY app-visible folder with the app's
+            // name (ADR-038): a fresh install has no cached id, and an account that
+            // ended up with duplicate folders before they converged may keep its
+            // backups in any of them.
+            folderResolver
+                .existingFolderIds()
+                .flatMap { folderId -> driveClient.listFiles(folderId, DriveBackupService.BACKUP_NAME_PREFIX) }
+                .distinctBy { it.fileId }
                 .map { DriveBackupInfo(it.fileId, it.name, it.createdAt, it.sizeBytes) }
                 .sortedByDescending { it.fileName }
         } catch (e: CancellationException) {

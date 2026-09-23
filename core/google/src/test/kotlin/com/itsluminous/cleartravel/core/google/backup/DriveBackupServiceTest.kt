@@ -208,6 +208,40 @@ class DriveBackupServiceTest {
         }
 
     @Test
+    fun `listBackups finds backups living in the SECOND of two same-name folders`() =
+        runTest {
+            // Pre-ADR-038 state: uploads landed in one folder, the backup ZIP in the other,
+            // and a fresh install has no cached folder id at all.
+            val first = drive.seedFolder("ClearTravel")
+            val second = drive.seedFolder("ClearTravel")
+            drive.seedFile(first, "ticket.pdf.cteb")
+            drive.seedFile(second, "cleartravel-backup-20260101-0101.zip")
+
+            val backups = service().listBackups()
+
+            assertThat(backups.map { it.fileName }).containsExactly("cleartravel-backup-20260101-0101.zip")
+            assertThat(drive.folders).hasSize(2) // a read path never converges or creates
+        }
+
+    @Test
+    fun `listBackups ignores a cached id pointing at the EMPTY duplicate and unions every folder`() =
+        runTest {
+            val empty = drive.seedFolder("ClearTravel")
+            val other = drive.seedFolder("ClearTravel")
+            drive.seedFile(other, "cleartravel-backup-20260101-0101.zip")
+            drive.seedFile(empty, "cleartravel-backup-20260102-0101.zip")
+            linkStore.setDriveFolderId(empty)
+
+            val backups = service().listBackups()
+
+            assertThat(backups.map { it.fileName })
+                .containsExactly(
+                    "cleartravel-backup-20260102-0101.zip",
+                    "cleartravel-backup-20260101-0101.zip",
+                ).inOrder()
+        }
+
+    @Test
     fun `an upload into a duplicated account converges the folders so listing and pruning see ONE set`() =
         runTest {
             val oldest = drive.seedFolder("ClearTravel")
