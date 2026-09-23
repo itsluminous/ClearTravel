@@ -129,7 +129,6 @@ class DriveBackupServiceTest {
             folderResolver = DriveFolderResolver(linkStore, drive, "ClearTravel"),
             backupsDir = backupsDir,
             downloadDir = File(tmp.root, "cache"),
-            driveFolderName = "ClearTravel",
         )
 
     private fun stageLocalBackup(name: String): File {
@@ -202,6 +201,32 @@ class DriveBackupServiceTest {
 
             val backups = service().listBackups()
             assertThat(backups.map { it.fileName })
+                .containsExactly(
+                    "cleartravel-backup-20260102-0101.zip",
+                    "cleartravel-backup-20260101-0101.zip",
+                ).inOrder()
+        }
+
+    @Test
+    fun `an upload into a duplicated account converges the folders so listing and pruning see ONE set`() =
+        runTest {
+            val oldest = drive.seedFolder("ClearTravel")
+            val duplicate = drive.seedFolder("ClearTravel")
+            drive.seedFile(duplicate, "cleartravel-backup-20260101-0101.zip")
+            drive.seedFile(duplicate, "boarding.pdf.cteb")
+            stageLocalBackup("cleartravel-backup-20260102-0101.zip")
+
+            assertThat(service().uploadLatestBackup()).isEqualTo(DriveBackupUploadResult.Uploaded)
+
+            assertThat(drive.folders.keys).containsExactly(oldest)
+            assertThat(drive.files.map { it.parentId }.toSet()).containsExactly(oldest)
+            assertThat(drive.files.map { it.name })
+                .containsExactly(
+                    "cleartravel-backup-20260101-0101.zip",
+                    "boarding.pdf.cteb",
+                    "cleartravel-backup-20260102-0101.zip",
+                )
+            assertThat(service().listBackups().map { it.fileName })
                 .containsExactly(
                     "cleartravel-backup-20260102-0101.zip",
                     "cleartravel-backup-20260101-0101.zip",

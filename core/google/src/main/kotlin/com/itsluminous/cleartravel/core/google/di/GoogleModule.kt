@@ -157,7 +157,6 @@ abstract class GoogleModule {
             backupManager: BackupManager,
             driveClient: DriveClient,
             folderResolver: DriveFolderResolver,
-            stringsFactory: CalendarEventStringsFactory,
         ): DriveBackupService =
             DefaultDriveBackupService(
                 linkStore = linkStore,
@@ -166,7 +165,6 @@ abstract class GoogleModule {
                 folderResolver = folderResolver,
                 backupsDir = AppFileLayout.backups(context.filesDir),
                 downloadDir = File(context.cacheDir, "drive-backups"),
-                driveFolderName = stringsFactory.driveFolderName(),
             )
 
         @Provides

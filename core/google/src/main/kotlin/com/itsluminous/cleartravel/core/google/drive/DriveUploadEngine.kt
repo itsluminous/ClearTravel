@@ -12,28 +12,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import java.io.File
 
-/**
- * Find-or-create of the app's "ClearTravel" Drive folder; the id is cached in the
- * link store and re-resolved when the folder disappears server-side.
- */
-class DriveFolderResolver(
-    private val linkStore: GoogleLinkStore,
-    private val driveClient: DriveClient,
-    private val folderName: String,
-) {
-    suspend fun ensureFolder(): String {
-        linkStore.current().driveFolderId?.let { return it }
-        val id = driveClient.findFolder(folderName) ?: driveClient.createFolder(folderName)
-        linkStore.setDriveFolderId(id)
-        return id
-    }
-
-    /** Drops the cached id (the folder 404'd) so the next pass re-resolves it. */
-    suspend fun invalidate() {
-        linkStore.setDriveFolderId(null)
-    }
-}
-
 /** Outcome of one upload-queue drain. */
 sealed interface DriveUploadResult {
     /** Uploads are disabled / no account linked — nothing to do. */

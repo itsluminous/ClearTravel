@@ -65,7 +65,6 @@ class DefaultDriveBackupService(
     private val backupsDir: File,
     /** Scratch space for downloaded backups (`cacheDir/drive-backups`). */
     private val downloadDir: File,
-    private val driveFolderName: String,
 ) : DriveBackupService {
     override suspend fun uploadLatestBackup(): DriveBackupUploadResult {
         val snapshot = linkStore.current()
@@ -102,7 +101,7 @@ class DefaultDriveBackupService(
         return try {
             // Listing must never CREATE the folder — a fresh link with no uploads yet
             // simply has no backups.
-            val folderId = snapshot.driveFolderId ?: driveClient.findFolder(driveFolderName) ?: return emptyList()
+            val folderId = folderResolver.existingFolderIds().firstOrNull() ?: return emptyList()
             driveClient
                 .listFiles(folderId, DriveBackupService.BACKUP_NAME_PREFIX)
                 .map { DriveBackupInfo(it.fileId, it.name, it.createdAt, it.sizeBytes) }

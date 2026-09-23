@@ -2363,3 +2363,96 @@ on the test WorkManager, verdict mapping), `BackupRestoreViewModelTest` +2, e2e
 `BackupScheduleE2eTest` 1 (picker card present). Follow-ups: a "last automatic run"
 timestamp distinct from the manual one is not tracked (the shared file's timestamp
 is enough for now); 30-day "monthly" is a fixed interval, not calendar months.
+
+## ADR-038 — Drive folder identity + convergence, backup listing across folders, boarding passes in local backups (2026-09-23)
+
+**Context.** Four field reports from a real phone with a real Google account:
+(1) with *Drive backups* and *Drive uploads* both on, TWO folders named "Clear Travel"
+appeared with the same creation time; (2) their content was inconsistent — attachment
+envelopes in one, backup ZIPs in the other; (3) a fresh install said "No backups
+found" although a backup ZIP was sitting in Drive; (4) restoring a LOCAL backup left
+`FlightJourney.boardingPassPath` pointing at a file that no longer existed ("This
+file is no longer available on the device").
+
+**Root causes.**
+
+- (1)/(2) `DriveFolderResolver.ensureFolder()` was a bare check-then-act: read the
+  cached id → `findFolder` → `createFolder` → cache. The resolver is a singleton but
+  had no lock, and `DriveBackupWorker` and `DriveUploadWorker` (both enqueued when the
+  toggles are switched on, both running under WorkManager at the same time) each saw
+  no cached id, each found nothing and each created a folder; the last writer's id
+  won the cache, so uploads and backups kept landing in different folders. On top,
+  `findFolder` asked Drive for `pageSize=1` with NO `orderBy`, so which folder a
+  fresh lookup returned was arbitrary.
+- (3) `listBackups()` used the cached id or that arbitrary first match, so a fresh
+  install (no cache) that happened to get the uploads-only duplicate saw an empty
+  list. The name query itself was fine (`name contains 'cleartravel-backup-'`, no
+  appProperties requirement).
+- (4) Bundling covered `attachments` rows and `travel_documents` rows only. The
+  boarding pass is a FILE referenced by the flight row (`files/boarding_passes/
+  <flightId>.<ext>`); its ADR-016 mirror attachment row exists only once the Drive
+  upload engine has run (uploads on) and then carries a `driveFileId`, so it was
+  never bundled either — and even when it was, the restore re-pointed the attachment
+  row, not `boardingPassPath`.
+
+**Decisions.**
+
+1. **One folder identity.** `DriveClient.findFolder` is replaced by `findFolders(name)`
+   returning EVERY live app-visible folder with that name **oldest first**
+   (`orderBy=createdTime`, client-side tie-break on id) — deterministic across
+   devices and passes. `DriveFolderResolver` (now its own file) serialises
+   `ensureFolder()` behind a `Mutex`; a concurrent caller waits and reuses the
+   folder the first one settled on. `listFiles` follows pagination and accepts an
+   empty prefix (every file); `moveFile(fileId, from, to)` (PATCH `addParents`/
+   `removeParents`) and `trashFile` are added.
+2. **Convergence (migration for already-duplicated accounts).** Once per process,
+   `ensureFolder()` lists the same-name folders, adopts the OLDEST as canonical,
+   moves every file out of each duplicate into it and trashes the duplicates that
+   are empty afterwards (trash, not delete — recoverable; `drive.file` only sees
+   app-created files, which is exactly the set the app should move). Only after a
+   fully successful pass is the cached id trusted without a network call for the
+   rest of the process; a partial failure returns the canonical folder anyway and
+   retries next resolve, so convergence never blocks an upload. A cached id whose
+   folder is gone re-resolves instead of uploading into the void. This also fixes
+   (2): once converged, uploads, backups, dedupe and pruning all see one set.
+3. **Backup listing is a union.** `DriveBackupService.listBackups()` (onboarding step
+   3 and Settings → Restore) asks the resolver for `existingFolderIds()` — every
+   same-name folder, never creating one — and unions their `cleartravel-backup-*`
+   files (de-duplicated by file id, newest name first). A read path never converges;
+   pre-fix duplicated users therefore see their backups on a fresh install BEFORE
+   any write pass has merged the folders. `DefaultDriveBackupService` drops its
+   `driveFolderName` parameter (the resolver owns the name).
+4. **Boarding passes ride in local backups.** Format-additive, no `schemaVersion`
+   bump: `FlightJourneyDto` gains `boardingPassBundled: Boolean = false`; when the
+   flight's file exists at export time its plaintext bytes are written at
+   `boarding_passes/<flightId>` (a NEW zip directory next to `attachments/`),
+   regardless of the Drive state of any mirror attachment row (the file is small and
+   the local backup must be self-contained — this is the bug). On import a winning
+   flight row with `boardingPassBundled` is extracted to `filesDir/boarding_passes/
+   <flightId>.<ext>` — the exact location `OcrBoardingPassImporter.store` uses, so
+   the restore lands the file "at its recorded relative path" — CTEF-encrypted under
+   the restoring install's key, and `boardingPassPath` is re-pointed. ADR-016 mirror
+   attachment rows (same `localPath` as the flight's old `boardingPassPath`) are NOT
+   bundled a second time; on import their `localPath` is re-pointed to the restored
+   boarding pass so the detail sheet's by-path de-duplication still holds and the
+   upload engine does not register a duplicate. For OLD backups (no flag) the
+   reverse mapping applies: if a bundled attachment row's original path equals a
+   winning flight's `boardingPassPath`, the flight is re-pointed to that restored
+   attachment file. Old backups import unchanged otherwise (missing flag = false,
+   unknown zip entries ignored by older readers).
+
+**Consequences.** `DriveClient` interface change (additive methods, `findFolder` →
+`findFolders`; fake updated). `FlightJourneyDto` additive field; `BackupCodec.writeZip`
+now takes a map of ZIP ENTRY NAME → file (was attachment id → file) and gains
+`extractEntry`. `docs/backup-format.md` documents the `boarding_passes/` directory and
+the flag. Tests: `DriveFolderResolverTest` 8 (concurrent resolve creates ONE folder;
+adopt-existing; convergence moves files to the oldest and trashes the empty; cached
+id on the newer duplicate is replaced; converged → cached without lookups; failed
+convergence returns canonical and retries; stale cached id re-resolves;
+`existingFolderIds` never creates), `DriveBackupServiceTest` +3 (backups found in
+the SECOND same-name folder; cached id on the empty duplicate still unions; an
+upload converges so listing/pruning see one set), `DefaultBackupManagerTest` +3
+(flight with boarding pass → export → wipe incl. files → import → file exists at
+`boarding_passes/<flightId>.<ext>`, decrypts to the same bytes, mirror attachment
+re-pointed; pre-ADR-038 backup whose mirror attachment was bundled re-points the
+flight; missing boarding-pass file exports row-only), `BackupMappersTest` +1.

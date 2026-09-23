@@ -37,21 +37,65 @@ class FakeDriveClient : DriveClient {
         val createdAt: Instant,
     )
 
-    val folders = mutableMapOf<String, String>()
+    data class StoredFolder(
+        val folderId: String,
+        val name: String,
+        val createdAt: Instant,
+        val trashed: Boolean = false,
+    )
+
+    /** Live folders by id → name (what most tests assert on). */
+    val folders: Map<String, String>
+        get() = folderRecords.filterNot { it.trashed }.associate { it.folderId to it.name }
+    val folderRecords = mutableListOf<StoredFolder>()
     val files = mutableListOf<StoredFile>()
     var failNextUpload = false
     var failDownloads = false
+    var failMoves = false
     var downloadBody: ByteArray = "drive-bytes".toByteArray()
+    var moveCalls = 0
+        private set
+    var findFolderCalls = 0
+        private set
+
+    /** Runs inside [findFolders] BEFORE the answer — a suspension point to expose check-then-act races. */
+    var onFindFolders: suspend () -> Unit = {}
     private var nextId = 1
     private var uploadClock = Instant.parse("2026-01-01T00:00:00Z")
+    private var folderClock = Instant.parse("2025-12-01T00:00:00Z")
 
-    override suspend fun findFolder(name: String): String? = folders.entries.firstOrNull { it.value == name }?.key
+    /** Seeds an existing folder (e.g. a pre-fix duplicate); later seeds are newer. */
+    fun seedFolder(
+        name: String,
+        folderId: String = "folder-${folderRecords.size + 1}",
+    ): String {
+        folderClock = folderClock.plusSeconds(60)
+        folderRecords += StoredFolder(folderId, name, folderClock)
+        return folderId
+    }
 
-    override suspend fun createFolder(name: String): String {
-        val id = "folder-${folders.size + 1}"
-        folders[id] = name
+    /** Seeds a file directly into [parentId] without going through an upload. */
+    fun seedFile(
+        parentId: String,
+        name: String,
+        bytes: ByteArray = "seed-$name".toByteArray(),
+    ): String {
+        val id = "file-${nextId++}"
+        uploadClock = uploadClock.plusSeconds(60)
+        files += StoredFile(id, name, parentId, bytes, uploadClock)
         return id
     }
+
+    override suspend fun findFolders(name: String): List<DriveFolderInfo> {
+        findFolderCalls++
+        onFindFolders()
+        return folderRecords
+            .filter { !it.trashed && it.name == name }
+            .sortedWith(compareBy<StoredFolder> { it.createdAt }.thenBy { it.folderId })
+            .map { DriveFolderInfo(it.folderId, it.name, it.createdAt) }
+    }
+
+    override suspend fun createFolder(name: String): String = seedFolder(name)
 
     override suspend fun uploadFile(
         name: String,
@@ -63,10 +107,7 @@ class FakeDriveClient : DriveClient {
             failNextUpload = false
             throw IllegalStateException("upload failed")
         }
-        val id = "file-${nextId++}"
-        uploadClock = uploadClock.plusSeconds(60)
-        files += StoredFile(id, name, parentId, sourceFile.readBytes(), uploadClock)
-        return id
+        return seedFile(parentId, name, sourceFile.readBytes())
     }
 
     override suspend fun downloadFile(
@@ -86,6 +127,27 @@ class FakeDriveClient : DriveClient {
             .filter { it.parentId == parentId && it.name.startsWith(namePrefix) }
             .sortedByDescending { it.createdAt }
             .map { DriveFileInfo(it.fileId, it.name, it.bytes.size.toLong(), it.createdAt) }
+
+    override suspend fun moveFile(
+        fileId: String,
+        fromParentId: String,
+        toParentId: String,
+    ) {
+        if (failMoves) throw IllegalStateException("move failed")
+        moveCalls++
+        val index = files.indexOfFirst { it.fileId == fileId && it.parentId == fromParentId }
+        check(index >= 0) { "no file $fileId under $fromParentId" }
+        files[index] = files[index].copy(parentId = toParentId)
+    }
+
+    override suspend fun trashFile(fileId: String) {
+        val index = folderRecords.indexOfFirst { it.folderId == fileId }
+        if (index >= 0) {
+            folderRecords[index] = folderRecords[index].copy(trashed = true)
+        } else {
+            files.removeIf { it.fileId == fileId }
+        }
+    }
 
     override suspend fun deleteFile(fileId: String) {
         files.removeIf { it.fileId == fileId }
