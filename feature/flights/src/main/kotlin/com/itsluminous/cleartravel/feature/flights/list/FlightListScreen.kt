@@ -1,24 +1,30 @@
 package com.itsluminous.cleartravel.feature.flights.list
 
+import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.AirplaneTicket
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Flight
+import androidx.compose.material.icons.filled.HowToReg
 import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -43,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
@@ -53,11 +60,14 @@ import com.itsluminous.cleartravel.core.designsystem.component.FullWidthFilterCh
 import com.itsluminous.cleartravel.core.designsystem.component.FullWidthFilterRow
 import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.feature.flights.R
+import com.itsluminous.cleartravel.feature.flights.checkin.CheckInGateDecision
 import com.itsluminous.cleartravel.feature.flights.detail.FlightDetailSheet
 import com.itsluminous.cleartravel.feature.flights.detail.FlightDocumentType
 import com.itsluminous.cleartravel.feature.flights.detail.FlightDocumentsViewModel
 import com.itsluminous.cleartravel.feature.flights.detail.FlightTripLinksViewModel
 import com.itsluminous.cleartravel.feature.flights.detail.buildFlightDocuments
+import com.itsluminous.cleartravel.feature.flights.share.FlightShareOutcome
+import com.itsluminous.cleartravel.feature.flights.share.rememberFlightSharer
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcome
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcomeKind
 import kotlinx.coroutines.launch
@@ -183,6 +193,39 @@ fun FlightListScreen(
     val unarchivedSnackbar = stringResource(R.string.flights_unarchived_snackbar)
     val deletedSnackbar = stringResource(R.string.flights_deleted_snackbar)
 
+    // ADR-039 part A: card quick actions. The check-in tap is gated on the airline's
+    // window; every refusal is explained in a snackbar (never a toast).
+    val context = LocalContext.current
+    val sharer = rememberFlightSharer()
+    val shareTextOnlySnackbar = stringResource(R.string.flights_share_text_only)
+    val shareFailedSnackbar = stringResource(R.string.flights_share_failed)
+    val checkInClosedSnackbar = stringResource(R.string.flights_checkin_closed)
+    val checkInDepartedSnackbar = stringResource(R.string.flights_checkin_departed)
+    val checkInOpensTemplate = stringResource(R.string.flights_checkin_opens_at)
+
+    fun onWebCheckIn(flight: FlightJourney) {
+        when (val decision = viewModel.checkInGate(flight)) {
+            is CheckInGateDecision.Open -> context.startActivity(Intent(Intent.ACTION_VIEW, decision.url.toUri()))
+            is CheckInGateDecision.NotYetOpen ->
+                scope.launch {
+                    snackbarHostState.showSnackbar(
+                        String.format(checkInOpensTemplate, formatTimestamp(decision.opensAt).orEmpty()),
+                    )
+                }
+            is CheckInGateDecision.Closed -> scope.launch { snackbarHostState.showSnackbar(checkInClosedSnackbar) }
+            CheckInGateDecision.Departed -> scope.launch { snackbarHostState.showSnackbar(checkInDepartedSnackbar) }
+        }
+    }
+
+    fun onShare(flight: FlightJourney) {
+        val outcome = runCatching { sharer.share(flight) }.getOrDefault(FlightShareOutcome.FAILED)
+        when (outcome) {
+            FlightShareOutcome.SHARED -> Unit
+            FlightShareOutcome.SHARED_TEXT_ONLY -> scope.launch { snackbarHostState.showSnackbar(shareTextOnlySnackbar) }
+            FlightShareOutcome.FAILED -> scope.launch { snackbarHostState.showSnackbar(shareFailedSnackbar) }
+        }
+    }
+
     Scaffold(
         modifier = modifier,
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -221,13 +264,17 @@ fun FlightListScreen(
                 )
             } else {
                 LazyColumn(
-                    contentPadding =
-                        androidx.compose.foundation.layout
-                            .PaddingValues(16.dp),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 88.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     items(uiState.flights, key = { it.id }) { flight ->
-                        FlightCard(flight = flight, onClick = { detailFlightId = flight.id })
+                        FlightCard(
+                            flight = flight,
+                            onClick = { detailFlightId = flight.id },
+                            onCheckStatus = { onCheckStatus(flight.id) },
+                            onWebCheckIn = { onWebCheckIn(flight) },
+                            onShare = { onShare(flight) },
+                        )
                     }
                 }
             }
@@ -340,73 +387,48 @@ fun FlightListScreen(
     }
 }
 
+/**
+ * A flight card: the informational body ([FlightCardBody]) plus — like the train
+ * card (ADR-020) — a vertical quick-action column on the right: check status, web
+ * check-in (window-gated, ADR-039 part A) and share (image + add-data link).
+ */
 @Composable
 private fun FlightCard(
     flight: FlightJourney,
     onClick: () -> Unit,
+    onCheckStatus: () -> Unit,
+    onWebCheckIn: () -> Unit,
+    onShare: () -> Unit,
 ) {
-    val context = LocalContext.current
     ClearTravelCard(modifier = Modifier.clickable(onClick = onClick)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "${flight.airlineIata} ${flight.flightNumber}",
-                style = MaterialTheme.typography.titleMedium,
-            )
-            FlightStatusChip(status = flight.status)
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column {
-                if (flight.depAirport.isNotBlank() || flight.arrAirport.isNotBlank()) {
-                    Text(
-                        text =
-                            listOf(flight.depAirport, flight.arrAirport)
-                                .filter { it.isNotBlank() }
-                                .joinToString(" ${stringResource(R.string.flights_card_route_separator)} "),
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                }
-                formatDate(flight.date)?.let {
-                    Text(text = it, style = MaterialTheme.typography.bodyMedium)
-                }
-                val dep = formatTime(flight.estDep ?: flight.schedDep)
-                val arr = formatTime(flight.estArr ?: flight.schedArr)
-                if (dep != null || arr != null) {
-                    Text(
-                        text =
-                            stringResource(
-                                R.string.flights_card_dep_arr,
-                                dep ?: stringResource(R.string.flights_value_unknown),
-                                arr ?: stringResource(R.string.flights_value_unknown),
-                            ),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-            }
-            if (flight.boardingPassPath != null) {
+        Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+            FlightCardBody(flight = flight, modifier = Modifier.weight(1f))
+            Column(
+                modifier = Modifier.padding(start = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
                 ExplainableIcon(
-                    icon = Icons.AutoMirrored.Filled.AirplaneTicket,
-                    explanationRes = R.string.flights_icon_boarding_pass,
-                    targetSize = 32.dp,
-                    iconSize = 20.dp,
+                    icon = Icons.Filled.Refresh,
+                    explanationRes = R.string.flights_card_check_status,
+                    tint = MaterialTheme.colorScheme.primary,
+                    targetSize = 40.dp,
+                    onClick = onCheckStatus,
+                )
+                ExplainableIcon(
+                    icon = Icons.Filled.HowToReg,
+                    explanationRes = R.string.flights_card_web_checkin,
+                    tint = MaterialTheme.colorScheme.primary,
+                    targetSize = 40.dp,
+                    onClick = onWebCheckIn,
+                )
+                ExplainableIcon(
+                    icon = Icons.Filled.Share,
+                    explanationRes = R.string.flights_card_share,
+                    tint = MaterialTheme.colorScheme.primary,
+                    targetSize = 40.dp,
+                    onClick = onShare,
                 )
             }
         }
-        Text(
-            text =
-                formatTimestamp(flight.lastFetchedAt)
-                    ?.let { context.getString(R.string.flights_last_fetched, it) }
-                    ?: stringResource(R.string.flights_never_fetched),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 8.dp),
-        )
     }
 }

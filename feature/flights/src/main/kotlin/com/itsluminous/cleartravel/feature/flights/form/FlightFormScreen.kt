@@ -33,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.data.share.FlightSharePayload
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.designsystem.component.LocalDatePickerDialog
 import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
@@ -60,6 +61,8 @@ fun FlightFormScreen(
      * notice with a "View" action; defaulted so existing call sites are untouched.
      */
     onDuplicate: (existingFlightId: String) -> Unit = {},
+    /** A shared flight link's add data (ADR-039); defaulted so existing call sites are untouched. */
+    sharedPayload: FlightSharePayload? = null,
 ) {
     val state by viewModel.formState.collectAsStateWithLifecycle()
     val busy by viewModel.isBusy.collectAsStateWithLifecycle()
@@ -72,11 +75,12 @@ fun FlightFormScreen(
         }
     }
 
-    LaunchedEffect(editId, importUri, bookingUri) {
+    LaunchedEffect(editId, importUri, bookingUri, sharedPayload) {
         when {
             editId != null -> viewModel.startEdit(editId)
             importUri != null -> viewModel.startFromBoardingPass(importUri)
             bookingUri != null -> viewModel.startFromBookingConfirmation(bookingUri)
+            sharedPayload != null -> viewModel.startFromShared(sharedPayload)
             else -> viewModel.startBlank()
         }
     }
@@ -289,6 +293,13 @@ private fun PrefillBanner(state: FlightFormState) {
                 color = MaterialTheme.colorScheme.tertiary,
             )
         }
+    }
+    if (state.fromSharedLink) {
+        Text(
+            text = stringResource(R.string.flights_prefill_source_shared),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
     }
 }
 

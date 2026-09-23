@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.itsluminous.cleartravel.core.data.share.FlightSharePayload
 import com.itsluminous.cleartravel.feature.flights.form.FlightFormScreen
 import com.itsluminous.cleartravel.feature.flights.status.StatusCheckScreen
 
@@ -24,6 +25,11 @@ sealed interface FlightsEntryRequest {
     /** Shared PDF/image the user confirmed is a booking confirmation (ADR-017). */
     data class BookingConfirmation(
         val uri: String,
+    ) : FlightsEntryRequest
+
+    /** A `share/flight/<blob>` link (ADR-039): the flight's add data prefills the form. */
+    data class Shared(
+        val payload: FlightSharePayload,
     ) : FlightsEntryRequest
 }
 
@@ -101,6 +107,7 @@ fun FlightsExternalEntry(
             editId = null,
             importUri = (request as? FlightsEntryRequest.BoardingPass)?.uri,
             bookingUri = (request as? FlightsEntryRequest.BookingConfirmation)?.uri,
+            sharedPayload = (request as? FlightsEntryRequest.Shared)?.payload,
             onClose = { onDone(FlightsEntryResult.Cancelled) },
             onSaved = { id -> onDone(FlightsEntryResult.Saved(id)) },
             onSavedAndCheck = { id -> checkingFlightId = id },

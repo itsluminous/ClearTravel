@@ -4,11 +4,16 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.core.testing.MainDispatcherRule
+import com.itsluminous.cleartravel.feature.flights.FakeCheckInRuleSource
 import com.itsluminous.cleartravel.feature.flights.FakeFlightRepository
+import com.itsluminous.cleartravel.feature.flights.checkin.CheckInGateDecision
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
+import java.time.Clock
+import java.time.Duration
+import java.time.ZoneOffset
 
 class FlightListViewModelTest {
     @get:Rule
@@ -24,7 +29,25 @@ class FlightListViewModelTest {
     fun setUp() {
         repository = FakeFlightRepository()
         repository.seed(active, archived)
-        viewModel = FlightListViewModel(repository)
+        viewModel = FlightListViewModel(repository, FakeCheckInRuleSource(), clock)
+    }
+
+    private val clock: Clock = Clock.fixed(Fixtures.NOW, ZoneOffset.UTC)
+
+    @Test
+    fun `check-in gate uses the data-file window and the injected clock`() {
+        // Default window opens 48 h before departure: a flight 3 days out is not yet open.
+        val later = active.copy(schedDep = Fixtures.NOW.plus(Duration.ofDays(3)), checkInUrl = "https://x/checkin")
+        assertThat(viewModel.checkInGate(later))
+            .isEqualTo(CheckInGateDecision.NotYetOpen(opensAt = later.schedDep!!.minus(Duration.ofHours(48))))
+
+        val soon = active.copy(schedDep = Fixtures.NOW.plus(Duration.ofHours(5)), checkInUrl = "https://x/checkin")
+        assertThat(viewModel.checkInGate(soon)).isEqualTo(CheckInGateDecision.Open("https://x/checkin"))
+
+        // No airline URL → the web-search fallback carries the airline code.
+        val noUrl = soon.copy(checkInUrl = null)
+        val open = viewModel.checkInGate(noUrl) as CheckInGateDecision.Open
+        assertThat(open.url).contains("6E")
     }
 
     @Test

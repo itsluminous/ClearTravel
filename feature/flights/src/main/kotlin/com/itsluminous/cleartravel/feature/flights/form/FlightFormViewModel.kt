@@ -3,6 +3,7 @@ package com.itsluminous.cleartravel.feature.flights.form
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsluminous.cleartravel.core.data.repository.FlightRepository
+import com.itsluminous.cleartravel.core.data.share.FlightSharePayload
 import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.feature.flights.checkin.CheckInRuleSource
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -89,6 +90,15 @@ class FlightFormViewModel
                 state.value = FlightFormState.fromBookingExtraction(extraction, bookingUri = uriString)
                 busy.value = false
             }
+        }
+
+        /**
+         * Shared-link import (ADR-039): the payload's add data prefills the form; the
+         * user adds their own booking reference/seat and saves through the normal path
+         * (including the ADR-025 duplicate guard). Nothing is ever saved blind.
+         */
+        fun startFromShared(payload: FlightSharePayload) {
+            state.value = FlightFormState.fromSharePayload(payload)
         }
 
         fun update(transform: (FlightFormState) -> FlightFormState) {

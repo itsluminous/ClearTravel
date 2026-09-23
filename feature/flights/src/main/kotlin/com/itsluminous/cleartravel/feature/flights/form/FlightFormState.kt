@@ -1,5 +1,7 @@
 package com.itsluminous.cleartravel.feature.flights.form
 
+import com.itsluminous.cleartravel.core.data.share.FlightSharePayload
+import com.itsluminous.cleartravel.core.data.share.SharePayloadMappers
 import com.itsluminous.cleartravel.core.model.EntityIds
 import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
@@ -62,6 +64,8 @@ data class FlightFormState(
     val bookingSource: BookingConfirmationSource = BookingConfirmationSource.NONE,
     /** True when the confirmation described further segments (return trip). */
     val returnLegHint: Boolean = false,
+    /** True when prefilled from a shared flight link (ADR-039) — drives the banner. */
+    val fromSharedLink: Boolean = false,
     val errors: Set<FlightFormError> = emptySet(),
 ) {
     val isEdit: Boolean get() = editingId != null
@@ -98,6 +102,35 @@ data class FlightFormState(
                         ?.format(TIME_FORMAT)
                         .orEmpty(),
                 existingPassPath = journey.boardingPassPath,
+            )
+        }
+
+        /**
+         * Prefill from a shared flight link (ADR-039): identity, route and scheduled
+         * times in the DEVICE zone; personal fields (PNR, seat, cabin) are left blank
+         * for the recipient. No confidence markers — the data is exact, not scanned.
+         */
+        fun fromSharePayload(
+            payload: FlightSharePayload,
+            zone: ZoneId = ZoneId.systemDefault(),
+        ): FlightFormState {
+            fun timeText(epochSecond: Long?): String =
+                SharePayloadMappers
+                    .toInstant(epochSecond)
+                    ?.atZone(zone)
+                    ?.toLocalTime()
+                    ?.format(TIME_FORMAT)
+                    .orEmpty()
+
+            return FlightFormState(
+                airlineIata = payload.airlineIata.trim().uppercase(),
+                flightNumber = payload.flightNumber.trim().uppercase(),
+                dateText = SharePayloadMappers.parseDate(payload.date)?.format(DATE_FORMAT).orEmpty(),
+                depAirport = payload.depAirport.trim().uppercase(),
+                arrAirport = payload.arrAirport.trim().uppercase(),
+                depTimeText = timeText(payload.schedDep),
+                arrTimeText = timeText(payload.schedArr),
+                fromSharedLink = true,
             )
         }
 

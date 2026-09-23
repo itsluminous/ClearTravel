@@ -137,4 +137,18 @@
     <string name="flights_detail_part_of">Part of</string>
     <string name="flights_detail_part_of_trip">%1$s · Day %2$d</string>
     <string name="flights_detail_part_of_hint">Open the trip in the Trips tab</string>
+
+    <!-- ADR-039 part A: card quick actions -->
+    <string name="flights_card_check_status">Check status</string>
+    <string name="flights_card_web_checkin">Web check-in</string>
+    <string name="flights_card_share">Share flight</string>
+    <string name="flights_checkin_opens_at">Check-in opens %1$s</string>
+    <string name="flights_checkin_closed">Web check-in has closed for this flight</string>
+    <string name="flights_checkin_departed">This flight has already departed</string>
+    <string name="flights_share_text">My flight %1$s - open in Clear Travel to add it: %2$s</string>
+    <string name="flights_share_chooser_title">Share flight</string>
+    <string name="flights_share_text_only">Couldn\'t render the card image - shared the link only</string>
+    <string name="flights_share_failed">Couldn\'t share the flight</string>
+    <!-- ADR-039: add form prefilled from a shared flight link -->
+    <string name="flights_prefill_source_shared">Filled from a shared flight link - add your booking reference and seat, then save</string>
 </resources>
