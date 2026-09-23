@@ -975,3 +975,43 @@ Notes:
   cleartravel://share/<kind>/<blob>` (custom scheme) and the https form with `-p`.
 - Play_36_Pixel (README demo data, password `TestPass123`) was only read (unlock →
   Settings) and shut down again; Android_16_AOSP_Medium shut down at the end of the run.
+
+## UX fixes — tappable pass marker, keyboard insets, input dialogs vs. edge swipe (2026-09-23 20:35–21:10 IST, emulator Play_36_Pixel, API 36, gesture navigation, ADR-041)
+
+Scope: the three user reports of 2026-09-23 — (1) the flight card's "Boarding pass
+attached" icon did nothing, (2) the keyboard covers the focused field on every screen,
+(3) an edge swipe with a dialog open "registers as a tap outside" and closes it. The
+Play AVD (README demo data, password `TestPass123`, gesture navigation =
+`navigation_mode 2`) was booted for the run and shut down again afterwards; every
+assertion is `uiautomator dump` text plus `dumpsys window` for the IME frame; one blind
+capture `109` (downscaled to 800 px, never viewed). The keyboard on this AVD occupies
+`[0,1517][1080,2400]` when shown (`InsetsSource type=ime … visible=true`).
+
+| # | Check | Verdict | Evidence |
+|---|---|---|---|
+| 1a | **Pre-fix root cause of the IME report** (code): `MainActivity.enableEdgeToEdge()` + manifest `adjustResize` **already present** — edge-to-edge means the window is never resized for the keyboard and Compose must apply the inset itself; the shell's M3 `Scaffold` uses the default `contentWindowInsets` (system bars only, and ignored at the bottom when a `bottomBar` is set) and no `imePadding()` existed anywhere except the Documents search box | root cause | code |
+| 1b | **Unlock screen**, keyboard up: Password field label moved from y 665–731 to **592–655**, the field's bottom edge at 655 < IME top 1517 (`LockScaffold.imePadding()`) | PASS | dump |
+| 1c | **Train form, LAST passenger field** (*Booking status*, the bottom-most input): before focus `[720,1614][1038,1785]` — 97 px of it would be under the keyboard; after tapping it the form scrolled and the FOCUSED field sits at **`[720,1178][1038,1349]`**, entirely above 1517, while the NavigationBar (`Trips` label y 2253–2295) stays put behind the keyboard | PASS | `109-train-form-last-passenger-above-ime.png`, dumps |
+| 1d | **Flight form** (edge case: the form opened from the OCR intake, i.e. a nested Scaffold inside the tab): *To (IATA)* field `[556,1769][1038,1980]` → focused **`[556,1136][1038,1349]`**; typing `BOM` landed in it | PASS | dump |
+| 1e | **Checklist add-item field** (bottom-docked in its own Scaffold): `[42,1998][891,2064]` → focused **`[42,1325][891,1496]`**, its *Add item to checklist* button `[944,1380]` alongside — no double padding despite the nested Scaffold (the shell consumes the IME inset) | PASS | dump |
+| 1f | **Itinerary item form**, *Link (optional)* field: `[42,1620][1038,1791]` → focused **`[42,1346][1038,1517]`** — bottom edge exactly at the IME top | PASS | dump |
+| 1g | **Trip form dialog**, Destination field: dialog window recentred, FOCUSED field `[183,517][897,685]`, Cancel/Save at y 1386–1439 (dialog windows already `adjustResize` themselves; unchanged) | PASS | dump |
+| 2a | **Boarding-pass marker**: flight `UK 955` saved from the OCR-intake form with `boardingpass.png` attached → card shows content-desc **"Boarding pass attached - tap to view"** `[799,1015][857,1073]` (40 dp target, primary tint) | baseline | dump |
+| 2b | Tap the marker → **viewer**: title *Boarding pass*, toolbar Close / Rotate 90° / Fullscreen / Share file / Save a copy, image *Stored document* `[0,746][1080,1517]` — identical to the detail sheet's *View boarding pass* route | **PASS** | dump |
+| 3a | **Pre-fix reproduction of the dialog report** (APK before the fix): New trip → type `Goa` → keyboard up → edge swipe `input swipe 1079 1200 500 1200` → the swipe only hid the keyboard (dialog + text intact); second edge swipe with the keyboard down → **dialog gone AND the app exited to the launcher** (`ViewPager 'At a glance'`, `Play Store`, …): the outside `ACTION_DOWN` dismissed the dialog and the recognised back gesture then hit the tab root | BUG REPRODUCED | dump |
+| 3b | **Fixed build**, New trip → `Goa` typed → keyboard up → edge swipe → keyboard hidden, dialog `New trip` + `EditText 'Goa'` **still there**; keyboard down → edge swipe → dialog closes as a plain **back** and the app stays on the Trips list (`Add trip` FAB visible, no launcher) | **PASS** | dumps |
+| 3c | New trip → `Goa` → keyboard down → **deliberate tap outside** at (540,300) → dialog + text **kept**; *Cancel* → closed | PASS | dumps |
+| 3d | **New checklist** (the other reported dialog): `Beach` typed → tap outside → kept (`EditText 'Beach' FOCUSED`); Cancel → closed; edge swipe with the keyboard down → closed as back, list still shown | PASS | dumps |
+| 3e | **Confirmations keep tap-outside**: Trips → *Delete trip* → "Delete trip?" → tap at (540,300) → dismissed, nothing deleted | PASS | dump |
+| 4 | Dialog audit (see ADR-041): 9 input dialogs → `InputDialogProperties`; 16 confirmations / choice lists / pickers unchanged | — | code |
+| 5 | `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → BUILD SUCCESSFUL; unit **1090/1090**, 0 failures | PASS | `ux-fixes.log` (git-ignored) |
+| 6 | `connectedDebugAndroidTest` on Android_16_AOSP_Medium → **23/23 PASS** (was 21: `FlightsE2eTest.boardingPassMarkerOnCard_opensViewer` + `TripsE2eTest.newTripDialog_keepsTypedInputOnOutsideTap_backDismisses`; `core:ocr` harness SKIPPED as usual); no existing assertion depended on tap-outside dismissal or on the old inset layout, so none changed. AVD shut down afterwards | PASS | `connected.log` (git-ignored) |
+
+Notes:
+- The report said "on the flight form"; the marker actually lives on the flight
+  **card** (`FlightCardBody`) — the form has no attachment indicator, only the prefill
+  banner text. The detail sheet's documents rows were already tappable.
+- `adb shell input swipe` from x = 1079 is what the system reads as a right-edge back
+  gesture on this AVD; while the keyboard is up the first swipe is consumed as
+  "hide keyboard" (both before and after the fix) — the data loss happened on the
+  next one.
