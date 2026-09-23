@@ -274,6 +274,7 @@ fun FlightListScreen(
                             onCheckStatus = { onCheckStatus(flight.id) },
                             onWebCheckIn = { onWebCheckIn(flight) },
                             onShare = { onShare(flight) },
+                            onViewPass = onViewPass,
                         )
                     }
                 }
@@ -390,7 +391,8 @@ fun FlightListScreen(
 /**
  * A flight card: the informational body ([FlightCardBody]) plus — like the train
  * card (ADR-020) — a vertical quick-action column on the right: check status, web
- * check-in (window-gated, ADR-039 part A) and share (image + add-data link).
+ * check-in (window-gated, ADR-039 part A) and share (image + add-data link). The
+ * body's boarding-pass marker opens the pass in the viewer ([onViewPass]).
  */
 @Composable
 private fun FlightCard(
@@ -399,10 +401,11 @@ private fun FlightCard(
     onCheckStatus: () -> Unit,
     onWebCheckIn: () -> Unit,
     onShare: () -> Unit,
+    onViewPass: (path: String) -> Unit,
 ) {
     ClearTravelCard(modifier = Modifier.clickable(onClick = onClick)) {
         Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            FlightCardBody(flight = flight, modifier = Modifier.weight(1f))
+            FlightCardBody(flight = flight, modifier = Modifier.weight(1f), onViewPass = onViewPass)
             Column(
                 modifier = Modifier.padding(start = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,

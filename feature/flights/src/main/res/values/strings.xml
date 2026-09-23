@@ -129,7 +129,7 @@
     <!-- Icon explanations (ExplainableIcon) -->
     <string name="flights_icon_back">Back</string>
     <string name="flights_icon_close">Close</string>
-    <string name="flights_icon_boarding_pass">Boarding pass attached</string>
+    <string name="flights_icon_boarding_pass">Boarding pass attached - tap to view</string>
     <!-- Duplicate-save notice (ADR-025) -->
     <string name="flights_form_duplicate">Flight already exists</string>
     <string name="flights_form_duplicate_view">View</string>

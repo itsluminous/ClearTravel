@@ -24,12 +24,18 @@ import com.itsluminous.cleartravel.feature.flights.R
  * line. Shared by the list card and the share image (ADR-039 part A) so the picture
  * a recipient gets looks exactly like the card; the share image turns freshness off
  * because "Checked 3 min ago" is meaningless to someone reading it later.
+ *
+ * The boarding-pass marker is a real control: a tap opens the pass in the shared
+ * document viewer through [onViewPass] — the same action as the detail sheet's
+ * "View boarding pass" button (user report 2026-09-23: the marker used to swallow the
+ * tap and do nothing). Long-press still explains it.
  */
 @Composable
 internal fun FlightCardBody(
     flight: FlightJourney,
     modifier: Modifier = Modifier,
     showFreshness: Boolean = true,
+    onViewPass: ((path: String) -> Unit)? = null,
 ) {
     Column(modifier = modifier) {
         Row(
@@ -75,12 +81,15 @@ internal fun FlightCardBody(
                     )
                 }
             }
-            if (flight.boardingPassPath != null && showFreshness) {
+            val passPath = flight.boardingPassPath
+            if (passPath != null && showFreshness) {
                 ExplainableIcon(
                     icon = Icons.AutoMirrored.Filled.AirplaneTicket,
                     explanationRes = R.string.flights_icon_boarding_pass,
-                    targetSize = 32.dp,
-                    iconSize = 20.dp,
+                    tint = MaterialTheme.colorScheme.primary,
+                    targetSize = 40.dp,
+                    iconSize = 22.dp,
+                    onClick = onViewPass?.let { open -> { open(passPath) } },
                 )
             }
         }
