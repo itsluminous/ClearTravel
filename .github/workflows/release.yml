@@ -106,14 +106,21 @@ jobs:
             "$APKSIGNER" verify --print-certs "$apk"
           done
 
-      - name: Rename artifact with version
+      - name: Rename artifacts with version
         run: |
           VERSION_NAME="${GITHUB_REF_NAME#v}"
           SUFFIX=""
           if [ "$HAS_SIGNING_SECRETS" != "true" ]; then
             SUFFIX="-debugsigned"
           fi
-          mv app/build/outputs/apk/release/ClearTravel.apk "app/build/outputs/apk/release/ClearTravel-$VERSION_NAME$SUFFIX.apk"
+          # Split builds produce ClearTravel-<abi>.apk per ABI plus a universal
+          # ClearTravel.apk; version every one of them.
+          for apk in app/build/outputs/apk/release/ClearTravel*.apk; do
+            base="$(basename "$apk" .apk)"
+            rest="${base#ClearTravel}"
+            mv "$apk" "app/build/outputs/apk/release/ClearTravel-$VERSION_NAME$rest$SUFFIX.apk"
+          done
+          ls -la app/build/outputs/apk/release/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

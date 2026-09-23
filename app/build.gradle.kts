@@ -76,6 +76,20 @@ android {
         }
     }
 
+    // Per-ABI release APKs: the bundled ML Kit OCR/barcode models + SQLCipher ship
+    // native code for every ABI, so a universal APK carries ~66 MB of lib/ while a
+    // single-ABI one carries ~17 MB. The universal APK is still produced as the
+    // works-everywhere fallback. Debug builds stay universal (emulators are x86_64
+    // or arm64 depending on host).
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -106,14 +120,20 @@ android {
     }
 }
 
-// Human-friendly artifact names: ClearTravel.apk / ClearTravel-debug.apk.
+// Human-friendly artifact names: ClearTravel[-<abi>][-debug].apk — split outputs
+// carry their ABI (ClearTravel-arm64-v8a.apk), the universal APK stays plain.
 androidComponents {
     onVariants { variant ->
         val suffix = if (variant.buildType == "release") "" else "-${variant.buildType}"
         variant.outputs.forEach { output ->
+            val abi =
+                output.filters
+                    .firstOrNull { it.filterType == com.android.build.api.variant.FilterConfiguration.FilterType.ABI }
+                    ?.identifier
+            val abiPart = if (abi != null) "-$abi" else ""
             (output as? com.android.build.api.variant.impl.VariantOutputImpl)
                 ?.outputFileName
-                ?.set("ClearTravel$suffix.apk")
+                ?.set("ClearTravel$abiPart$suffix.apk")
         }
     }
 }
