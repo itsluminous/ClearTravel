@@ -45,6 +45,28 @@ class OcrDatesTest {
     }
 
     @Test
+    fun `parses ISO yyyy-MM-dd`() {
+        assertThat(OcrDates.parseToIso("Your flight on 2026-06-12 departs at 06:35", today)).isEqualTo("2026-06-12")
+    }
+
+    @Test
+    fun `parses month-first prose MMM d, yyyy`() {
+        assertThat(OcrDates.parseToIso("Departure: Jun 12, 2026", today)).isEqualTo("2026-06-12")
+        assertThat(OcrDates.parseToIso("June 12th 2026", today)).isEqualTo("2026-06-12")
+    }
+
+    @Test
+    fun `parses two-digit year with month name`() {
+        assertThat(OcrDates.parseToIso("to VNS on 29 May 26.", today)).isEqualTo("2026-05-29")
+        assertThat(OcrDates.parseToIso("29-May-26", today)).isEqualTo("2026-05-29")
+    }
+
+    @Test
+    fun `flight numbers and times are not mistaken for dates`() {
+        assertThat(OcrDates.parseToIso("flight QP 1421 PNR X4F18V dep 06:35", today)).isNull()
+    }
+
+    @Test
     fun `invalid calendar day returns null`() {
         assertThat(OcrDates.parseToIso("32-13-2025", today)).isNull()
     }
