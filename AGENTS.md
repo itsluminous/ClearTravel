@@ -17,11 +17,11 @@ Package root: `com.itsluminous.cleartravel`.
 
 | Module | Contents | Status |
 |---|---|---|
-| `app` | Hilt application, MainActivity (single-activity Compose), bottom bar (Trips / Journeys / Checklist / Documents / Menu), NavHost, Journeys Trains\|Flights segmented composition, deep links, launcher icon, manifest (Maps key placeholder), androidTest e2e suite (4 classes, Hilt test modules) | done |
+| `app` | Hilt application, MainActivity (single-activity Compose), bottom bar (Trips / Journeys / Checklist / Documents / Menu), NavHost, Journeys Trains\|Flights segmented composition, deep links, share-sheet intakes (`ui/intake`: shared FILE → boarding pass / ticket / confirmation; shared TEXT → train or flight, ADR-042), launcher icon, manifest (Maps key placeholder), androidTest e2e suite (4 classes, Hilt test modules) | done |
 | `core:designsystem` | `ClearTravelTheme` (dynamic color + #0B57D0 seed fallback), typography ≥16sp body, `EmptyState`, `ChipRow`, `FullWidthFilterRow`/`FullWidthFilterChip`, `LocalDatePickerDialog`, `DateFormats`, `ExplainableIcon`, `ClearTravelCard`, `ClearTravelFab`, `TextEditDialog`, `PasswordField`, reorderable-list helpers, `ShellChromeController` seam, `DocumentViewerScreen` (shared image/PDF viewer: zoom/rotate, fullscreen, landscape rail; ADR-030/034), `CardShare` (off-screen card renderer + share intents, ADR-039) — anything two features need lives here (ADR-036) | done |
 | `core:model` | `SyncableEntity` (UUID + updatedAt + tombstone, ADR-002), `EntityIds`, `ThemeMode`, domain models/enums — **contract: changes need an ADR** | done |
 | `core:database` | Room entities/DAOs/converters, `ClearTravelDatabase` (schema v3: v2 `train_coaches`, v3 `travel_documents`; committed `schemas/` + `MigrationTest`) — **contract: changes need an ADR**. Encryption lives BELOW it (SQLCipher factory in `core:data`), so schemas and DAO tests are untouched | done |
-| `core:data` | Repository interfaces + Room-backed impls, `TrainStatusProvider`/`FlightStatusProvider` contracts (Hilt-bound), settings DataStore (+ `lockTiming`, `backupSchedule`), backup export/merge — format v2 password envelope (ADR-015/031, `docs/backup-format.md`; ADR-040 derived built-in preset item ids + seeded-duplicate collapse on import), `JourneyAddRequestBus` cross-tab seam (ADR-028), `security/`: `VaultKeyedOpenHelperFactory` (lazy SQLCipher), plaintext→encrypted DB + file migrations, `AppFileLayout`, `SecureStorageInitializer`, `share/`: ADR-039 share-link codec (`ShareLinkCodec`, payload DTOs, mappers) + `SharedContentImporter` (id-stable upsert) | done |
+| `core:data` | Repository interfaces + Room-backed impls, `TrainStatusProvider`/`FlightStatusProvider` contracts (Hilt-bound), settings DataStore (+ `lockTiming`, `backupSchedule`), backup export/merge — format v2 password envelope (ADR-015/031, `docs/backup-format.md`; ADR-040 derived built-in preset item ids + seeded-duplicate collapse on import), `JourneyAddRequestBus` cross-tab seam (ADR-028), `intake/SharedTextClassifier` train-vs-flight preselection for shared text (ADR-042), `security/`: `VaultKeyedOpenHelperFactory` (lazy SQLCipher), plaintext→encrypted DB + file migrations, `AppFileLayout`, `SecureStorageInitializer`, `share/`: ADR-039 share-link codec (`ShareLinkCodec`, payload DTOs, mappers) + `SharedContentImporter` (id-stable upsert) | done |
 | `core:security` | ADR-031: `KeyVault` (random DEK wrapped by PBKDF2 password KEK + optional biometric Keystore key; `vault.json`), `LocalFileCipher` (CTEF chunked AES-GCM), `PortableCipher` (CTEB password envelope for backups/Drive), `BiometricKeyWrapper`/`BiometricUnlock`, `AppLockController` + `LockTiming`. Pure JVM except the Keystore/BiometricPrompt wrappers; never depends on data/database | done |
 | `core:notifications` | Channels (trains/flights/reminders), builders, deep links, POST_NOTIFICATIONS permission gate | done |
 | `core:google` | Google linking (Credential Manager), Calendar sync (dedicated "Clear Travel" calendar), Drive uploads/backups + restore ladder, sync workers, ADR-037 scheduled automatic backup (`ScheduledBackupWorker`/`ScheduledBackupScheduler`, local always + Drive when enabled) | done (needs-user-setup: `GOOGLE_WEB_CLIENT_ID`, see `docs/google-setup.md`) |
@@ -29,7 +29,7 @@ Package root: `com.itsluminous.cleartravel`.
 | `core:ocr` | PDF→bitmap→preprocess→ML Kit text recognition + BCBP barcode decode; pure extraction functions + OCR-text fixtures | done |
 | `core:testing` | `MainDispatcherRule`, generic `inMemoryDatabase<T>()`, `Fixtures` builders — exposed as MAIN source | done |
 | `feature:trains` | Train tickets CRUD, redesigned cards (ADR-020), detail sheet, PNR refresh (foreground WebView, user-solved captcha; injected `RuleRegistry`), SMS/OCR/PNR-link prefill + de-duplication (ADR-024), hands-free route fetch (ixigo primary / erail fallback) + offline route page (ADR-019), seat map from `train_coaches` + seat-layout data files (ADR-022), ticket share image + PNR link, archive | done (on-device validated, `docs/validation-report.md`) |
-| `feature:flights` | Flight CRUD (date is picker-only), boarding-pass + booking-confirmation import (ADR-017), de-duplication (ADR-025), status check WebView: airline rule → Google flight-status card fallback (`GoogleFlightsExtractor`, ADR-026) → web search, failure banner/retry + outcome line, check-in windows data, card quick actions (refresh / window-gated web check-in / share image + add-data link, ADR-039), WorkManager polling (EntryPoint workers, ADR-013) + notifications | done (on-device validated; Air India + Google rules verified live) |
+| `feature:flights` | Flight CRUD (date is picker-only), boarding-pass + booking-confirmation import (ADR-017), SMS/email text prefill (`text/FlightTextParser` driven by `assets/airline-sms-rules.json` + `flight-sms/` fixtures, paste dialog + shared-text entry `FlightsEntryRequest.Text`, ADR-042), de-duplication (ADR-025), status check WebView: airline rule → Google flight-status card fallback (`GoogleFlightsExtractor`, ADR-026) → web search, failure banner/retry + outcome line, check-in windows data, card quick actions (refresh / window-gated web check-in / share image + add-data link, ADR-039), WorkManager polling (EntryPoint workers, ADR-013) + notifications | done (on-device validated; Air India + Google rules verified live) |
 | `feature:itinerary` | Trips tab: trips, day-grouped items (auto-sort by time + drag override, ADR-029), timeline + Google Maps view (markers only), location picker with Nominatim place search + platform-Geocoder fallback (ADR-035), Google Maps link intake (ADR-029 D), commute legs linked to journeys incl. add-from-form via `JourneyAddRequestBus` (ADR-028), share trip as self-contained link (ADR-039) | done (map needs-user-setup: `MAPS_API_KEY` + Play-services device) |
 | `feature:checklist` | Checklist tab: per-trip checklists, preset templates + manager, share checklist as self-contained link + `ChecklistLanding` hook (ADR-039) | done |
 | `feature:documents` | Documents tab: travel documents (passport, visa, …) as encrypted local files with typed labels + expiry, add via system picker, bottom-docked live search (ADR-033), shared viewer, edit/delete (ADR-027; local-only, Drive sync is a follow-up) | done (device-validated: `docs/validation-report.md`, ADR-030/033/034 runs) |
@@ -40,8 +40,10 @@ Package root: `com.itsluminous.cleartravel`.
 `core:designsystem` reads document bytes only through its `DocumentFileReader` seam
 (`LocalDocumentFileReader`, installed by the app shell with the decrypting reader);
 cross-feature interaction goes through `core:data` contracts (e.g. the ADR-028
-`JourneyAddRequestBus` + `ItineraryRepository.observeItemsLinkedToJourney`) and the
-app shell's landing hooks (`JourneysDeepLink`, `TripsLanding`, `ChecklistLanding`). The app module is the
+`JourneyAddRequestBus` + `ItineraryRepository.observeItemsLinkedToJourney`, the ADR-042
+`SharedTextClassifier`) and the app shell's landing hooks (`JourneysDeepLink`,
+`TripsLanding`, `ChecklistLanding`) and entry requests (`TrainsEntryRequest`,
+`FlightsEntryRequest`). The app module is the
 only composition point (Journeys tab, cross-tab coordination). `core:designsystem` never depends on
 data/database/features. UI never touches Room DAOs or WebView engines directly.
 
@@ -76,8 +78,9 @@ exist and the full gate passes.
 3. **UUID + `updated_at` + tombstones on every entity** (ADR-002): implement
    `SyncableEntity`, bump `updated_at` on every write, soft-delete only. Required by
    backup merge — never add an entity without these.
-4. **Behavior-as-data** (ADR-003): scrape rules, check-in windows, checklist presets,
-   OCR patterns are versioned data files, each with its own fixture test. A rule file
+4. **Behavior-as-data** (ADR-003): scrape rules, check-in windows, airline SMS/email
+   rules, checklist presets, OCR patterns are versioned data files, each with its own
+   fixture test. A rule file
    without a fixture fails CI.
 5. **Contract freeze**: changes to `core:model`, `core:database`, or repository
    interfaces in `core:data` require an ADR entry in `docs/decisions.md` in the same

@@ -17,7 +17,10 @@ optional Google account link for Calendar/Drive sync.
   ticket as an image + PNR link, detail bottom sheets, archive, deep-linkable
   notifications.
 - **Flight journeys** — add flights manually (date from a picker), import a boarding
-  pass (BCBP barcode / OCR) or a booking confirmation (e-ticket PDF/image); duplicates
+  pass (BCBP barcode / OCR) or a booking confirmation (e-ticket PDF/image), or **paste
+  the airline's SMS/email** — airline, flight number, PNR, route, date, times and
+  terminal are read from the text by a rule-driven parser (per-airline patterns and
+  code→name table in a versioned data file) into the form for review; duplicates
   are refused. One-tap "Save & check status" opens the airline's status page in a
   WebView, auto-fills the query, dismisses consent walls, and extracts status / gate /
   terminal / times into the app — and for every airline without a dedicated rule the
@@ -36,6 +39,11 @@ optional Google account link for Calendar/Drive sync.
   sheet lists the trips it is part of, one tap apart.
 - **Packing checklists** — per-trip checklists built from editable preset templates
   (append multiple presets, track packed counts).
+- **Share any travel text into the app** — share an SMS or email from another app and
+  Clear Travel asks "What's this text?" with *Train ticket* or *Flight* pre-selected by a
+  classifier (10-digit PNR / IRCTC / train number vs. flight number / 6-char PNR /
+  airline names / IATA pairs); you confirm or switch, and the matching form opens
+  prefilled.
 - **Share trips, checklists and flights as links** — a trip (with its whole
   itinerary), a checklist (with its check states) or a flight is shared as a
   self-contained `cleartravel.itsluminous.com/share/…` link (no server involved).
@@ -90,8 +98,9 @@ Key principles (full details in `AGENTS.md` and `docs/decisions.md`):
 
 - **Offline-first** — every screen reads from Room via Flows and renders with no
   network; status fetches write to Room, never block the UI.
-- **Behavior-as-data** — scrape rules, check-in windows, checklist presets and OCR
-  patterns are versioned JSON/data files, each guarded by a recorded fixture test.
+- **Behavior-as-data** — scrape rules, check-in windows, airline SMS/email rules,
+  checklist presets and OCR patterns are versioned JSON/data files, each guarded by a
+  recorded fixture test.
 - **Syncable entities** — every entity carries a UUID, `updated_at` and a tombstone,
   enabling conflict-free backup merges and Drive restore.
 - **Feature isolation** — feature modules depend only on `core:*`; cross-feature

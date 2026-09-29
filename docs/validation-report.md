@@ -1015,3 +1015,37 @@ Notes:
   gesture on this AVD; while the keyboard is up the first swipe is consumed as
   "hide keyboard" (both before and after the fix) — the data loss happened on the
   next one.
+
+## Flight from SMS/email text + train-or-flight shared-text intake (2026-09-29 21:50–22:20 IST, emulator Play_36_Pixel, API 36, ADR-042)
+
+Scope: the new fourth flight add path (paste airline text) and the shared-TEXT intake
+that guesses train vs. flight with a user override, mirroring the shared-FILE intake.
+The Play AVD (README demo data, password `TestPass123`) was booted for the run; every
+assertion is `uiautomator dump` text (radio state read from the `checkable`/`checked`
+attributes of the selectable rows — the M3 `RadioButton` node itself never reports
+`checked`). The shared text was injected with
+`adb shell am start -a android.intent.action.SEND -t text/plain --es android.intent.extra.TEXT '…' -n com.itsluminous.cleartravel/.MainActivity`.
+The one flight added (`QP 1421`) was deleted at the end so the demo data is intact.
+
+| # | Check | Verdict | Evidence |
+|---|---|---|---|
+| a1 | **Share the Akasa sample** ("Dear Bandana … Akasa Air flight QP 1421 with PNR X4F18V from BLR (Terminal 1) to VNS on 29 May 26 …") → dialog *What's this text?* with the full text as preview, *Choose how to import the shared text.*, rows **Train ticket** / **Flight** + *Suggested* under Flight; the Flight row `[183,1368][897,1518]` is `checked=true`, Train `checked=false`; buttons Cancel / Continue | **PASS** (Flight pre-selected) | dump |
+| a2 | *Continue* → **Add flight** form: banner *Filled from pasted text - review carefully before saving*, *Departure terminal from the text: 1*, fields `Airline (IATA)=QP`, `Flight number=1421`, `Date=2026-05-29`, `PNR / booking reference=X4F18V`, `From (IATA)=BLR`, `To (IATA)=VNS` — each with *High confidence*; Seat / Cabin / times empty, no error | **PASS** | dump |
+| a3 | *Save* → the shell lands on Journeys/Flights with the detail sheet open: `QP 1421`, *Scheduled*, `Fri, 29 May 2026`, `BLR → VNS`, Departure *Terminal: 1*, PNR `X4F18V`; back → card `QP 1421` / `BLR → VNS` on the Flights list | **PASS** | dumps |
+| b1 | **Share the IRCTC SMS fixture** (`PNR:8524167890,TRN:12951,DOJ:20-09-25,3A,NDLS-BCT,…`) → same dialog, *Suggested* under **Train ticket**, Train row `checked=true` | **PASS** (Train pre-selected) | dump |
+| b2 | *Continue* → **Add train ticket** form prefilled exactly as before ADR-042: PNR `8524167890`, train `12951`, `Sep 20, 2025`, `NDLS`→`BCT`, class `3A`, passenger `RAHUL SHARMA` coach `B4` berth `32` — the existing path is unchanged; back → list still shows `12951 - Mumbai Rajdhani` (demo) | **PASS** | dump |
+| c1 | Share the Akasa text again → **tap *Train ticket*** → Train row `checked=true`, Flight `checked=false` while *Suggested* stays under Flight → *Continue* → **Add train ticket** (blank: the IRCTC parser finds no 10-digit PNR / TRN) — routing follows the user's pick, not the suggestion | **PASS** | dumps |
+| c2 | Share the IRCTC text → **tap *Flight*** → *Continue* → **Add flight** opens blank and the snackbar **"Could not read a flight from that text"** shows (`[74,2210][769,2273]`, ~4 s) — the no-match fallback, no crash, no partial guess | **PASS** | dump |
+| d1 | Flights FAB → add sheet lists *Enter manually* / **Paste SMS or email text** (*Prefill the form from an airline message*) / *Import boarding pass* / *Import booking confirmation* | **PASS** | dump |
+| d2 | *Paste SMS or email text* → dialog **Paste flight text**, field *Airline SMS or email text*, Cancel / *Prefill form*; typed `IndiGo: Your flight 6E 2001 from DEL to GOI on 12 Jun 2026 departs 06:35. PNR: ABC123. Seat 14A.` → *Prefill form* → form: `6E`, `2001`, `2026-06-12`, `ABC123`, seat `14A`, `DEL`, `GOI`, departure time `6:35` | **PASS** | dumps |
+| d3 | **ADR-025 through the paste path**: paste `Akasa Air flight QP 1421 with PNR X4F18V from BLR to VNS on 29 May 26.` (the flight saved in a3) → *Save* → back on the list with the snackbar **"Flight already exists"** + *View*; still exactly one `QP 1421` card | **PASS** | dump |
+| e | Cleanup: `QP 1421` → detail → *Delete* → "Delete this flight?" → Delete → list shows only the demo flights (`AI 131`, `UK 955`, …) | done | dump |
+| f | `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → BUILD SUCCESSFUL; unit **1131/1131**, 0 failures (was 1090: +7 flight-SMS fixtures, +14 parser behaviour, +7 classifier, +5 text-intake VM, +3 flight form VM, +1 form state, +4 `OcrDates`) | PASS | `flight-sms.log` (git-ignored) |
+| g | `connectedDebugAndroidTest` on Android_16_AOSP_Medium → **26/26 PASS** (was 23: +3 `SharedTextIntakeE2eTest` — shared flight text → Flight pre-selected → prefilled form → Save → card; shared train text → Train pre-selected → train form; flight text overridden to Train → train form; `core:ocr` harness SKIPPED as usual). Play AVD shut down afterwards | PASS | `connected.log` (git-ignored) |
+
+Notes:
+- `adb shell input text` cannot type `-` or `(` reliably, so the paste-path messages
+  were phrased with spaces and `from … to …`; the `-`/`→`/`(T1)` notations are covered
+  by the unit fixtures instead.
+- The intake dialog is a pure choice, so it keeps the default tap-outside dismissal
+  (ADR-041); the paste dialog uses `InputDialogProperties` like the train one.

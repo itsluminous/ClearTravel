@@ -2715,3 +2715,90 @@ UiAutomation tap at screen x = 8 px outside the dialog window → dialog and typ
 still there → back → gone), `E2e.tapScreen` helper. No existing test relied on
 tap-outside dismissal or on the old inset layout. Device validation in
 `docs/validation-report.md` (2026-09-23).
+
+## ADR-042 — Flight from SMS/email text + train-or-flight intake for shared text (2026-09-29)
+
+**Context.** Trains could be added from a pasted or shared IRCTC SMS/email (ADR-024);
+flights only from files (boarding pass / booking confirmation, ADR-017) or a share link
+(ADR-039). Airline confirmations arrive as text too ("Akasa Air flight QP 1421 with PNR
+X4F18V from BLR (Terminal 1) to VNS on 29 May 26"), and every `text/plain` share that
+was neither a Clear Travel link nor a Maps link went straight to the TRAIN form — a
+shared flight SMS opened a blank train form with a "couldn't read" notice. The shared
+FILE intake already guesses boarding pass / ticket / confirmation and lets the user
+choose (`SharedFileIntakeDialog`); shared TEXT needed the same.
+
+**Decisions.**
+
+1. **The flight text parser lives in `feature:flights`, rule-driven (ADR-003).**
+   `text/FlightTextParser` is pure: every regex comes from
+   `assets/airline-sms-rules.json` (`AirlineSmsRules`: airline code → display name +
+   the aliases airlines write in messages, stop-word lists that keep "ON 29"/"PNR" from
+   passing as codes, ordered pattern lists per field; a per-airline `patterns` block is
+   PREPENDED once the airline is recognised — IndiGo/AIX "PNR/Booking Ref" is the first
+   use). Confidence is decided by WHICH list hit: labeled → HIGH, structural → MEDIUM,
+   whole-text fallback → LOW. Codes are matched case-sensitively, keywords
+   case-insensitively inside the rules. Structure signal: no flight number, no labeled
+   PNR, no route and no known airline → `FlightTextExtraction.EMPTY`, never a guess from
+   a stray date. Output type `FlightTextExtraction` reuses `core:ocr`'s `ExtractedField`
+   / `ExtractionConfidence`; dates go through `core:ocr`'s `OcrDates` (now PUBLIC and
+   extended with ISO `2026-06-12`, month-first `Jun 12, 2026` and ordinal days) instead
+   of a second date table. Fixtures: `test/resources/flight-sms/*.txt` + `.expected.json`
+   (Akasa sample, IndiGo, Air India, Vistara, SpiceJet, the generic "Your flight AI 202
+   DEL-BOM…" line, an OTA e-mail) plus garbage and an IRCTC SMS asserting EMPTY; a
+   behaviour test compiles every regex in the asset. Terminals are read too
+   (`depTerminal`/`arrTerminal`, arrival when the 30 chars before the mention name the
+   arrival airport or say "arriv…"); the passenger name is extracted but the form has no
+   such field, so it is dropped at prefill.
+   *Why not `core:ocr`?* The IRCTC SMS parser does live there (historical), but the
+   airline table already lives in `feature:flights` (`checkin-windows.json`) and the
+   task's rule is "parsers stay in features"; the shared pieces (`ExtractedField`,
+   `OcrDates`) are what `core:ocr` contributes.
+2. **Fourth flight add path = the train one, mirrored.** `FlightListScreen`'s add sheet
+   gains "Paste SMS or email text" → `PasteTextDialog` (moved from a private copy in
+   `feature:trains` to `core:designsystem`, ADR-036; `InputDialogProperties`, ADR-041)
+   → `FlightsRoute.Form(sharedText)` → `FlightFormViewModel.startFromText` →
+   `FlightFormState.fromTextExtraction` (confidence markers, `fromText` banner, times
+   re-formatted `H:mm`, `returnLegHint` from `additionalFlights`). Unrecognised fields
+   stay empty silently; only an EMPTY extraction emits `FlightFormEvent.PrefillEmpty`
+   → snackbar "Could not read a flight from that text" on the (blank) form, whose
+   `Scaffold` now hosts a `SnackbarHost`. Save runs the ADR-025 duplicate guard like
+   every other path. Terminals are NOT form fields (the status check owns them): the
+   banner prints "Departure/Arrival terminal from the text: N" so nothing reaches the
+   journey unseen; `toJourney` copies them, merge-on-edit keeps the existing value when
+   the draft's is blank.
+3. **Shared text is classified in `core:data`, routed by the app shell.**
+   `core:data/intake/SharedTextClassifier` (pure, regex-only, unit-tested on both
+   samples, all fixtures and ambiguous cases) scores TRAIN evidence (10-digit PNR
+   labeled +4 / bare +2, IRCTC +3, "train" +2, labeled 5-digit train no +3 / bare +1,
+   IRCTC class code +1, DOJ +2, coach/berth/CNF/RAC/WL +1, station pair with a 4–5-letter
+   member +1) against FLIGHT evidence (flight number with a non-stop-word code +3,
+   labeled 6-char alphanumeric PNR +3, airline name +3, "flight"/"airline" +2,
+   airport/boarding pass/terminal/gate/web check-in +1, IATA pair `DEL-BOM` /
+   `from BLR to VNS` +2). Higher score wins; a tie — including no evidence — is TRAIN,
+   the pre-ADR-042 destination. It is a preselection, not a parser: the confirmed
+   feature's own parser does the reading.
+   `app/ui/intake`: `SharedTextRoute.TrainText` → `JourneyText`; `MainActivity` parks it
+   in `pendingSharedText` and `SharedTextIntakeHost` shows `SharedTextIntakeDialog`
+   ("What's this text?", a 3-line preview of the text, radio rows Train ticket | Flight
+   with the classifier's pick preselected and labelled "Suggested", Continue / Cancel —
+   the file intake's look, minus the async "detecting" phase). `SharedTextIntakeViewModel`
+   (plain `ViewModel`, no Hilt) owns start / select / confirm / reset and yields
+   `TextIntakeRoute.Train(text)` → `TrainsEntryRequest.Text` (unchanged path) or
+   `TextIntakeRoute.Flight(text)` → the NEW `FlightsEntryRequest.Text` →
+   `FlightsExternalEntry` → `FlightFormScreen(sharedText)`. A pure choice dialog, so it
+   keeps the default tap-outside dismissal (ADR-041). Feature modules still never see
+   each other: the shell composes the two routes.
+
+**Contract touches (additive).** `feature:flights`: `FlightsEntryRequest.Text`,
+`FlightFormScreen(sharedText)`, `FlightListScreen(onImportText)`, `FlightFormEvent.PrefillEmpty`,
+`FlightFormState.fromText/depTerminal/arrTerminal`. `core:data`: new `intake` package
+(`SharedTextKind`, `SharedTextScores`, `SharedTextClassifier`). `core:ocr`: `OcrDates`
+public + two formats. `core:designsystem`: `PasteTextDialog`. `app`: `SharedTextRoute.JourneyText`
+(renamed from `TrainText`). No schema, repository or backup change.
+
+**Consequences.** e2e `SharedTextIntakeE2eTest` (shared flight text → intake with Flight
+preselected → Continue → prefilled form → Save → card; shared train text → Train
+preselected → train form prefilled; flight text overridden to Train → train form).
+Device validation in `docs/validation-report.md` (2026-09-29). Follow-ups: a passenger
+field on the flight form would let the parsed name land; the `core:ocr`
+`BookingConfirmationExtractor` could adopt the same rules asset for airline aliases.
