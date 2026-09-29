@@ -23,6 +23,9 @@
     <string name="intake_option_booking_confirmation">Flight booking confirmation</string>
     <string name="intake_confirm">Continue</string>
     <string name="intake_cancel">Cancel</string>
+    <string name="intake_text_title">What\'s this text?</string>
+    <string name="intake_text_message">Choose how to import the shared text.</string>
+    <string name="intake_option_flight">Flight</string>
 
     <!-- ADR-039: shared trip / checklist import (confirm before writing). -->
     <string name="share_import_working_title">Reading shared link…</string>

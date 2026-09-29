@@ -19,16 +19,18 @@ class SharedTextRouteTest {
     }
 
     @Test
-    fun `IRCTC text keeps routing to the train form`() {
+    fun `journey text routes to the train-or-flight intake`() {
         val sms = "PNR:1234567890,TRN:12627,DOJ:20-10-26,SL,SBC-NDLS,Dep:20:00"
+        val flight = "Your flight AI 202 DEL-BOM on 12-Jun-2026, PNR ABC123"
 
-        assertThat(routeSharedText(sms)).isEqualTo(SharedTextRoute.TrainText(sms))
+        assertThat(routeSharedText(sms)).isEqualTo(SharedTextRoute.JourneyText(sms))
+        assertThat(routeSharedText(flight)).isEqualTo(SharedTextRoute.JourneyText(flight))
     }
 
     @Test
     fun `other links are not mistaken for maps links`() {
         assertThat(routeSharedText("https://www.irctc.co.in/nget/train-search"))
-            .isInstanceOf(SharedTextRoute.TrainText::class.java)
+            .isInstanceOf(SharedTextRoute.JourneyText::class.java)
     }
 
     @Test

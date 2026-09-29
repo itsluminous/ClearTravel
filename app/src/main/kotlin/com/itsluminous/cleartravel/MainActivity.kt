@@ -54,7 +54,10 @@ import com.itsluminous.cleartravel.ui.ThemeViewModel
 import com.itsluminous.cleartravel.ui.intake.IntakeRoute
 import com.itsluminous.cleartravel.ui.intake.SharedFileIntakeDialog
 import com.itsluminous.cleartravel.ui.intake.SharedFileIntakeViewModel
+import com.itsluminous.cleartravel.ui.intake.SharedTextIntakeDialog
+import com.itsluminous.cleartravel.ui.intake.SharedTextIntakeViewModel
 import com.itsluminous.cleartravel.ui.intake.SharedTextRoute
+import com.itsluminous.cleartravel.ui.intake.TextIntakeRoute
 import com.itsluminous.cleartravel.ui.intake.routeSharedText
 import com.itsluminous.cleartravel.ui.security.EncryptedDocumentFileReader
 import com.itsluminous.cleartravel.ui.share.ShareImportHost
@@ -102,14 +105,17 @@ class MainActivity : FragmentActivity() {
     private val pendingTripsLanding = mutableStateOf<TripsLanding?>(null)
 
     /**
-     * Pending external entry into a feature form — shared IRCTC text or a confirmed
-     * shared file for trains, a PNR share link (ADR-020), or a confirmed shared file
-     * for flights. Cleared when the hosted form closes.
+     * Pending external entry into a feature form — confirmed shared text or file for
+     * trains, a PNR share link (ADR-020), or confirmed shared text/file or a share
+     * link for flights. Cleared when the hosted form closes.
      */
     private val pendingEntry = mutableStateOf<ExternalEntry?>(null)
 
     /** A shared image/PDF awaiting the "What's this file?" intake dialog. */
     private val pendingSharedFile = mutableStateOf<Uri?>(null)
+
+    /** Shared SMS/email text awaiting the "What's this text?" train-or-flight intake (ADR-042). */
+    private val pendingSharedText = mutableStateOf<String?>(null)
 
     /** Shared text carrying a Google Maps link, awaiting the "Add place" intake (ADR-029 part D). */
     private val pendingMapsLink = mutableStateOf<String?>(null)
@@ -138,6 +144,7 @@ class MainActivity : FragmentActivity() {
 
         val themeViewModel: ThemeViewModel by viewModels()
         val intakeViewModel: SharedFileIntakeViewModel by viewModels()
+        val textIntakeViewModel: SharedTextIntakeViewModel by viewModels()
         val pickCoordinator: JourneyPickCoordinator by viewModels()
         val shareImportViewModel: ShareImportViewModel by viewModels()
         setContent {
@@ -159,7 +166,7 @@ class MainActivity : FragmentActivity() {
                             startupTasks.runOnAppOpen()
                         },
                     ) {
-                        ShellContent(themeViewModel, intakeViewModel, pickCoordinator, shareImportViewModel)
+                        ShellContent(themeViewModel, intakeViewModel, textIntakeViewModel, pickCoordinator, shareImportViewModel)
                     }
                 }
             }
@@ -171,6 +178,7 @@ class MainActivity : FragmentActivity() {
     private fun ShellContent(
         themeViewModel: ThemeViewModel,
         intakeViewModel: SharedFileIntakeViewModel,
+        textIntakeViewModel: SharedTextIntakeViewModel,
         pickCoordinator: JourneyPickCoordinator,
         shareImportViewModel: ShareImportViewModel,
     ) {
@@ -259,6 +267,16 @@ class MainActivity : FragmentActivity() {
             },
             onCancelled = { pendingSharedFile.value = null },
         )
+        // ADR-042: shared SMS/email → train or flight (classifier preselects, user confirms).
+        SharedTextIntakeHost(
+            viewModel = textIntakeViewModel,
+            sharedText = pendingSharedText.value,
+            onRouted = { route ->
+                pendingSharedText.value = null
+                pendingEntry.value = route.toExternalEntry()
+            },
+            onCancelled = { pendingSharedText.value = null },
+        )
         // ADR-029 part D: the added place's trip is shown in the Trips tab.
         MapsLinkIntakeHost(
             sharedText = pendingMapsLink.value,
@@ -278,7 +296,7 @@ class MainActivity : FragmentActivity() {
     /**
      * Routes an arriving intent: ACTION_SEND text (a Clear Travel share link → the
      * share import, ADR-039; a Google Maps link → the "Add place" intake, ADR-029;
-     * anything else → train SMS form directly), ACTION_SEND image/PDF (→ intake
+     * anything else → the train-or-flight text intake, ADR-042), ACTION_SEND image/PDF (→ intake
      * dialog), ACTION_VIEW share link (→ import confirm / prefilled flight form) or
      * PNR link (→ train form carrying the PNR), else a notification deep link.
      */
@@ -290,7 +308,7 @@ class MainActivity : FragmentActivity() {
                     when (val route = routeSharedText(intent.getStringExtra(Intent.EXTRA_TEXT))) {
                         is SharedTextRoute.ShareLink -> consumeShareLink(route.link)
                         is SharedTextRoute.MapsLink -> pendingMapsLink.value = route.text
-                        is SharedTextRoute.TrainText -> pendingEntry.value = ExternalEntry.Trains(TrainsEntryRequest.Text(route.text))
+                        is SharedTextRoute.JourneyText -> pendingSharedText.value = route.text
                         null -> Unit
                     }
                 } else {
@@ -357,6 +375,46 @@ private fun IntakeRoute.toExternalEntry(): ExternalEntry =
         is IntakeRoute.FlightBoardingPass -> ExternalEntry.Flights(FlightsEntryRequest.BoardingPass(uri))
         is IntakeRoute.FlightBookingConfirmation -> ExternalEntry.Flights(FlightsEntryRequest.BookingConfirmation(uri))
     }
+
+private fun TextIntakeRoute.toExternalEntry(): ExternalEntry =
+    when (this) {
+        is TextIntakeRoute.Train -> ExternalEntry.Trains(TrainsEntryRequest.Text(text))
+        is TextIntakeRoute.Flight -> ExternalEntry.Flights(FlightsEntryRequest.Text(text))
+    }
+
+/**
+ * Drives the "What's this text?" intake (ADR-042): classifies when shared text
+ * arrives, shows the dialog while active, and hands the confirmed route back.
+ */
+@Composable
+private fun SharedTextIntakeHost(
+    viewModel: SharedTextIntakeViewModel,
+    sharedText: String?,
+    onRouted: (TextIntakeRoute) -> Unit,
+    onCancelled: () -> Unit,
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    LaunchedEffect(sharedText) {
+        if (sharedText != null) viewModel.start(sharedText) else viewModel.reset()
+    }
+    LaunchedEffect(state.route) {
+        state.route?.let { route ->
+            onRouted(route)
+            viewModel.reset()
+        }
+    }
+    if (state.active && state.route == null) {
+        SharedTextIntakeDialog(
+            state = state,
+            onSelect = viewModel::select,
+            onConfirm = viewModel::confirm,
+            onCancel = {
+                viewModel.reset()
+                onCancelled()
+            },
+        )
+    }
+}
 
 /**
  * Drives the "What's this file?" intake: starts detection when a shared file
