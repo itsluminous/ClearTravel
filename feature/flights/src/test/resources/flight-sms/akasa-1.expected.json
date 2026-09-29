@@ -1,0 +1,38 @@
+{
+  "passengerName": {
+    "value": "Bandana",
+    "confidence": "MEDIUM"
+  },
+  "pnr": {
+    "value": "X4F18V",
+    "confidence": "HIGH"
+  },
+  "carrier": {
+    "value": "QP",
+    "confidence": "HIGH"
+  },
+  "airlineName": {
+    "value": "Akasa Air",
+    "confidence": "HIGH"
+  },
+  "flightNumber": {
+    "value": "1421",
+    "confidence": "HIGH"
+  },
+  "fromAirport": {
+    "value": "BLR",
+    "confidence": "HIGH"
+  },
+  "toAirport": {
+    "value": "VNS",
+    "confidence": "HIGH"
+  },
+  "flightDate": {
+    "value": "2026-05-29",
+    "confidence": "HIGH"
+  },
+  "depTerminal": {
+    "value": "1",
+    "confidence": "MEDIUM"
+  }
+}

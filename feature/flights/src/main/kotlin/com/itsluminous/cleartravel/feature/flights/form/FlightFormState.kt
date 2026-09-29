@@ -9,6 +9,7 @@ import com.itsluminous.cleartravel.core.ocr.model.BoardingPassExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassSource
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationSource
+import com.itsluminous.cleartravel.feature.flights.text.FlightTextExtraction
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
@@ -66,6 +67,15 @@ data class FlightFormState(
     val returnLegHint: Boolean = false,
     /** True when prefilled from a shared flight link (ADR-039) — drives the banner. */
     val fromSharedLink: Boolean = false,
+    /** True when prefilled from pasted/shared SMS or email text (ADR-042) — drives the banner. */
+    val fromText: Boolean = false,
+    /**
+     * Terminals read from pasted text (ADR-042). Not editable in the form (they are
+     * provider fields the status check overwrites), but shown in the prefill banner so
+     * nothing reaches the journey unseen; blank = leave whatever the journey has.
+     */
+    val depTerminal: String = "",
+    val arrTerminal: String = "",
     val errors: Set<FlightFormError> = emptySet(),
 ) {
     val isEdit: Boolean get() = editingId != null
@@ -219,6 +229,58 @@ data class FlightFormState(
             )
         }
 
+        /**
+         * Prefill from pasted/shared SMS or email text (ADR-042) — confidence markers per
+         * field. Times arrive as `HH:mm` and are re-formatted the way the form shows
+         * them; the passenger name is dropped (the form has no such field).
+         */
+        fun fromTextExtraction(extraction: FlightTextExtraction): FlightFormState {
+            fun conf(field: com.itsluminous.cleartravel.core.ocr.model.ExtractedField) = field.confidence
+
+            fun timeText(field: com.itsluminous.cleartravel.core.ocr.model.ExtractedField): String =
+                field.value
+                    ?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+                    ?.format(TIME_FORMAT)
+                    .orEmpty()
+
+            return FlightFormState(
+                airlineIata =
+                    extraction.carrier.value
+                        .orEmpty()
+                        .uppercase(),
+                flightNumber = extraction.flightNumber.value.orEmpty(),
+                dateText = extraction.flightDate.value.orEmpty(),
+                pnr = extraction.pnr.value.orEmpty(),
+                seat = extraction.seat.value.orEmpty(),
+                cabinClass = extraction.cabinClass.value.orEmpty(),
+                depAirport =
+                    extraction.fromAirport.value
+                        .orEmpty()
+                        .uppercase(),
+                arrAirport =
+                    extraction.toAirport.value
+                        .orEmpty()
+                        .uppercase(),
+                depTimeText = timeText(extraction.depTime),
+                arrTimeText = timeText(extraction.arrTime),
+                depTerminal = extraction.depTerminal.value.orEmpty(),
+                arrTerminal = extraction.arrTerminal.value.orEmpty(),
+                confidences =
+                    mapOf(
+                        FlightField.AIRLINE to conf(extraction.carrier),
+                        FlightField.FLIGHT_NUMBER to conf(extraction.flightNumber),
+                        FlightField.DATE to conf(extraction.flightDate),
+                        FlightField.PNR to conf(extraction.pnr),
+                        FlightField.SEAT to conf(extraction.seat),
+                        FlightField.CABIN to conf(extraction.cabinClass),
+                        FlightField.DEP_AIRPORT to conf(extraction.fromAirport),
+                        FlightField.ARR_AIRPORT to conf(extraction.toAirport),
+                    ).filterValues { it != ExtractionConfidence.NONE },
+                fromText = true,
+                returnLegHint = extraction.additionalFlights > 0,
+            )
+        }
+
         /** PURE validation. Airline + flight number + date are mandatory; times optional. */
         fun validate(state: FlightFormState): Set<FlightFormError> =
             buildSet {
@@ -274,6 +336,8 @@ data class FlightFormState(
             arrAirport = airportOrEmpty(arrAirport),
             schedDep = instant(depTimeText),
             schedArr = instant(arrTimeText),
+            depTerminal = depTerminal.trim(),
+            arrTerminal = arrTerminal.trim(),
             boardingPassPath = existingPassPath,
             checkInUrl = checkInUrl,
         )

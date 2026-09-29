@@ -19,6 +19,7 @@ import com.itsluminous.cleartravel.feature.flights.FakeFlightRepository
 import com.itsluminous.cleartravel.feature.flights.checkin.AirlineCheckInInfo
 import com.itsluminous.cleartravel.feature.flights.checkin.CheckInRules
 import com.itsluminous.cleartravel.feature.flights.checkin.CheckInWindowSpec
+import com.itsluminous.cleartravel.feature.flights.text.AirlineSmsRulesFixture
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Before
@@ -56,8 +57,63 @@ class FlightFormViewModelTest {
                 importer,
                 bookingImporter,
                 FakeCheckInRuleSource(checkInRules),
+                AirlineSmsRulesFixture.parser(),
             )
     }
+
+    @Test
+    fun `startFromText prefills the form from an airline SMS with confidence markers`() =
+        runTest {
+            viewModel.startFromText(AirlineSmsRulesFixture.read("akasa-1.txt"))
+
+            val state = viewModel.formState.value
+            assertThat(state.airlineIata).isEqualTo("QP")
+            assertThat(state.flightNumber).isEqualTo("1421")
+            assertThat(state.pnr).isEqualTo("X4F18V")
+            assertThat(state.depAirport).isEqualTo("BLR")
+            assertThat(state.arrAirport).isEqualTo("VNS")
+            assertThat(state.dateText).isEqualTo("2026-05-29")
+            assertThat(state.depTerminal).isEqualTo("1")
+            assertThat(state.fromText).isTrue()
+            assertThat(state.confidences[FlightField.AIRLINE]).isEqualTo(ExtractionConfidence.HIGH)
+            assertThat(state.confidences[FlightField.PNR]).isEqualTo(ExtractionConfidence.HIGH)
+            // Nothing parsed for seat/cabin: those fields stay empty with no marker.
+            assertThat(state.seat).isEmpty()
+            assertThat(state.confidences).doesNotContainKey(FlightField.SEAT)
+            assertThat(FlightFormState.validate(state)).isEmpty()
+        }
+
+    @Test
+    fun `startFromText with no flight opens a blank form and reports PrefillEmpty`() =
+        runTest {
+            viewModel.events.test {
+                viewModel.startFromText("the quick brown fox jumps over the lazy dog")
+
+                assertThat(awaitItem()).isEqualTo(FlightFormEvent.PrefillEmpty)
+                assertThat(viewModel.formState.value).isEqualTo(FlightFormState())
+            }
+        }
+
+    @Test
+    fun `a text-prefilled flight saves its terminal and is refused as a duplicate the second time`() =
+        runTest {
+            viewModel.startFromText(AirlineSmsRulesFixture.read("akasa-1.txt"))
+            var saved: String? = null
+            viewModel.save { saved = it }
+            val journey = repository.getFlight(saved!!)!!
+            assertThat(journey.airlineIata).isEqualTo("QP")
+            assertThat(journey.flightNumber).isEqualTo("1421")
+            assertThat(journey.date).isEqualTo(LocalDate.of(2026, 5, 29))
+            assertThat(journey.depTerminal).isEqualTo("1")
+
+            viewModel.events.test {
+                viewModel.startFromText(AirlineSmsRulesFixture.read("akasa-1.txt"))
+                viewModel.save { error("must not save a duplicate") }
+
+                assertThat(awaitItem()).isEqualTo(FlightFormEvent.DuplicateFlight(existingFlightId = journey.id))
+                assertThat(repository.savedIds).hasSize(1)
+            }
+        }
 
     @Test
     fun `save rejects an invalid form and surfaces errors`() =

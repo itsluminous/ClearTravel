@@ -1,0 +1,42 @@
+{
+  "passengerName": {
+    "value": "Neha",
+    "confidence": "MEDIUM"
+  },
+  "pnr": {
+    "value": "ZX9K2L",
+    "confidence": "HIGH"
+  },
+  "carrier": {
+    "value": "SG",
+    "confidence": "HIGH"
+  },
+  "airlineName": {
+    "value": "SpiceJet",
+    "confidence": "HIGH"
+  },
+  "flightNumber": {
+    "value": "8195",
+    "confidence": "HIGH"
+  },
+  "fromAirport": {
+    "value": "BLR",
+    "confidence": "MEDIUM"
+  },
+  "toAirport": {
+    "value": "DEL",
+    "confidence": "MEDIUM"
+  },
+  "flightDate": {
+    "value": "2026-06-12",
+    "confidence": "HIGH"
+  },
+  "depTime": {
+    "value": "21:40",
+    "confidence": "MEDIUM"
+  },
+  "depTerminal": {
+    "value": "1",
+    "confidence": "MEDIUM"
+  }
+}

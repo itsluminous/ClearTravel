@@ -1,0 +1,102 @@
+{
+  "version": 1,
+  "notes": "Behavior-as-data (ADR-003/ADR-042): how flight SMS/email text is read. `airlines` maps IATA codes to display names + the aliases airlines write in messages (longest alias wins; a flight-number code beats an alias). `patterns` are Java regexes applied IN ORDER, first match wins; keywords use inline case-insensitive groups `(?i:...)` while IATA/PNR/flight codes stay case-sensitive so ordinary words never pass as codes. Group 1 is the value (route/flight patterns: group 1 = from/carrier, group 2 = to/number; time patterns: group 2 = optional am/pm). A per-airline `patterns` block is PREPENDED to the generic list once that airline is recognised. Every fixture under src/test/resources/flight-sms is the regression test for this file.",
+  "airlines": {
+    "QP": { "name": "Akasa Air", "aliases": ["Akasa Air", "Akasa"] },
+    "6E": {
+      "name": "IndiGo",
+      "aliases": ["IndiGo", "Indigo"],
+      "patterns": {
+        "labeledPnr": ["(?i:\\bPNR\\s*/\\s*Booking\\s+Ref(?:erence)?)\\s*[:#\\-]?\\s*([A-Z0-9]{6})\\b"]
+      }
+    },
+    "AI": { "name": "Air India", "aliases": ["Air India"] },
+    "IX": {
+      "name": "Air India Express",
+      "aliases": ["Air India Express", "AIX"],
+      "patterns": {
+        "labeledPnr": ["(?i:\\bPNR\\s*/\\s*Booking\\s+Ref(?:erence)?)\\s*[:#\\-]?\\s*([A-Z0-9]{6})\\b"]
+      }
+    },
+    "UK": { "name": "Vistara", "aliases": ["Vistara"] },
+    "SG": { "name": "SpiceJet", "aliases": ["SpiceJet", "Spicejet", "Spice Jet"] },
+    "I5": { "name": "AIX Connect", "aliases": ["AIX Connect", "AirAsia India"] },
+    "9I": { "name": "Alliance Air", "aliases": ["Alliance Air"] },
+    "S5": { "name": "Star Air", "aliases": ["Star Air"] },
+    "EK": { "name": "Emirates", "aliases": ["Emirates"] },
+    "QR": { "name": "Qatar Airways", "aliases": ["Qatar Airways"] },
+    "SQ": { "name": "Singapore Airlines", "aliases": ["Singapore Airlines"] },
+    "EY": { "name": "Etihad Airways", "aliases": ["Etihad Airways", "Etihad"] },
+    "FZ": { "name": "flydubai", "aliases": ["flydubai", "fly dubai"] },
+    "LH": { "name": "Lufthansa", "aliases": ["Lufthansa"] },
+    "BA": { "name": "British Airways", "aliases": ["British Airways"] },
+    "CX": { "name": "Cathay Pacific", "aliases": ["Cathay Pacific"] },
+    "TG": { "name": "Thai Airways", "aliases": ["Thai Airways"] },
+    "MH": { "name": "Malaysia Airlines", "aliases": ["Malaysia Airlines"] },
+    "UL": { "name": "SriLankan Airlines", "aliases": ["SriLankan Airlines", "SriLankan"] },
+    "DL": { "name": "Delta Air Lines", "aliases": ["Delta Air Lines", "Delta"] },
+    "AA": { "name": "American Airlines", "aliases": ["American Airlines"] },
+    "UA": { "name": "United Airlines", "aliases": ["United Airlines"] }
+  },
+  "flightCodeStopwords": [
+    "ON", "AT", "TO", "IN", "BY", "OF", "NO", "IS", "OR", "RS", "PM", "AM", "GO", "UP", "US", "IT", "AS",
+    "BE", "DO", "IF", "WE", "AN", "MY", "SO", "ID", "HR", "KM", "PP", "TT", "ST", "ND", "RD", "TH", "OK"
+  ],
+  "iataStopwords": [
+    "PNR", "SMS", "AIR", "INR", "USD", "GST", "ETA", "ETD", "DEP", "ARR", "STD", "STA", "TBA", "AND", "THE",
+    "FOR", "VIA", "PIN", "OTP", "URL", "APP", "PDF", "SEQ", "NOT", "ALL", "ANY", "NEW", "OUR", "YOU", "FLT",
+    "HRS", "MIN", "GMT", "IST", "UTC", "REF", "ADD", "SEE", "USE", "NOW", "ONE", "TWO"
+  ],
+  "passengerStopwords": [
+    "Customer", "Guest", "Traveller", "Traveler", "Passenger", "Sir", "Madam", "User", "Flyer", "Member", "Valued"
+  ],
+  "patterns": {
+    "labeledFlight": [
+      "(?i:\\bflight)\\s*(?:(?i:no\\.?|number|#))?\\s*[:#\\-]?\\s*([A-Z][A-Z0-9]|[0-9][A-Z])\\s*-?\\s*(\\d{1,4})\\b"
+    ],
+    "bareFlight": [
+      "\\b([A-Z][A-Z0-9]|[0-9][A-Z])\\s?-?\\s?(\\d{2,4})\\b"
+    ],
+    "labeledPnr": [
+      "(?i:\\bPNR|\\bbooking\\s+ref(?:erence)?|\\bbooking\\s+(?:id|code|number|no\\.?)|\\bconfirmation\\s+(?:no\\.?|number|code)|\\brecord\\s+locator|\\breservation\\s+(?:code|number|no\\.?))\\s*(?:(?i:no\\.?|number|#))?\\s*[:#\\-]?\\s*(?:(?i:is)\\s+)?([A-Z0-9]{6})\\b"
+    ],
+    "barePnr": [
+      "\\b(?=[A-Z0-9]*[A-Z])(?=[A-Z0-9]*\\d)([A-Z0-9]{6})\\b"
+    ],
+    "route": [
+      "(?i:\\bfrom)\\s+(?:[A-Za-z][A-Za-z .'\\-]*?\\s*\\()?([A-Z]{3})\\)?(?:\\s*\\([^)]{0,40}\\))?\\s*,?\\s*(?i:to)\\s+(?:[A-Za-z][A-Za-z .'\\-]*?\\s*\\()?([A-Z]{3})\\b",
+      "\\(([A-Z]{3})\\)\\s*(?:(?i:to)|->|→|—|–|-)\\s*[A-Za-z .'\\-]*?\\(([A-Z]{3})\\)",
+      "\\b([A-Z]{3})\\s*(?:->|→|—|–|-|(?i:\\s+to\\s+))\\s*([A-Z]{3})\\b"
+    ],
+    "labeledDate": [
+      "(?i:\\b(?:on|dated?|date\\s+of\\s+(?:travel|journey|departure)|travel\\s+date|departure\\s+date|journey\\s+date|scheduled\\s+for|departing|departs|departure|DOJ))\\s*[:\\-]?\\s*(\\d{4}-\\d{2}-\\d{2}|\\d{1,2}[-/.]\\d{1,2}[-/.]\\d{2,4}|\\d{1,2}(?:st|nd|rd|th)?\\s*[-/. ]?\\s*[A-Za-z]{3,9}\\.?\\s*[-/. ,]?\\s*\\d{2,4}|[A-Za-z]{3,9}\\.?\\s+\\d{1,2}(?:st|nd|rd|th)?,?\\s+\\d{4})"
+    ],
+    "depTime": [
+      "(?i:\\b(?:dep(?:arts?|arting|arture)?|STD|leaves|leaving|take[- ]?off))\\b\\s*(?:(?i:time|at|is))?\\s*[:\\-]?\\s*(\\d{1,2}[:.]\\d{2})\\s*((?i:am|pm))?\\b"
+    ],
+    "arrTime": [
+      "(?i:\\b(?:arr(?:ives?|iving|ival)?|STA|reach(?:es|ing)?|land(?:s|ing)?))\\b\\s*(?:(?i:time|at|is))?\\s*[:\\-]?\\s*(\\d{1,2}[:.]\\d{2})\\s*((?i:am|pm))?\\b"
+    ],
+    "anyTime": [
+      "(?i:\\bat)\\s+(\\d{1,2}[:.]\\d{2})\\s*((?i:am|pm))?\\b"
+    ],
+    "terminal": [
+      "(?i:\\bterminal)\\s*-?\\s*(\\d[A-Z]?)\\b",
+      "\\bT\\s?-?\\s?(\\d)\\b"
+    ],
+    "passenger": [
+      "(?i:\\b(?:passenger|traveller|traveler|guest)(?:\\s+name)?)\\s*[:\\-]\\s*((?:(?i:mr|ms|mrs|dr|mstr|miss)\\.?\\s+)?[A-Z][A-Za-z]+(?:\\s+[A-Z][A-Za-z]+){0,2})",
+      "(?i:\\b(?:dear|hi|hello))\\s+(?:(?i:mr|ms|mrs|dr|mstr|miss)\\.?\\s+)?([A-Z][A-Za-z]+(?:\\s+[A-Z][A-Za-z]+){0,2})\\s*[,!]"
+    ],
+    "seat": [
+      "(?i:\\bseat)\\s*(?:(?i:no\\.?|number|#))?\\s*[:\\-]?\\s*(\\d{1,3}[A-K])\\b"
+    ],
+    "cabin": [
+      "(?i:\\b(?:cabin|class|cabin\\s+class|travel\\s+class)\\s*[:\\-]\\s*)(?i:(premium\\s+economy|economy|business|first))\\b",
+      "(?i:\\b(premium\\s+economy|economy|business|first))\\s+(?i:class)\\b"
+    ],
+    "bareCabin": [
+      "(?i:\\b(premium\\s+economy|economy|business))\\b"
+    ]
+  }
+}

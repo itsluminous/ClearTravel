@@ -1,0 +1,30 @@
+{
+  "pnr": {
+    "value": "ABC123",
+    "confidence": "HIGH"
+  },
+  "carrier": {
+    "value": "AI",
+    "confidence": "HIGH"
+  },
+  "airlineName": {
+    "value": "Air India",
+    "confidence": "HIGH"
+  },
+  "flightNumber": {
+    "value": "202",
+    "confidence": "HIGH"
+  },
+  "fromAirport": {
+    "value": "DEL",
+    "confidence": "MEDIUM"
+  },
+  "toAirport": {
+    "value": "BOM",
+    "confidence": "MEDIUM"
+  },
+  "flightDate": {
+    "value": "2026-06-12",
+    "confidence": "HIGH"
+  }
+}

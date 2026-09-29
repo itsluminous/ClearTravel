@@ -1,0 +1,9 @@
+e-Ticket
+Booking ID: MMT123456789
+Airline PNR: K7L9P2
+IndiGo 6E 6144
+BOM → HYD
+Date of travel: 2026-06-12
+Departure 19:05 | Arrival 20:35
+Economy
+Thank you for booking with us.

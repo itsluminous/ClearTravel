@@ -1,0 +1,42 @@
+{
+  "passengerName": {
+    "value": "Priya Sharma",
+    "confidence": "HIGH"
+  },
+  "pnr": {
+    "value": "QWE789",
+    "confidence": "HIGH"
+  },
+  "carrier": {
+    "value": "UK",
+    "confidence": "HIGH"
+  },
+  "airlineName": {
+    "value": "Vistara",
+    "confidence": "HIGH"
+  },
+  "flightNumber": {
+    "value": "955",
+    "confidence": "HIGH"
+  },
+  "fromAirport": {
+    "value": "DEL",
+    "confidence": "MEDIUM"
+  },
+  "toAirport": {
+    "value": "BOM",
+    "confidence": "MEDIUM"
+  },
+  "flightDate": {
+    "value": "2026-06-12",
+    "confidence": "LOW"
+  },
+  "depTime": {
+    "value": "07:20",
+    "confidence": "HIGH"
+  },
+  "cabinClass": {
+    "value": "Business",
+    "confidence": "LOW"
+  }
+}

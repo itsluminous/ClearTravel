@@ -16,6 +16,15 @@
     <string name="flights_add_import_hint">Scan the barcode of a boarding-pass image or PDF</string>
     <string name="flights_add_booking">Import booking confirmation</string>
     <string name="flights_add_booking_hint">Prefill from an e-ticket PDF or image - available from booking day</string>
+    <string name="flights_add_paste">Paste SMS or email text</string>
+    <string name="flights_add_paste_hint">Prefill the form from an airline message</string>
+    <string name="flights_paste_dialog_title">Paste flight text</string>
+    <string name="flights_paste_dialog_label">Airline SMS or email text</string>
+    <string name="flights_paste_dialog_confirm">Prefill form</string>
+    <string name="flights_text_import_failed">Could not read a flight from that text</string>
+    <string name="flights_prefill_source_text">Filled from pasted text - review carefully before saving</string>
+    <string name="flights_prefill_text_dep_terminal">Departure terminal from the text: %1$s</string>
+    <string name="flights_prefill_text_arr_terminal">Arrival terminal from the text: %1$s</string>
     <string name="flights_card_route_separator">→</string>
     <string name="flights_card_dep_arr">Dep %1$s · Arr %2$s</string>
     <string name="flights_last_fetched">Checked %1$s</string>

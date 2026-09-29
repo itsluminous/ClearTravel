@@ -8,6 +8,8 @@ import com.itsluminous.cleartravel.feature.flights.form.OcrBoardingPassImporter
 import com.itsluminous.cleartravel.feature.flights.form.OcrBookingConfirmationImporter
 import com.itsluminous.cleartravel.feature.flights.status.FlightStatusAlerts
 import com.itsluminous.cleartravel.feature.flights.status.NotifierFlightStatusAlerts
+import com.itsluminous.cleartravel.feature.flights.text.AirlineSmsRuleSource
+import com.itsluminous.cleartravel.feature.flights.text.AssetAirlineSmsRuleSource
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -32,6 +34,11 @@ abstract class FlightsBindingsModule {
     @Binds
     @Singleton
     abstract fun bindFlightStatusAlerts(impl: NotifierFlightStatusAlerts): FlightStatusAlerts
+
+    /** ADR-042: the flight SMS/email parser's rules asset. */
+    @Binds
+    @Singleton
+    abstract fun bindAirlineSmsRuleSource(impl: AssetAirlineSmsRuleSource): AirlineSmsRuleSource
 }
 
 // The RuleRegistry @Provides that used to live here (FlightsProvidersModule) was

@@ -14,6 +14,8 @@ internal sealed interface FlightsRoute {
         val importUri: String? = null,
         /** Picked booking-confirmation file (third add path, ADR-017). */
         val bookingUri: String? = null,
+        /** Pasted SMS/email text (fourth add path, ADR-042). */
+        val sharedText: String? = null,
     ) : FlightsRoute
 
     data class StatusCheck(

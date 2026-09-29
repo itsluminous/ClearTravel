@@ -8,6 +8,7 @@ import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationSource
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedField
 import com.itsluminous.cleartravel.core.testing.Fixtures
+import com.itsluminous.cleartravel.feature.flights.text.FlightTextExtraction
 import org.junit.Test
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -19,6 +20,45 @@ class FlightFormStateTest {
             flightNumber = "2345",
             dateText = "2026-09-25",
         )
+
+    @Test
+    fun `fromTextExtraction maps fields, reformats times and drops the passenger name`() {
+        val extraction =
+            FlightTextExtraction(
+                passengerName = ExtractedField.of("Rahul", ExtractionConfidence.MEDIUM),
+                pnr = ExtractedField.of("ABC123", ExtractionConfidence.HIGH),
+                carrier = ExtractedField.of("6e", ExtractionConfidence.HIGH),
+                flightNumber = ExtractedField.of("2001", ExtractionConfidence.HIGH),
+                fromAirport = ExtractedField.of("DEL", ExtractionConfidence.HIGH),
+                toAirport = ExtractedField.of("GOI", ExtractionConfidence.HIGH),
+                flightDate = ExtractedField.of("2026-06-12", ExtractionConfidence.HIGH),
+                depTime = ExtractedField.of("06:35", ExtractionConfidence.HIGH),
+                arrTime = ExtractedField.of("21:10", ExtractionConfidence.HIGH),
+                depTerminal = ExtractedField.of("3", ExtractionConfidence.MEDIUM),
+                seat = ExtractedField.of("14A", ExtractionConfidence.HIGH),
+                cabinClass = ExtractedField.of("Economy", ExtractionConfidence.LOW),
+                additionalFlights = 1,
+            )
+
+        val state = FlightFormState.fromTextExtraction(extraction)
+
+        assertThat(state.airlineIata).isEqualTo("6E")
+        assertThat(state.flightNumber).isEqualTo("2001")
+        assertThat(state.dateText).isEqualTo("2026-06-12")
+        assertThat(state.depTimeText).isEqualTo("6:35")
+        assertThat(state.arrTimeText).isEqualTo("21:10")
+        assertThat(state.depTerminal).isEqualTo("3")
+        assertThat(state.arrTerminal).isEmpty()
+        assertThat(state.seat).isEqualTo("14A")
+        assertThat(state.cabinClass).isEqualTo("Economy")
+        assertThat(state.fromText).isTrue()
+        assertThat(state.returnLegHint).isTrue()
+        assertThat(state.confidences[FlightField.CABIN]).isEqualTo(ExtractionConfidence.LOW)
+        assertThat(FlightFormState.validate(state)).isEmpty()
+        val journey = state.toJourney(checkInUrl = null, zone = ZoneId.of("Asia/Kolkata"))
+        assertThat(journey.depTerminal).isEqualTo("3")
+        assertThat(journey.schedDep).isEqualTo(ZonedDateTime.parse("2026-06-12T06:35+05:30[Asia/Kolkata]").toInstant())
+    }
 
     @Test
     fun `valid minimal form passes validation`() {

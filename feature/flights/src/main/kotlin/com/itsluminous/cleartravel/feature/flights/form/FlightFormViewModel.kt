@@ -6,6 +6,7 @@ import com.itsluminous.cleartravel.core.data.repository.FlightRepository
 import com.itsluminous.cleartravel.core.data.share.FlightSharePayload
 import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.feature.flights.checkin.CheckInRuleSource
+import com.itsluminous.cleartravel.feature.flights.text.FlightTextParser
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +27,13 @@ sealed interface FlightFormEvent {
     data class DuplicateFlight(
         val existingFlightId: String,
     ) : FlightFormEvent
+
+    /**
+     * Pasted/shared text held no flight at all (ADR-042): the form opened blank. The
+     * host explains it in a snackbar — fields that merely went unrecognised stay empty
+     * silently, like every other prefill path.
+     */
+    data object PrefillEmpty : FlightFormEvent
 }
 
 @HiltViewModel
@@ -36,6 +44,7 @@ class FlightFormViewModel
         private val importer: BoardingPassImporter,
         private val bookingImporter: BookingConfirmationImporter,
         private val checkInRuleSource: CheckInRuleSource,
+        private val textParser: FlightTextParser,
     ) : ViewModel() {
         private val state = MutableStateFlow(FlightFormState())
         val formState: StateFlow<FlightFormState> = state
@@ -101,6 +110,22 @@ class FlightFormViewModel
             state.value = FlightFormState.fromSharePayload(payload)
         }
 
+        /**
+         * SMS/email text import (ADR-042): pure parsing against the airline rules
+         * asset, prefill with confidence markers; the user reviews — never saved blind.
+         * Text with no flight in it opens a blank form and emits
+         * [FlightFormEvent.PrefillEmpty].
+         */
+        fun startFromText(text: String) {
+            val extraction = textParser.parse(text)
+            if (extraction.isEmpty) {
+                state.value = FlightFormState()
+                eventsFlow.tryEmit(FlightFormEvent.PrefillEmpty)
+            } else {
+                state.value = FlightFormState.fromTextExtraction(extraction)
+            }
+        }
+
         fun update(transform: (FlightFormState) -> FlightFormState) {
             state.value = transform(state.value).copy(errors = emptySet())
         }
@@ -113,7 +138,7 @@ class FlightFormViewModel
          * airline + flight number + date, NOTHING is written and
          * [FlightFormEvent.DuplicateFlight] is emitted instead (ADR-025) — editing a
          * journey never trips on its own identity, only re-pointing it at ANOTHER
-         * journey's does. Every add path (manual, boarding pass, booking confirmation,
+         * journey's does. Every add path (manual, boarding pass, booking confirmation, pasted text,
          * share-sheet intake) funnels through here, so the guard covers all of them.
          */
         fun save(onSaved: (flightId: String) -> Unit) {
@@ -167,6 +192,8 @@ class FlightFormViewModel
                 schedDep = draft.schedDep ?: existing.schedDep,
                 schedArr = draft.schedArr ?: existing.schedArr,
                 checkInUrl = draft.checkInUrl ?: existing.checkInUrl,
+                depTerminal = draft.depTerminal.ifBlank { existing.depTerminal },
+                arrTerminal = draft.arrTerminal.ifBlank { existing.arrTerminal },
             )
         }
     }

@@ -1,0 +1,50 @@
+{
+  "passengerName": {
+    "value": "Rahul",
+    "confidence": "MEDIUM"
+  },
+  "pnr": {
+    "value": "ABC123",
+    "confidence": "HIGH"
+  },
+  "carrier": {
+    "value": "6E",
+    "confidence": "HIGH"
+  },
+  "airlineName": {
+    "value": "IndiGo",
+    "confidence": "HIGH"
+  },
+  "flightNumber": {
+    "value": "2001",
+    "confidence": "HIGH"
+  },
+  "fromAirport": {
+    "value": "DEL",
+    "confidence": "HIGH"
+  },
+  "toAirport": {
+    "value": "GOI",
+    "confidence": "HIGH"
+  },
+  "flightDate": {
+    "value": "2026-06-12",
+    "confidence": "HIGH"
+  },
+  "depTime": {
+    "value": "06:35",
+    "confidence": "HIGH"
+  },
+  "arrTime": {
+    "value": "09:10",
+    "confidence": "HIGH"
+  },
+  "depTerminal": {
+    "value": "3",
+    "confidence": "MEDIUM"
+  },
+  "seat": {
+    "value": "14A",
+    "confidence": "HIGH"
+  }
+}

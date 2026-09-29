@@ -128,6 +128,7 @@ fun FlightsContent(
                 onAddManual = { route = FlightsRoute.Form() },
                 onImportPass = { uri -> route = FlightsRoute.Form(importUri = uri) },
                 onImportBooking = { uri -> route = FlightsRoute.Form(bookingUri = uri) },
+                onImportText = { text -> route = FlightsRoute.Form(sharedText = text) },
                 onEdit = { id -> route = FlightsRoute.Form(editId = id) },
                 onCheckStatus = { id ->
                     checkOutcome = null
@@ -153,6 +154,7 @@ fun FlightsContent(
                 editId = current.editId,
                 importUri = current.importUri,
                 bookingUri = current.bookingUri,
+                sharedText = current.sharedText,
                 onClose = {
                     finishAddRequest(FlightsEntryResult.Cancelled)
                     route = FlightsRoute.Journeys

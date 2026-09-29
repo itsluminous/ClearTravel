@@ -1,0 +1,42 @@
+{
+  "pnr": {
+    "value": "K7L9P2",
+    "confidence": "HIGH"
+  },
+  "carrier": {
+    "value": "6E",
+    "confidence": "HIGH"
+  },
+  "airlineName": {
+    "value": "IndiGo",
+    "confidence": "HIGH"
+  },
+  "flightNumber": {
+    "value": "6144",
+    "confidence": "HIGH"
+  },
+  "fromAirport": {
+    "value": "BOM",
+    "confidence": "MEDIUM"
+  },
+  "toAirport": {
+    "value": "HYD",
+    "confidence": "MEDIUM"
+  },
+  "flightDate": {
+    "value": "2026-06-12",
+    "confidence": "HIGH"
+  },
+  "depTime": {
+    "value": "19:05",
+    "confidence": "HIGH"
+  },
+  "arrTime": {
+    "value": "20:35",
+    "confidence": "HIGH"
+  },
+  "cabinClass": {
+    "value": "Economy",
+    "confidence": "LOW"
+  }
+}

@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Flight
@@ -43,6 +44,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,6 +60,7 @@ import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.designsystem.component.FullWidthFilterChip
 import com.itsluminous.cleartravel.core.designsystem.component.FullWidthFilterRow
+import com.itsluminous.cleartravel.core.designsystem.component.PasteTextDialog
 import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.feature.flights.R
 import com.itsluminous.cleartravel.feature.flights.checkin.CheckInGateDecision
@@ -97,6 +100,8 @@ fun FlightListScreen(
     onImportBooking: (uriString: String) -> Unit = {},
     /** Opens an attached booking confirmation in the document viewer. */
     onViewBooking: (path: String) -> Unit = {},
+    /** Fourth add path (ADR-042): pasted SMS/email text to prefill from. */
+    onImportText: (text: String) -> Unit = {},
     /** Deep-link hook: opens this flight's detail sheet on first composition. */
     initialDetailFlightId: String? = null,
     /**
@@ -118,6 +123,7 @@ fun FlightListScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     var showAddOptions by remember { mutableStateOf(false) }
+    var showPasteDialog by rememberSaveable { mutableStateOf(false) }
     var detailFlightId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(openAddSheetNonce) {
@@ -306,6 +312,17 @@ fun FlightListScreen(
             )
             HorizontalDivider()
             ListItem(
+                headlineContent = { Text(stringResource(R.string.flights_add_paste)) },
+                supportingContent = { Text(stringResource(R.string.flights_add_paste_hint)) },
+                leadingContent = { Icon(Icons.Filled.ContentPaste, contentDescription = null) },
+                modifier =
+                    Modifier.clickable {
+                        showAddOptions = false
+                        showPasteDialog = true
+                    },
+            )
+            HorizontalDivider()
+            ListItem(
                 headlineContent = { Text(stringResource(R.string.flights_add_import)) },
                 supportingContent = { Text(stringResource(R.string.flights_add_import_hint)) },
                 leadingContent = { Icon(Icons.Filled.QrCodeScanner, contentDescription = null) },
@@ -328,6 +345,23 @@ fun FlightListScreen(
             )
             Spacer(modifier = Modifier.padding(bottom = 24.dp))
         }
+    }
+
+    if (showPasteDialog) {
+        PasteTextDialog(
+            title = stringResource(R.string.flights_paste_dialog_title),
+            label = stringResource(R.string.flights_paste_dialog_label),
+            confirmText = stringResource(R.string.flights_paste_dialog_confirm),
+            dismissText = stringResource(R.string.flights_form_cancel),
+            onDismiss = {
+                showPasteDialog = false
+                onAddAbandoned()
+            },
+            onConfirm = { text ->
+                showPasteDialog = false
+                onImportText(text)
+            },
+        )
     }
 
     val detailFlight = uiState.flights.firstOrNull { it.id == detailFlightId }

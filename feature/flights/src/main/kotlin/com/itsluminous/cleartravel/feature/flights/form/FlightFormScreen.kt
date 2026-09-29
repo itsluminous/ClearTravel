@@ -19,6 +19,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -29,6 +31,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -63,30 +66,38 @@ fun FlightFormScreen(
     onDuplicate: (existingFlightId: String) -> Unit = {},
     /** A shared flight link's add data (ADR-039); defaulted so existing call sites are untouched. */
     sharedPayload: FlightSharePayload? = null,
+    /** Pasted or shared SMS/email text to read the flight from (ADR-042); defaulted likewise. */
+    sharedText: String? = null,
 ) {
     val state by viewModel.formState.collectAsStateWithLifecycle()
     val busy by viewModel.isBusy.collectAsStateWithLifecycle()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     LaunchedEffect(viewModel) {
         viewModel.events.collect { event ->
             when (event) {
                 is FlightFormEvent.DuplicateFlight -> onDuplicate(event.existingFlightId)
+                FlightFormEvent.PrefillEmpty ->
+                    snackbarHostState.showSnackbar(context.getString(R.string.flights_text_import_failed))
             }
         }
     }
 
-    LaunchedEffect(editId, importUri, bookingUri, sharedPayload) {
+    LaunchedEffect(editId, importUri, bookingUri, sharedPayload, sharedText) {
         when {
             editId != null -> viewModel.startEdit(editId)
             importUri != null -> viewModel.startFromBoardingPass(importUri)
             bookingUri != null -> viewModel.startFromBookingConfirmation(bookingUri)
             sharedPayload != null -> viewModel.startFromShared(sharedPayload)
+            sharedText != null -> viewModel.startFromText(sharedText)
             else -> viewModel.startBlank()
         }
     }
 
     Scaffold(
         modifier = modifier,
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {
@@ -300,6 +311,36 @@ private fun PrefillBanner(state: FlightFormState) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.primary,
         )
+    }
+    if (state.fromText) {
+        Text(
+            text = stringResource(R.string.flights_prefill_source_text),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        // Terminals are not form fields (the status check owns them) — surfaced here so
+        // nothing read from the text lands on the journey unseen.
+        if (state.depTerminal.isNotBlank()) {
+            Text(
+                text = stringResource(R.string.flights_prefill_text_dep_terminal, state.depTerminal),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (state.arrTerminal.isNotBlank()) {
+            Text(
+                text = stringResource(R.string.flights_prefill_text_arr_terminal, state.arrTerminal),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (state.returnLegHint) {
+            Text(
+                text = stringResource(R.string.flights_booking_return_hint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+        }
     }
 }
 

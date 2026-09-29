@@ -13,7 +13,7 @@ import com.itsluminous.cleartravel.feature.flights.status.StatusCheckScreen
 
 /**
  * What an EXTERNAL entry into the flights add form carries (integration contract for
- * the app shell's share-sheet file intake). Each variant maps onto one existing
+ * the app shell's share-sheet file and text intakes). Each variant maps onto one existing
  * import path of `FlightFormViewModel` — no extraction logic is duplicated.
  */
 sealed interface FlightsEntryRequest {
@@ -30,6 +30,11 @@ sealed interface FlightsEntryRequest {
     /** A `share/flight/<blob>` link (ADR-039): the flight's add data prefills the form. */
     data class Shared(
         val payload: FlightSharePayload,
+    ) : FlightsEntryRequest
+
+    /** Shared airline SMS/email text the user confirmed is a flight (ADR-042) → text parser prefill. */
+    data class Text(
+        val text: String,
     ) : FlightsEntryRequest
 }
 
@@ -108,6 +113,7 @@ fun FlightsExternalEntry(
             importUri = (request as? FlightsEntryRequest.BoardingPass)?.uri,
             bookingUri = (request as? FlightsEntryRequest.BookingConfirmation)?.uri,
             sharedPayload = (request as? FlightsEntryRequest.Shared)?.payload,
+            sharedText = (request as? FlightsEntryRequest.Text)?.text,
             onClose = { onDone(FlightsEntryResult.Cancelled) },
             onSaved = { id -> onDone(FlightsEntryResult.Saved(id)) },
             onSavedAndCheck = { id -> checkingFlightId = id },
