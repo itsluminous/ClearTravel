@@ -29,16 +29,13 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Train
 import androidx.compose.material.icons.filled.UploadFile
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -56,7 +53,7 @@ import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.designsystem.component.FullWidthFilterChip
 import com.itsluminous.cleartravel.core.designsystem.component.FullWidthFilterRow
-import com.itsluminous.cleartravel.core.designsystem.component.InputDialogProperties
+import com.itsluminous.cleartravel.core.designsystem.component.PasteTextDialog
 import com.itsluminous.cleartravel.core.model.TrainTicket
 import com.itsluminous.cleartravel.feature.trains.R
 import java.time.Instant
@@ -203,6 +200,10 @@ internal fun TrainListScreen(
 
     if (showPasteDialog) {
         PasteTextDialog(
+            title = stringResource(R.string.trains_paste_dialog_title),
+            label = stringResource(R.string.trains_paste_dialog_label),
+            confirmText = stringResource(R.string.trains_paste_dialog_confirm),
+            dismissText = stringResource(R.string.trains_form_cancel),
             onDismiss = {
                 showPasteDialog = false
                 onAddAbandoned()
@@ -228,40 +229,6 @@ private fun AddOptionRow(
         supportingContent = { Text(stringResource(hintRes)) },
         leadingContent = { Icon(imageVector = icon, contentDescription = null) },
         modifier = modifier.clickable(onClick = onClick),
-    )
-}
-
-@Composable
-private fun PasteTextDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var text by rememberSaveable { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        properties = InputDialogProperties,
-        modifier = modifier,
-        title = { Text(stringResource(R.string.trains_paste_dialog_title)) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                label = { Text(stringResource(R.string.trains_paste_dialog_label)) },
-                minLines = 4,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(text) }, enabled = text.isNotBlank()) {
-                Text(stringResource(R.string.trains_paste_dialog_confirm))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.trains_form_cancel))
-            }
-        },
     )
 }
 
