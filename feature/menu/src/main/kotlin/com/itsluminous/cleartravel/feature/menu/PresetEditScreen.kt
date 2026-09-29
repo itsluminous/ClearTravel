@@ -33,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.designsystem.component.ReorderHandle
@@ -78,7 +79,7 @@ internal fun PresetEditScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.menu_preset_edit_title)) },
+                title = { AutoShrinkText(stringResource(R.string.menu_preset_edit_title)) },
                 navigationIcon = {
                     ExplainableIcon(
                         icon = Icons.AutoMirrored.Filled.ArrowBack,

@@ -214,10 +214,11 @@ private fun TripCard(
             Column(modifier = Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 AutoShrinkText(text = trip.name, style = MaterialTheme.typography.titleMedium)
                 if (trip.destination.isNotBlank()) {
-                    Text(
+                    AutoShrinkText(
                         text = trip.destination,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        minScale = 0.8f,
                     )
                 }
                 tripDateRangeText(trip)?.let { range ->

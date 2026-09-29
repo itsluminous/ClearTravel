@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.model.ThemeMode
@@ -105,7 +106,7 @@ internal fun SettingsScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.menu_settings)) },
+                title = { AutoShrinkText(stringResource(R.string.menu_settings)) },
                 navigationIcon = {
                     ExplainableIcon(
                         icon = Icons.AutoMirrored.Filled.ArrowBack,
@@ -193,7 +194,7 @@ internal fun AboutScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.menu_about_title)) },
+                title = { AutoShrinkText(stringResource(R.string.menu_about_title)) },
                 navigationIcon = {
                     ExplainableIcon(
                         icon = Icons.AutoMirrored.Filled.ArrowBack,

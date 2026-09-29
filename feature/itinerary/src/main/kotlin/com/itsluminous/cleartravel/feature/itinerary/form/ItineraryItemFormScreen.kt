@@ -137,7 +137,7 @@ internal fun ItineraryItemFormScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
+                    AutoShrinkText(
                         stringResource(
                             if (viewModel.isEdit) {
                                 R.string.itinerary_edit_item_title

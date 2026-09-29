@@ -83,7 +83,7 @@ internal fun PresetManagerScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.menu_presets_title)) },
+                title = { AutoShrinkText(stringResource(R.string.menu_presets_title)) },
                 navigationIcon = {
                     ExplainableIcon(
                         icon = Icons.AutoMirrored.Filled.ArrowBack,

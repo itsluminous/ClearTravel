@@ -114,7 +114,7 @@ internal fun BackupRestoreScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.menu_backup_title)) },
+                title = { AutoShrinkText(stringResource(R.string.menu_backup_title)) },
                 navigationIcon = {
                     ExplainableIcon(
                         icon = Icons.AutoMirrored.Filled.ArrowBack,
@@ -177,7 +177,7 @@ internal fun BackupRestoreScreen(
                     modifier = Modifier.padding(top = 4.dp),
                 )
                 val lastBackup = uiState.lastBackup
-                Text(
+                AutoShrinkText(
                     text =
                         if (lastBackup == null) {
                             stringResource(R.string.menu_backup_last_backup_never)
@@ -189,6 +189,7 @@ internal fun BackupRestoreScreen(
                             )
                         },
                     style = MaterialTheme.typography.bodyMedium,
+                    minScale = 0.8f,
                     modifier = Modifier.padding(top = 8.dp),
                 )
                 Button(
@@ -234,7 +235,7 @@ internal fun BackupRestoreScreen(
                     )
                 } else {
                     val newest = uiState.driveBackups.firstOrNull()
-                    Text(
+                    AutoShrinkText(
                         text =
                             if (newest == null) {
                                 stringResource(R.string.menu_backup_drive_none)
@@ -246,6 +247,7 @@ internal fun BackupRestoreScreen(
                                 )
                             },
                         style = MaterialTheme.typography.bodyMedium,
+                        minScale = 0.8f,
                         modifier = Modifier.padding(top = 8.dp),
                     )
                     Button(
@@ -345,8 +347,12 @@ private fun DriveBackupListDialog(
                                     .clickable { onPick(backup) }
                                     .padding(vertical = 8.dp),
                         ) {
-                            Text(text = backup.fileName, style = MaterialTheme.typography.bodyLarge)
-                            Text(
+                            AutoShrinkText(
+                                text = backup.fileName,
+                                style = MaterialTheme.typography.bodyLarge,
+                                minScale = 0.8f,
+                            )
+                            AutoShrinkText(
                                 text =
                                     stringResource(
                                         R.string.menu_backup_drive_last,
@@ -355,6 +361,7 @@ private fun DriveBackupListDialog(
                                     ),
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                minScale = 0.8f,
                             )
                         }
                     }

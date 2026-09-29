@@ -102,7 +102,7 @@ fun FlightFormScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
+                    AutoShrinkText(
                         stringResource(
                             if (state.isEdit) R.string.flights_form_title_edit else R.string.flights_form_title_add,
                         ),

@@ -126,10 +126,15 @@ exist and the full gate passes.
    `imePadding()`/`WindowInsets.ime` inside a tab screen — it is already consumed;
    scrollable forms bring the focused field into view on their own.
    **Single-line labels shrink, never wrap:** every button / chip / segmented /
-   filter / tab label, card title row, stat pill, dialog action and app-bar title is
-   an `AutoShrinkText` (`core:designsystem`), which steps the font down to fit its
-   slot (floor 60%, then ellipsis) — never a plain `Text` that could wrap to a
-   second line or a hand-rolled `maxLines = 1` copy.
+   filter / tab label, card title row, one-line stat / date / status line, stat
+   pill, dialog action, list-row title and app-bar title is an `AutoShrinkText`
+   (`core:designsystem`), which steps the font down to fit its slot (floor 60%,
+   then ellipsis) — never a plain `Text` that could wrap to a second line or a
+   hand-rolled `maxLines = 1` copy. Long dynamic values (file names, place names,
+   notes) pass `minScale = 0.8f` so they shrink a little and then ellipsize instead
+   of going illegible. Multi-sentence descriptions and blurbs stay plain `Text` —
+   wrapping is correct there. Verify at `font_scale 1.3` with `uiautomator dump`
+   node heights (a wrapped label is twice the height of its single-line siblings).
 
 ## Working conventions
 

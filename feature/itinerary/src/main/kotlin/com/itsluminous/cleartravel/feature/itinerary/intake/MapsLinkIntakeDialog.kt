@@ -193,12 +193,10 @@ private fun TargetOption(
                 .padding(vertical = 4.dp),
     ) {
         RadioButton(selected = selected, onClick = null, enabled = enabled)
-        Text(
+        AutoShrinkText(
             text = label,
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(start = 8.dp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
     }
 }

@@ -75,7 +75,7 @@ fun StatusCheckScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.flights_check_title)) },
+                title = { AutoShrinkText(stringResource(R.string.flights_check_title)) },
                 navigationIcon = {
                     ExplainableIcon(
                         icon = Icons.Filled.Close,

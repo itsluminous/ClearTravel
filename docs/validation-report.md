@@ -1090,3 +1090,36 @@ Notes:
   what is left instead of pushing them.
 - Dynamic, possibly very long values (journey-picker rows, place suggestions) use
   `minScale = 0.8f` — shrink a little, then ellipsize, rather than go illegible.
+
+## Shrink-to-fit labels — follow-up sweep (2026-09-30 05:10–05:50 IST, emulator Play_36_Pixel, API 36)
+
+A second audit (regex over every `Button`/`*Chip`/`SegmentedButton`/`NavigationBarItem`/
+`TopAppBar` slot plus every hand-rolled `maxLines = 1` `Text`) found 8 app-bar titles and
+2 `maxLines = 1` copies still on plain `Text`, and the 1.3× walk exposed two one-line stat
+rows that wrapped. All converted to `AutoShrinkText` (no API change). Heights are
+`uiautomator dump` node heights at font scale 1.3 (single-line reference: label 67,
+body 80–82, app-bar title 84, bottom-nav 55); `font_scale` reset to `1.0` and re-read
+afterwards, and the flight-form save row re-checked at 1.0 (`Save` / `Save & check
+status` 53 / 53).
+
+| # | Screen / element (font scale 1.3) | Node height | Verdict |
+|---|---|---|---|
+| n1 | **Flight form save row** `Save` `[225,1821][342,1888]` / `Save & check status` `[623,1820][971,1889]`; app-bar `Add flight` | 67 / 69 / 84 | PASS |
+| n2 | Trip card **destination** `Tokyo, Japan` in the 302 px column — was **160** (two lines, plain body `Text`) → `AutoShrinkText(minScale = 0.8f)` | 160 → 83 | **PASS after fix** |
+| n3 | Backup & Restore **`Last backup: Sep 23, 2026, 11:41AM (239 kB)`** — was **160** → `AutoShrinkText(minScale = 0.8f)`; same for the Drive "newest" line and the Drive-list rows (file name + date) | 160 → 84 | **PASS after fix** |
+| n4 | App-bar titles `Settings` / `Backup & Restore` / `Manage presets` / `Edit preset` / `Add flight` / `New itinerary item` | 84 | PASS |
+| n5 | Maps-link intake dialog (shared Google Maps URL): trip radio labels `🏙️ Tokyo` … `Teosa, Maharashtra, India` (was `maxLines = 1` + ellipsis); actions `Cancel` / `Add place` | 81–87 / 67 | PASS |
+| n6 | Trip detail: `Timeline` / `Map` segments 67, item titles 71, day headers 80; item form: type / day / category chips 67, `Pick on map` 59 | 59–80 | PASS |
+| n7 | Journeys: `Active` / `Archived` 67, `Trains` / `Flights` 67; train card header `MMCT` / `Oct 3, Sat` / `NDLS` 80, title `12951 - Mumbai Rajdhani` 80, pill `CNF B4-23` 67; detail sheet `Check PNR status` / `View route` / `Seat map` 67, `Edit` / `Archive` / `Delete` 67–68 | 67–80 | PASS |
+| n8 | Flight cards `UK 955` / `EK 501` 80, `Scheduled` 67, `BOM → DXB` 81, dates 80 (quick actions are icon-only) | 67–81 | PASS |
+| n9 | Checklist cards 80 + `3 of 19 done` 75; detail header 76; Documents cards name / type 80, `Expires soon · Jan 14, 2027` 85; Presets rows + `Built-in` pill 80 / 67 | 67–85 | PASS |
+| n10 | Settings → `Change password` dialog: `Confirm new password` 87, `Cancel` / `Change` 67; Backup → **Import this backup?** `Cancel` / `Import` 67 | 67–87 | PASS |
+| n11 | Full gate `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → BUILD SUCCESSFUL, unit **1136/1136** (`shrink.log`) | — | PASS |
+| n12 | `connectedDebugAndroidTest` on Android_16_AOSP_Medium against the **final** tree → **26/26**, 0 failures (`connected-shrink.log`); emulator killed afterwards, `adb devices` empty | — | PASS |
+
+Notes:
+- Left wrapping on purpose (body text): lock-timing / backup-schedule radio descriptions,
+  the import dialog's `Trips: 4 · Journeys: 6 · …` summary, section blurbs.
+- The audit script: any `Text(` within 14 lines of a `*Button(`/`*Chip(`/`SegmentedButton(`/
+  `NavigationBarItem(`/`TopAppBar(` opener, plus `grep -rn "maxLines = 1"` — both now
+  return zero hits outside `AutoShrinkText.kt`.
