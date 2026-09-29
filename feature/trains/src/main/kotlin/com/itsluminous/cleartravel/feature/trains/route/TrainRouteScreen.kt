@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.designsystem.DateFormats
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
@@ -86,7 +87,7 @@ internal fun TrainRouteScreen(
                     message = stringResource(R.string.trains_route_empty_message),
                 )
                 Button(onClick = onRefresh, modifier = Modifier.padding(top = 8.dp)) {
-                    Text(stringResource(R.string.trains_route_empty_fetch))
+                    AutoShrinkText(stringResource(R.string.trains_route_empty_fetch))
                 }
             }
         } else if (!state.loading) {

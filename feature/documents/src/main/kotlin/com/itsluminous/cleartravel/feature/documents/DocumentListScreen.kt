@@ -51,6 +51,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
@@ -224,12 +225,12 @@ internal fun DocumentListScreen(
                         viewModel.delete(deleting.id)
                     },
                 ) {
-                    Text(stringResource(R.string.documents_delete_confirm))
+                    AutoShrinkText(stringResource(R.string.documents_delete_confirm))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { deletingId = null }) {
-                    Text(stringResource(R.string.documents_cancel))
+                    AutoShrinkText(stringResource(R.string.documents_cancel))
                 }
             },
         )
@@ -300,8 +301,8 @@ private fun DocumentCard(
                 tint = MaterialTheme.colorScheme.primary,
             )
             Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                Text(text = document.name, style = MaterialTheme.typography.titleMedium)
-                Text(
+                AutoShrinkText(text = document.name, style = MaterialTheme.typography.titleMedium)
+                AutoShrinkText(
                     text = stringResource(DocumentTypePresets.labelRes(document.type)),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -355,5 +356,5 @@ private fun ExpiryLine(expiryDate: LocalDate?) {
                 stringResource(R.string.documents_card_expires_soon, formatted) to MaterialTheme.colorScheme.tertiary
             else -> stringResource(R.string.documents_card_expires, formatted) to MaterialTheme.colorScheme.onSurfaceVariant
         }
-    Text(text = text, style = MaterialTheme.typography.bodyMedium, color = color, modifier = Modifier.padding(top = 2.dp))
+    AutoShrinkText(text = text, style = MaterialTheme.typography.bodyMedium, color = color, modifier = Modifier.padding(top = 2.dp))
 }

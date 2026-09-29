@@ -3,7 +3,6 @@ package com.itsluminous.cleartravel.core.designsystem.component
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
@@ -42,10 +41,10 @@ fun LocalDatePickerDialog(
                     val picked = pickerState.selectedDateMillis?.let(::localDateFromPickerMillis)
                     if (picked != null) onConfirm(picked) else onDismiss()
                 },
-            ) { Text(stringResource(R.string.designsystem_date_picker_ok)) }
+            ) { AutoShrinkText(stringResource(R.string.designsystem_date_picker_ok)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.designsystem_date_picker_cancel)) }
+            TextButton(onClick = onDismiss) { AutoShrinkText(stringResource(R.string.designsystem_date_picker_cancel)) }
         },
     ) {
         DatePicker(state = pickerState)

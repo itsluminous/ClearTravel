@@ -18,6 +18,7 @@ import com.itsluminous.cleartravel.R
 import com.itsluminous.cleartravel.core.data.share.ShareImportPreview
 import com.itsluminous.cleartravel.core.data.share.ShareImportResult
 import com.itsluminous.cleartravel.core.data.share.ShareLinkError
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 
 /**
  * Hosts the shared trip/checklist import (ADR-039): starts the preview when a
@@ -79,7 +80,7 @@ fun ShareImportHost(
                     )
                 },
                 confirmButton = {
-                    TextButton(onClick = ::dismiss) { Text(stringResource(R.string.share_import_ok)) }
+                    TextButton(onClick = ::dismiss) { AutoShrinkText(stringResource(R.string.share_import_ok)) }
                 },
             )
     }
@@ -125,11 +126,11 @@ private fun ConfirmDialog(
         text = { Text(message) },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text(stringResource(if (preview.existing) R.string.share_import_update else R.string.share_import_add))
+                AutoShrinkText(stringResource(if (preview.existing) R.string.share_import_update else R.string.share_import_add))
             }
         },
         dismissButton = {
-            TextButton(onClick = onCancel) { Text(stringResource(R.string.share_import_cancel)) }
+            TextButton(onClick = onCancel) { AutoShrinkText(stringResource(R.string.share_import_cancel)) }
         },
     )
 }

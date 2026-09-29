@@ -26,6 +26,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.google.auth.GoogleFeature
 import com.itsluminous.cleartravel.core.google.auth.GoogleLinkState
@@ -99,7 +100,7 @@ internal fun GoogleAccountSection(
                         enabled = !uiState.inProgress,
                         modifier = Modifier.padding(top = 8.dp),
                     ) {
-                        Text(stringResource(R.string.menu_google_link_action))
+                        AutoShrinkText(stringResource(R.string.menu_google_link_action))
                     }
                 }
                 is GoogleLinkState.Linked -> {
@@ -112,7 +113,7 @@ internal fun GoogleAccountSection(
                         enabled = !uiState.inProgress,
                         modifier = Modifier.padding(top = 8.dp),
                     ) {
-                        Text(stringResource(R.string.menu_google_disconnect_action))
+                        AutoShrinkText(stringResource(R.string.menu_google_disconnect_action))
                     }
                 }
             }
@@ -149,16 +150,16 @@ internal fun GoogleAccountSection(
             text = { Text(stringResource(R.string.menu_google_disconnect_message)) },
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmDisconnect(deleteCalendar = false) }) {
-                    Text(stringResource(R.string.menu_google_disconnect_keep))
+                    AutoShrinkText(stringResource(R.string.menu_google_disconnect_keep))
                 }
             },
             dismissButton = {
                 Row {
                     TextButton(onClick = { viewModel.confirmDisconnect(deleteCalendar = true) }) {
-                        Text(stringResource(R.string.menu_google_disconnect_delete))
+                        AutoShrinkText(stringResource(R.string.menu_google_disconnect_delete))
                     }
                     TextButton(onClick = viewModel::dismissDisconnect) {
-                        Text(stringResource(R.string.menu_cancel))
+                        AutoShrinkText(stringResource(R.string.menu_cancel))
                     }
                 }
             },

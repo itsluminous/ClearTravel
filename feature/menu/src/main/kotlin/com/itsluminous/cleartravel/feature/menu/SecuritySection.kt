@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.InputDialogProperties
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordField
@@ -98,7 +99,7 @@ internal fun SecuritySection(
                 enabled = state.hasPassword && !state.busy,
                 modifier = Modifier.padding(top = 12.dp),
             ) {
-                Text(stringResource(R.string.menu_security_change_password))
+                AutoShrinkText(stringResource(R.string.menu_security_change_password))
             }
 
             Row(
@@ -254,11 +255,11 @@ private fun ChangePasswordDialog(
                 onClick = { onSubmit(current, new, confirm) },
                 enabled = !busy && current.isNotEmpty() && new.isNotEmpty() && confirm.isNotEmpty(),
             ) {
-                Text(stringResource(R.string.menu_security_change_confirm))
+                AutoShrinkText(stringResource(R.string.menu_security_change_confirm))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.menu_cancel)) }
+            TextButton(onClick = onDismiss) { AutoShrinkText(stringResource(R.string.menu_cancel)) }
         },
     )
 }

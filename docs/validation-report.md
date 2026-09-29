@@ -1049,3 +1049,44 @@ Notes:
   by the unit fixtures instead.
 - The intake dialog is a pure choice, so it keeps the default tap-outside dismissal
   (ADR-041); the paste dialog uses `InputDialogProperties` like the train one.
+
+## Shrink-to-fit labels — sweep + font-scale 1.3 proof (2026-09-29 22:15–23:05 IST, emulator Play_36_Pixel, API 36)
+
+Scope: the reported wrap of the flight form's **Save & check status** button, then a
+sweep of every single-line UI label in the app (buttons, chips, segmented / filter
+rows, bottom-nav labels, card title rows, stat pills, dialog actions, app-bar titles)
+onto `AutoShrinkText` (`core:designsystem`), which now jumps to the proportional fit on
+overflow (floor 60 %, then ellipsis) and passes `color` / `fontWeight` / `fontStyle` /
+`textAlign` through. 151 label sites across 43 files (all modules) were converted; the
+`FullWidthFilterChip` and `PasswordField` label slots in `core:designsystem` shrink for
+every caller. Every assertion below is a `uiautomator dump` **node height** — a
+single-line node at font scale 1.3 measures 67–81 px (label/body), 80 px (title); a
+wrapped label doubles that. `adb shell settings put system font_scale 1.3` for the walk,
+reset to `1.0` afterwards and re-checked.
+
+| # | Screen / element (font scale 1.3) | Node height | Verdict |
+|---|---|---|---|
+| a1 | **Flight form save row**: `Save` `[225,1821][342,1888]`, `Save & check status` `[623,1820][971,1889]` | 67 / 69 | **PASS** — one line each, row height unchanged; before the fix the right label wrapped to two lines |
+| a2 | Same row at **font scale 1.0**: `Save` / `Save & check status` | 53 / 53 | PASS — natural size, no shrink needed |
+| b | Flight card: `AI 131` title `[84,351][576,431]`, status pill `Scheduled` 67, `BOM → LHR` 81, date 80, `Dep 06:30 · Arr 11:45` 80 (×3 cards) | 80 / 67 / 81 / 80 / 80 | PASS |
+| c | Train card: header band `UDN` / `Sep 29, Tue 08:35` / `DNR` 80 each, title `20933 - UDN DANAPUR EXP` 80 (810 px slot), pills `RAC - 8` / `RAC - 9` / `CNF B4-23` 67 | 80 / 67 | PASS |
+| d | Journeys segments `Trains` / `Flights` 67; `Active` / `Archived` full-width filter chips 67 (trains, flights, trips) | 67 | PASS |
+| e | Trip cards: names 80, date ranges `Oct 10, 2026 – Oct 18, 2026` 82 in the 302 px column (destination sub-line is body text and may wrap — by design) | 80 / 82 | PASS |
+| f | Checklist cards `Paris Trip` 80 + `3 of 19 done` 75; detail header `3 of 19 done` 76; item rows 81 | 75–81 | PASS |
+| g | Documents cards: name 80, type 80, `Expires soon · Jan 14, 2027` 85 | 80–85 | PASS |
+| h | Backup & Restore: `Export backup` / `Import backup` 67; **Import this backup?** dialog `Cancel` 67 / `Import` 67 | 67 | PASS |
+| i | Settings → Security: `Change password` 67; dialog `Cancel` / `Change` 67; text-field label **`Confirm new password`** was 162 (two lines — the eye icon narrows the field) → `PasswordField` label converted → **87** | 162 → 87 | **PASS after fix** |
+| j | Flight detail sheet: `Check status` / `Open web check-in` / `Attach booking confirmation` 67, action row `Edit` 67 / `Archive` 68 / `Delete` 67 | 67–68 | PASS |
+| k | Bottom navigation `Trips` / `Journeys` / `Checklist` / `Documents` / `Menu` | 55 each | PASS |
+| l | `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → BUILD SUCCESSFUL; unit **1136/1136**, 0 failures (was 1131: +5 `AutoShrinkTextTest` on the fit math) | — | PASS (`shrink.log`, git-ignored) |
+| m | `connectedDebugAndroidTest` on Android_16_AOSP_Medium → **26/26 PASS**, 0 failures (run against the sweep build before the one-line `PasswordField` label swap in row i; the AOSP AVD was in use by another session afterwards, so it was not re-run) | — | PASS |
+
+Notes:
+- Onboarding wizard buttons were converted but not walked (needs `pm clear`, which
+  would wipe the demo data); they are full-width single buttons, so a wrap there was
+  already impossible.
+- `Modifier.weight(1f)` was added to the flight card's title and left column so the
+  status pill / boarding-pass icon are measured first and the title shrinks into
+  what is left instead of pushing them.
+- Dynamic, possibly very long values (journey-picker rows, place suggestions) use
+  `minScale = 0.8f` — shrink a little, then ellipsize, rather than go illegible.

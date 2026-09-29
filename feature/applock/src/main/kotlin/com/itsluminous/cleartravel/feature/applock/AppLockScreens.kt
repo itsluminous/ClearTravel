@@ -38,6 +38,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordField
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordFieldRole
@@ -220,7 +221,7 @@ internal fun SetupPasswordScreen(
             enabled = !feedback.busy && password.isNotEmpty() && confirm.isNotEmpty(),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(stringResource(R.string.applock_setup_action))
+            AutoShrinkText(stringResource(R.string.applock_setup_action))
         }
         if (feedback.busy) CircularProgressIndicator()
         if (feedback.preparationFailed) PreparationFailedText()
@@ -303,13 +304,13 @@ internal fun UnlockScreen(
             enabled = !feedback.busy && password.isNotEmpty(),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(stringResource(R.string.applock_unlock_action))
+            AutoShrinkText(stringResource(R.string.applock_unlock_action))
         }
         if (canPrompt) {
             OutlinedButton(onClick = ::startBiometric, enabled = !feedback.busy, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Filled.Fingerprint, contentDescription = null)
                 Spacer(Modifier.size(8.dp))
-                Text(stringResource(R.string.applock_biometric_action))
+                AutoShrinkText(stringResource(R.string.applock_biometric_action))
             }
         }
         if (feedback.biometricUnavailable) {
@@ -319,7 +320,7 @@ internal fun UnlockScreen(
         if (feedback.preparationFailed) {
             PreparationFailedText()
             OutlinedButton(onClick = onRetryPreparation, enabled = !feedback.busy) {
-                Text(stringResource(R.string.applock_preparation_retry))
+                AutoShrinkText(stringResource(R.string.applock_preparation_retry))
             }
         }
         if (feedback.busy) CircularProgressIndicator()

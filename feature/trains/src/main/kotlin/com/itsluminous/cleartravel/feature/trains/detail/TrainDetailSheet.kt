@@ -164,15 +164,15 @@ internal fun TrainDetailSheet(
                 )
             }
             Button(onClick = onCheckStatus, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.trains_detail_check_status))
+                AutoShrinkText(stringResource(R.string.trains_detail_check_status))
             }
             if (ticket.trainNumber.isNotBlank()) {
                 OutlinedButton(onClick = onViewRoute, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.trains_detail_view_route))
+                    AutoShrinkText(stringResource(R.string.trains_detail_view_route))
                 }
             }
             OutlinedButton(onClick = onSeatMap, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.trains_detail_seat_map))
+                AutoShrinkText(stringResource(R.string.trains_detail_seat_map))
             }
             // Three equal-width buttons: the longer "Unarchive" must shrink to stay on
             // one line rather than wrap, and its siblings get the same treatment.
@@ -206,12 +206,12 @@ internal fun TrainDetailSheet(
                         onDelete()
                     },
                 ) {
-                    Text(stringResource(R.string.trains_detail_delete_confirm_yes))
+                    AutoShrinkText(stringResource(R.string.trains_detail_delete_confirm_yes))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text(stringResource(R.string.trains_detail_delete_confirm_no))
+                    AutoShrinkText(stringResource(R.string.trains_detail_delete_confirm_no))
                 }
             },
         )

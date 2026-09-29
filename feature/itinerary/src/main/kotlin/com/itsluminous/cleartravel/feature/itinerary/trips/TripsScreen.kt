@@ -45,6 +45,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
@@ -177,11 +178,11 @@ internal fun TripsScreen(
                         viewModel.deleteTrip(trip.id)
                         deleteTarget = null
                     },
-                ) { Text(stringResource(R.string.itinerary_delete)) }
+                ) { AutoShrinkText(stringResource(R.string.itinerary_delete)) }
             },
             dismissButton = {
                 TextButton(onClick = { deleteTarget = null }) {
-                    Text(stringResource(R.string.itinerary_cancel))
+                    AutoShrinkText(stringResource(R.string.itinerary_cancel))
                 }
             },
         )
@@ -211,7 +212,7 @@ private fun TripCard(
                 Text(text = trip.coverEmoji, style = MaterialTheme.typography.titleLarge)
             }
             Column(modifier = Modifier.weight(1f).padding(horizontal = 12.dp)) {
-                Text(text = trip.name, style = MaterialTheme.typography.titleMedium)
+                AutoShrinkText(text = trip.name, style = MaterialTheme.typography.titleMedium)
                 if (trip.destination.isNotBlank()) {
                     Text(
                         text = trip.destination,
@@ -220,7 +221,7 @@ private fun TripCard(
                     )
                 }
                 tripDateRangeText(trip)?.let { range ->
-                    Text(
+                    AutoShrinkText(
                         text = range,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

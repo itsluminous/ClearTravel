@@ -166,7 +166,7 @@ fun FlightDetailSheet(
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
             FilledTonalButton(onClick = onCheckStatus, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.flights_action_check_status))
+                AutoShrinkText(stringResource(R.string.flights_action_check_status))
             }
             FilledTonalButton(
                 onClick = {
@@ -177,15 +177,15 @@ fun FlightDetailSheet(
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(stringResource(R.string.flights_action_web_checkin))
+                AutoShrinkText(stringResource(R.string.flights_action_web_checkin))
             }
             flight.boardingPassPath?.let { path ->
                 FilledTonalButton(onClick = { onViewPass(path) }, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.flights_action_view_pass))
+                    AutoShrinkText(stringResource(R.string.flights_action_view_pass))
                 }
             }
             FilledTonalButton(onClick = onAttachBooking, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.flights_action_attach_booking))
+                AutoShrinkText(stringResource(R.string.flights_action_attach_booking))
             }
 
             if (documents.isNotEmpty()) {
@@ -272,11 +272,11 @@ fun FlightDetailSheet(
                         confirmDelete = false
                         onDelete()
                     },
-                ) { Text(stringResource(R.string.flights_delete_confirm)) }
+                ) { AutoShrinkText(stringResource(R.string.flights_delete_confirm)) }
             },
             dismissButton = {
                 TextButton(onClick = { confirmDelete = false }) {
-                    Text(stringResource(R.string.flights_delete_cancel))
+                    AutoShrinkText(stringResource(R.string.flights_delete_cancel))
                 }
             },
         )

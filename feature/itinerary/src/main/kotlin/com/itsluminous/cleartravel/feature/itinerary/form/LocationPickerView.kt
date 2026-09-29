@@ -36,12 +36,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.feature.itinerary.R
@@ -88,7 +88,7 @@ internal fun LocationPickerView(
             OutlinedButton(
                 onClick = onCancel,
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
-            ) { Text(stringResource(R.string.itinerary_back)) }
+            ) { AutoShrinkText(stringResource(R.string.itinerary_back)) }
         }
         return
     }
@@ -188,10 +188,9 @@ internal fun LocationPickerView(
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(
+                AutoShrinkText(
                     text = place.label,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    minScale = LONG_VALUE_MIN_SCALE,
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
@@ -227,12 +226,15 @@ internal fun LocationPickerView(
         )
         Row(modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
             OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.itinerary_cancel))
+                AutoShrinkText(stringResource(R.string.itinerary_cancel))
             }
             Button(
                 onClick = { onConfirm(MapPoint(target.latitude, target.longitude)) },
                 modifier = Modifier.weight(1f).padding(start = 8.dp),
-            ) { Text(stringResource(R.string.itinerary_confirm_location)) }
+            ) { AutoShrinkText(stringResource(R.string.itinerary_confirm_location)) }
         }
     }
 }
+
+/** Place suggestions can be whole addresses: shrink a little, then ellipsize rather than go illegible. */
+private const val LONG_VALUE_MIN_SCALE = 0.8f

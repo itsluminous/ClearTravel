@@ -46,12 +46,12 @@ fun PasteTextDialog(
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(text) }, enabled = text.isNotBlank()) {
-                Text(confirmText)
+                AutoShrinkText(confirmText)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(dismissText)
+                AutoShrinkText(dismissText)
             }
         },
     )

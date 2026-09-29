@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
@@ -118,8 +119,8 @@ private fun ChecklistCard(
     modifier: Modifier = Modifier,
 ) {
     ClearTravelCard(modifier = modifier.clickable(onClick = onClick)) {
-        Text(text = row.checklist.name, style = MaterialTheme.typography.titleMedium)
-        Text(
+        AutoShrinkText(text = row.checklist.name, style = MaterialTheme.typography.titleMedium)
+        AutoShrinkText(
             text = stringResource(R.string.checklist_progress, row.doneCount, row.totalCount),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -182,12 +183,12 @@ private fun CreateChecklistDialog(
                 onClick = { onCreate(name, selectedPresetId) },
                 enabled = name.isNotBlank(),
             ) {
-                Text(stringResource(R.string.checklist_create_confirm))
+                AutoShrinkText(stringResource(R.string.checklist_create_confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.checklist_cancel))
+                AutoShrinkText(stringResource(R.string.checklist_cancel))
             }
         },
     )

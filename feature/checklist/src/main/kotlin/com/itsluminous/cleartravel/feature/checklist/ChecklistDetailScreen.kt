@@ -45,6 +45,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.CardShare
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
@@ -118,7 +119,7 @@ internal fun ChecklistDetailScreen(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { Text(checklist?.name.orEmpty()) },
+                title = { AutoShrinkText(checklist?.name.orEmpty()) },
                 navigationIcon = {
                     ExplainableIcon(
                         icon = Icons.AutoMirrored.Filled.ArrowBack,
@@ -215,12 +216,12 @@ internal fun ChecklistDetailScreen(
                         viewModel.deleteChecklist()
                     },
                 ) {
-                    Text(stringResource(R.string.checklist_delete_confirm))
+                    AutoShrinkText(stringResource(R.string.checklist_delete_confirm))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = false }) {
-                    Text(stringResource(R.string.checklist_cancel))
+                    AutoShrinkText(stringResource(R.string.checklist_cancel))
                 }
             },
         )
@@ -235,7 +236,7 @@ private fun ProgressHeader(
     val done = items.count { it.checked }
     val total = items.size
     Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(
+        AutoShrinkText(
             text = stringResource(R.string.checklist_progress, done, total),
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -369,7 +370,7 @@ private fun AppendPresetDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.checklist_cancel))
+                AutoShrinkText(stringResource(R.string.checklist_cancel))
             }
         },
     )

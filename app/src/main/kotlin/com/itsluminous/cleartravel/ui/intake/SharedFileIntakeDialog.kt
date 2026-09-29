@@ -19,6 +19,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.itsluminous.cleartravel.R
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 
 /**
  * "What's this file?" — asks how a shared PDF/image should be imported. While the
@@ -85,12 +86,12 @@ fun SharedFileIntakeDialog(
         },
         confirmButton = {
             TextButton(onClick = onConfirm, enabled = !state.detecting && state.selected != null) {
-                Text(stringResource(R.string.intake_confirm))
+                AutoShrinkText(stringResource(R.string.intake_confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onCancel) {
-                Text(stringResource(R.string.intake_cancel))
+                AutoShrinkText(stringResource(R.string.intake_cancel))
             }
         },
     )

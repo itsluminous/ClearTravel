@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.designsystem.DateFormats
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordField
 import com.itsluminous.cleartravel.core.designsystem.component.PasswordFieldRole
@@ -124,7 +125,7 @@ internal fun GoogleStep(
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Button(onClick = onContinue, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.applock_onboarding_continue))
+                    AutoShrinkText(stringResource(R.string.applock_onboarding_continue))
                 }
             }
             GoogleLinkState.NotConfigured, GoogleLinkState.NotLinked -> {
@@ -133,7 +134,7 @@ internal fun GoogleStep(
                     enabled = state.googleConfigured && !state.busy,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(stringResource(R.string.applock_onboarding_google_connect))
+                    AutoShrinkText(stringResource(R.string.applock_onboarding_google_connect))
                 }
                 if (!state.googleConfigured) {
                     Text(
@@ -143,7 +144,7 @@ internal fun GoogleStep(
                     )
                 }
                 OutlinedButton(onClick = onContinue, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
-                    Text(stringResource(R.string.applock_onboarding_google_offline))
+                    AutoShrinkText(stringResource(R.string.applock_onboarding_google_offline))
                 }
             }
         }
@@ -187,7 +188,7 @@ internal fun RestoreStep(
                 enabled = !state.busy,
                 modifier = Modifier.padding(top = 8.dp),
             ) {
-                Text(stringResource(R.string.applock_onboarding_restore_file_action))
+                AutoShrinkText(stringResource(R.string.applock_onboarding_restore_file_action))
             }
         }
 
@@ -218,7 +219,7 @@ internal fun RestoreStep(
                             modifier = Modifier.padding(top = 4.dp),
                         )
                         TextButton(onClick = onRetryDrive, enabled = !state.busy) {
-                            Text(stringResource(R.string.applock_onboarding_restore_drive_recheck))
+                            AutoShrinkText(stringResource(R.string.applock_onboarding_restore_drive_recheck))
                         }
                     }
                     is DriveCheck.Found -> {
@@ -257,7 +258,7 @@ internal fun RestoreStep(
         if (state.busy) CircularProgressIndicator()
         Spacer(Modifier.size(8.dp))
         Button(onClick = onStartFresh, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.applock_onboarding_start_fresh))
+            AutoShrinkText(stringResource(R.string.applock_onboarding_start_fresh))
         }
     }
 }
@@ -320,10 +321,10 @@ internal fun BackupPasswordStep(
             enabled = !state.busy && password.isNotEmpty(),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(stringResource(R.string.applock_onboarding_backup_password_action))
+            AutoShrinkText(stringResource(R.string.applock_onboarding_backup_password_action))
         }
         OutlinedButton(onClick = onCancel, enabled = !state.busy, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.applock_onboarding_backup_password_cancel))
+            AutoShrinkText(stringResource(R.string.applock_onboarding_backup_password_cancel))
         }
         if (state.busy) CircularProgressIndicator()
     }

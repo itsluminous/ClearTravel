@@ -101,7 +101,7 @@ internal fun TrainTicketFormScreen(
             )
         }
         OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) {
-            Text(
+            AutoShrinkText(
                 text =
                     state.journeyDate?.let(::formatDate)
                         ?: stringResource(R.string.trains_form_pick_date),
@@ -156,7 +156,7 @@ internal fun TrainTicketFormScreen(
             )
         }
         OutlinedButton(onClick = viewModel::addPassengerRow) {
-            Text(stringResource(R.string.trains_form_add_passenger))
+            AutoShrinkText(stringResource(R.string.trains_form_add_passenger))
         }
 
         Row(
@@ -164,14 +164,14 @@ internal fun TrainTicketFormScreen(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 24.dp),
         ) {
             OutlinedButton(onClick = onCancel, modifier = Modifier.weight(1f)) {
-                Text(stringResource(R.string.trains_form_cancel))
+                AutoShrinkText(stringResource(R.string.trains_form_cancel))
             }
             Button(
                 onClick = viewModel::save,
                 enabled = !state.saving,
                 modifier = Modifier.weight(1f),
             ) {
-                Text(stringResource(R.string.trains_form_save))
+                AutoShrinkText(stringResource(R.string.trains_form_save))
             }
         }
     }

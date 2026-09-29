@@ -39,6 +39,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.data.backup.ImportPreview
 import com.itsluminous.cleartravel.core.designsystem.DateFormats
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.designsystem.component.InputDialogProperties
@@ -195,7 +196,7 @@ internal fun BackupRestoreScreen(
                     enabled = !uiState.inProgress,
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
-                    Text(stringResource(R.string.menu_backup_export_action))
+                    AutoShrinkText(stringResource(R.string.menu_backup_export_action))
                 }
             }
 
@@ -215,7 +216,7 @@ internal fun BackupRestoreScreen(
                     enabled = !uiState.inProgress,
                     modifier = Modifier.padding(top = 8.dp),
                 ) {
-                    Text(stringResource(R.string.menu_backup_import_action))
+                    AutoShrinkText(stringResource(R.string.menu_backup_import_action))
                 }
             }
 
@@ -252,7 +253,7 @@ internal fun BackupRestoreScreen(
                         enabled = !uiState.inProgress,
                         modifier = Modifier.padding(top = 8.dp),
                     ) {
-                        Text(stringResource(R.string.menu_backup_drive_restore_action))
+                        AutoShrinkText(stringResource(R.string.menu_backup_drive_restore_action))
                     }
                 }
             }
@@ -300,12 +301,12 @@ internal fun BackupRestoreScreen(
             },
             confirmButton = {
                 TextButton(onClick = viewModel::confirmFreshRestore) {
-                    Text(stringResource(R.string.menu_backup_fresh_restore_confirm))
+                    AutoShrinkText(stringResource(R.string.menu_backup_fresh_restore_confirm))
                 }
             },
             dismissButton = {
                 TextButton(onClick = viewModel::dismissFreshRestore) {
-                    Text(stringResource(R.string.menu_backup_fresh_restore_decline))
+                    AutoShrinkText(stringResource(R.string.menu_backup_fresh_restore_decline))
                 }
             },
         )
@@ -362,7 +363,7 @@ private fun DriveBackupListDialog(
         },
         confirmButton = {},
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.menu_cancel)) }
+            TextButton(onClick = onDismiss) { AutoShrinkText(stringResource(R.string.menu_cancel)) }
         },
     )
 }
@@ -395,11 +396,11 @@ private fun BackupPasswordDialog(
         },
         confirmButton = {
             TextButton(onClick = { onSubmit(password) }, enabled = password.isNotEmpty() && !inProgress) {
-                Text(stringResource(R.string.menu_backup_password_confirm))
+                AutoShrinkText(stringResource(R.string.menu_backup_password_confirm))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.menu_cancel)) }
+            TextButton(onClick = onDismiss) { AutoShrinkText(stringResource(R.string.menu_cancel)) }
         },
     )
 }
@@ -437,10 +438,10 @@ private fun ImportConfirmDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onConfirm) { Text(stringResource(R.string.menu_backup_import_confirm)) }
+            TextButton(onClick = onConfirm) { AutoShrinkText(stringResource(R.string.menu_backup_import_confirm)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.menu_cancel)) }
+            TextButton(onClick = onDismiss) { AutoShrinkText(stringResource(R.string.menu_cancel)) }
         },
     )
 }

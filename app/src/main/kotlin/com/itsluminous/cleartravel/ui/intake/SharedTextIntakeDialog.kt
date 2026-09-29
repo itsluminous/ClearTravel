@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.itsluminous.cleartravel.R
 import com.itsluminous.cleartravel.core.data.intake.SharedTextKind
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 
 /**
  * "What's this text?" — asks whether a shared SMS/email is a train ticket or a flight
@@ -86,12 +87,12 @@ fun SharedTextIntakeDialog(
         },
         confirmButton = {
             TextButton(onClick = onConfirm, enabled = state.selected != null) {
-                Text(stringResource(R.string.intake_confirm))
+                AutoShrinkText(stringResource(R.string.intake_confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onCancel) {
-                Text(stringResource(R.string.intake_cancel))
+                AutoShrinkText(stringResource(R.string.intake_cancel))
             }
         },
     )

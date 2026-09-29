@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ChipRow
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.designsystem.component.InputDialogProperties
@@ -79,7 +80,7 @@ internal fun DocumentDetailsDialog(
                         FilterChip(
                             selected = preset == type,
                             onClick = { type = preset },
-                            label = { Text(stringResource(DocumentTypePresets.labelRes(preset))) },
+                            label = { AutoShrinkText(stringResource(DocumentTypePresets.labelRes(preset))) },
                         )
                     }
                 }
@@ -143,12 +144,12 @@ internal fun DocumentDetailsDialog(
                 },
                 enabled = displayedName.isNotBlank(),
             ) {
-                Text(stringResource(R.string.documents_save))
+                AutoShrinkText(stringResource(R.string.documents_save))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.documents_cancel))
+                AutoShrinkText(stringResource(R.string.documents_cancel))
             }
         },
     )

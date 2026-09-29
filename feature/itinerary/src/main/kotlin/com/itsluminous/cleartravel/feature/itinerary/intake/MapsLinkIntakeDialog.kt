@@ -27,6 +27,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.InputDialogProperties
 import com.itsluminous.cleartravel.core.model.Trip
 import com.itsluminous.cleartravel.feature.itinerary.R
@@ -136,11 +137,11 @@ internal fun MapsLinkIntakeDialog(
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(fallbackName) }, enabled = state.canConfirm(trips)) {
-                Text(stringResource(R.string.itinerary_maps_add_place))
+                AutoShrinkText(stringResource(R.string.itinerary_maps_add_place))
             }
         },
         dismissButton = {
-            TextButton(onClick = onCancel) { Text(stringResource(R.string.itinerary_cancel)) }
+            TextButton(onClick = onCancel) { AutoShrinkText(stringResource(R.string.itinerary_cancel)) }
         },
     )
 }

@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.scrape.RuleDrivenScrapeSession
 import com.itsluminous.cleartravel.core.scrape.ScrapeEvent
@@ -84,7 +85,7 @@ internal fun PnrCheckScreen(
             is PnrCheckUiState.RuleUnavailable -> {
                 Banner(text = stringResource(R.string.trains_pnr_check_rule_missing)) {
                     TextButton(onClick = onClose) {
-                        Text(stringResource(R.string.trains_pnr_check_close))
+                        AutoShrinkText(stringResource(R.string.trains_pnr_check_close))
                     }
                 }
             }
@@ -101,10 +102,10 @@ internal fun PnrCheckScreen(
             is PnrCheckUiState.ParseFailed -> {
                 Banner(text = stringResource(R.string.trains_pnr_check_parse_failed)) {
                     TextButton(onClick = { viewModel.start(pnr) }) {
-                        Text(stringResource(R.string.trains_pnr_check_retry))
+                        AutoShrinkText(stringResource(R.string.trains_pnr_check_retry))
                     }
                     TextButton(onClick = onClose) {
-                        Text(stringResource(R.string.trains_pnr_check_close))
+                        AutoShrinkText(stringResource(R.string.trains_pnr_check_close))
                     }
                 }
                 // The raw page stays visible below the banner (spec fallback).

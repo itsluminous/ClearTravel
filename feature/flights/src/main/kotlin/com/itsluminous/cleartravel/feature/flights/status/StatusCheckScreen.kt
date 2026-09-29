@@ -33,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.scrape.RuleDrivenScrapeSession
 import com.itsluminous.cleartravel.core.scrape.ScrapeWebViewController
@@ -187,15 +188,15 @@ private fun ParseFailedBanner(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(onClick = onRetry) {
-                    Text(stringResource(R.string.flights_check_retry))
+                    AutoShrinkText(stringResource(R.string.flights_check_retry))
                 }
                 if (onTryWebSearch != null) {
                     TextButton(onClick = onTryWebSearch) {
-                        Text(stringResource(R.string.flights_check_try_web_search))
+                        AutoShrinkText(stringResource(R.string.flights_check_try_web_search))
                     }
                 }
                 TextButton(onClick = onClose) {
-                    Text(stringResource(R.string.flights_check_close))
+                    AutoShrinkText(stringResource(R.string.flights_check_close))
                 }
             }
         }

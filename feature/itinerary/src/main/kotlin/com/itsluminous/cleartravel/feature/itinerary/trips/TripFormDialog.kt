@@ -33,6 +33,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ChipRow
 import com.itsluminous.cleartravel.core.designsystem.component.InputDialogProperties
 import com.itsluminous.cleartravel.core.designsystem.component.LocalDatePickerDialog
@@ -116,22 +117,20 @@ internal fun TripFormDialog(
                         onClick = { showStartPicker = true },
                         modifier = Modifier.weight(1f),
                     ) {
-                        Text(
+                        AutoShrinkText(
                             text =
                                 startDate?.formatMedium()
                                     ?: stringResource(R.string.itinerary_trip_start_date),
-                            maxLines = 1,
                         )
                     }
                     OutlinedButton(
                         onClick = { showEndPicker = true },
                         modifier = Modifier.weight(1f).padding(start = 8.dp),
                     ) {
-                        Text(
+                        AutoShrinkText(
                             text =
                                 endDate?.formatMedium()
                                     ?: stringResource(R.string.itinerary_trip_end_date),
-                            maxLines = 1,
                         )
                     }
                 }
@@ -145,7 +144,7 @@ internal fun TripFormDialog(
                         FilterChip(
                             selected = emoji == candidate,
                             onClick = { emoji = candidate },
-                            label = { Text(candidate) },
+                            label = { AutoShrinkText(candidate) },
                         )
                     }
                 }
@@ -167,11 +166,11 @@ internal fun TripFormDialog(
         },
         confirmButton = {
             TextButton(onClick = { onSave(name, destination, startDate, endDate, emoji, color) }) {
-                Text(stringResource(R.string.itinerary_save))
+                AutoShrinkText(stringResource(R.string.itinerary_save))
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.itinerary_cancel)) }
+            TextButton(onClick = onDismiss) { AutoShrinkText(stringResource(R.string.itinerary_cancel)) }
         },
     )
 

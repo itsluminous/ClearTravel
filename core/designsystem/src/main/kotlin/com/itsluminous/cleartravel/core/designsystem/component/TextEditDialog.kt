@@ -51,12 +51,12 @@ fun TextEditDialog(
         },
         confirmButton = {
             TextButton(onClick = submit, enabled = trimmed.isNotEmpty()) {
-                Text(confirmText)
+                AutoShrinkText(confirmText)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(dismissText)
+                AutoShrinkText(dismissText)
             }
         },
     )

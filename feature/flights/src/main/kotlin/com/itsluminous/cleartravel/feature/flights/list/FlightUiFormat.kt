@@ -4,13 +4,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.model.FlightStatus
 import com.itsluminous.cleartravel.feature.flights.R
 import java.time.Instant
@@ -37,7 +37,7 @@ fun FlightStatusChip(
     modifier: Modifier = Modifier,
 ) {
     val (container, content) = statusColors(status)
-    Text(
+    AutoShrinkText(
         text = stringResource(status.labelRes()),
         style = MaterialTheme.typography.labelLarge,
         color = content,

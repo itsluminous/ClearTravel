@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,6 +26,7 @@ import androidx.navigation.compose.composable
 import com.itsluminous.cleartravel.R
 import com.itsluminous.cleartravel.core.data.crosstab.JourneyAddRequest
 import com.itsluminous.cleartravel.core.data.crosstab.JourneyAddResult
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.LocalShellChrome
 import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.core.notifications.DeepLinkContract
@@ -171,7 +171,7 @@ private fun JourneysScreen(
                             count = JourneysSegment.entries.size,
                         ),
                 ) {
-                    Text(
+                    AutoShrinkText(
                         text =
                             stringResource(
                                 when (entry) {

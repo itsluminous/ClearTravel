@@ -14,6 +14,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.feature.flights.R
@@ -43,9 +44,11 @@ internal fun FlightCardBody(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
+            // Chip first (measured before the weighted title), title shrinks to what is left.
+            AutoShrinkText(
                 text = "${flight.airlineIata} ${flight.flightNumber}",
                 style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
             )
             FlightStatusChip(status = flight.status)
         }
@@ -54,9 +57,9 @@ internal fun FlightCardBody(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 if (flight.depAirport.isNotBlank() || flight.arrAirport.isNotBlank()) {
-                    Text(
+                    AutoShrinkText(
                         text =
                             listOf(flight.depAirport, flight.arrAirport)
                                 .filter { it.isNotBlank() }
@@ -65,12 +68,12 @@ internal fun FlightCardBody(
                     )
                 }
                 formatDate(flight.date)?.let {
-                    Text(text = it, style = MaterialTheme.typography.bodyMedium)
+                    AutoShrinkText(text = it, style = MaterialTheme.typography.bodyMedium)
                 }
                 val dep = formatTime(flight.estDep ?: flight.schedDep)
                 val arr = formatTime(flight.estArr ?: flight.schedArr)
                 if (dep != null || arr != null) {
-                    Text(
+                    AutoShrinkText(
                         text =
                             stringResource(
                                 R.string.flights_card_dep_arr,

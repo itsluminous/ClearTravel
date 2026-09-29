@@ -60,7 +60,7 @@ fun PasswordField(
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
-        label = { Text(label) },
+        label = { AutoShrinkText(label) },
         singleLine = true,
         enabled = enabled,
         isError = isError,

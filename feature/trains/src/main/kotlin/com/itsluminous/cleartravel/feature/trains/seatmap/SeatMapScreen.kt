@@ -47,6 +47,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
@@ -98,7 +99,7 @@ internal fun SeatMapScreen(
                 )
                 if (canFetch) {
                     Button(onClick = onFetch, modifier = Modifier.padding(top = 8.dp)) {
-                        Text(stringResource(R.string.trains_seatmap_fetch))
+                        AutoShrinkText(stringResource(R.string.trains_seatmap_fetch))
                     }
                 }
             }
@@ -209,7 +210,7 @@ private fun PassengerChips(
                     seat.rawSeat.isNotEmpty() -> stringResource(R.string.trains_seatmap_passenger_chip_unallotted, seat.rawSeat)
                     else -> stringResource(SeatMapWording.chipNoneRes(kind))
                 }
-            SuggestionChip(onClick = {}, label = { Text(label) })
+            SuggestionChip(onClick = {}, label = { AutoShrinkText(label) })
         }
     }
 }
@@ -363,7 +364,7 @@ private fun NoCoachesCard(
         )
         if (onFetch != null) {
             Button(onClick = onFetch, modifier = Modifier.padding(top = 8.dp)) {
-                Text(stringResource(R.string.trains_seatmap_fetch))
+                AutoShrinkText(stringResource(R.string.trains_seatmap_fetch))
             }
         }
     }

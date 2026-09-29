@@ -15,7 +15,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -31,6 +30,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.itsluminous.cleartravel.R
 import com.itsluminous.cleartravel.core.data.crosstab.JourneyAddResult
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.LocalShellChrome
 import com.itsluminous.cleartravel.core.designsystem.component.ShellChromeController
 import com.itsluminous.cleartravel.core.model.JourneyType
@@ -135,7 +135,7 @@ fun ClearTravelApp(
                             selected = selected,
                             onClick = { switchTab(destination.route) },
                             icon = { Icon(imageVector = destination.icon, contentDescription = null) },
-                            label = { Text(label) },
+                            label = { AutoShrinkText(label) },
                         )
                     }
                 }

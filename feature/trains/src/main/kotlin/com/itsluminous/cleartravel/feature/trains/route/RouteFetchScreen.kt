@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.scrape.RuleDrivenScrapeSession
 import com.itsluminous.cleartravel.core.scrape.ScrapeEvent
@@ -84,7 +85,7 @@ internal fun RouteFetchScreen(
             is RouteFetchUiState.RuleUnavailable -> {
                 Banner(text = stringResource(R.string.trains_route_fetch_rule_missing)) {
                     TextButton(onClick = onClose) {
-                        Text(stringResource(R.string.trains_route_fetch_close))
+                        AutoShrinkText(stringResource(R.string.trains_route_fetch_close))
                     }
                 }
             }
@@ -101,15 +102,15 @@ internal fun RouteFetchScreen(
             is RouteFetchUiState.ParseFailed -> {
                 Banner(text = stringResource(R.string.trains_route_fetch_parse_failed)) {
                     TextButton(onClick = viewModel::retry) {
-                        Text(stringResource(R.string.trains_route_fetch_retry))
+                        AutoShrinkText(stringResource(R.string.trains_route_fetch_retry))
                     }
                     if (current.hasAlternateSource) {
                         TextButton(onClick = viewModel::tryAlternateSource) {
-                            Text(stringResource(R.string.trains_route_fetch_alternate))
+                            AutoShrinkText(stringResource(R.string.trains_route_fetch_alternate))
                         }
                     }
                     TextButton(onClick = onClose) {
-                        Text(stringResource(R.string.trains_route_fetch_close))
+                        AutoShrinkText(stringResource(R.string.trains_route_fetch_close))
                     }
                 }
                 // The raw page stays visible below the banner (spec fallback).

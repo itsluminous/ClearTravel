@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.itsluminous.cleartravel.core.designsystem.DateFormats
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
@@ -269,7 +270,7 @@ private fun TrainTicketCardItem(
                     trailingTitleContent =
                         if (ticket.archived) {
                             {
-                                Text(
+                                AutoShrinkText(
                                     text = stringResource(R.string.trains_card_archived_badge),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,

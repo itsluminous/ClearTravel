@@ -51,6 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
@@ -114,7 +115,7 @@ internal fun TripDetailScreen(
             TopAppBar(
                 title = {
                     val current = trip
-                    Text(
+                    AutoShrinkText(
                         text =
                             if (current == null) {
                                 stringResource(R.string.itinerary_trip_missing_title)
@@ -123,8 +124,6 @@ internal fun TripDetailScreen(
                                     .filter { it.isNotBlank() }
                                     .joinToString(" ")
                             },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 },
                 navigationIcon = {
@@ -186,12 +185,12 @@ internal fun TripDetailScreen(
                     selected = selectedView == VIEW_TIMELINE,
                     onClick = { selectedView = VIEW_TIMELINE },
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                ) { Text(stringResource(R.string.itinerary_view_timeline)) }
+                ) { AutoShrinkText(stringResource(R.string.itinerary_view_timeline)) }
                 SegmentedButton(
                     selected = selectedView == VIEW_MAP,
                     onClick = { selectedView = VIEW_MAP },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                ) { Text(stringResource(R.string.itinerary_view_map)) }
+                ) { AutoShrinkText(stringResource(R.string.itinerary_view_map)) }
             }
             when (selectedView) {
                 VIEW_TIMELINE ->
@@ -240,11 +239,11 @@ internal fun TripDetailScreen(
                         viewModel.deleteItem(item.id)
                         deleteTarget = null
                     },
-                ) { Text(stringResource(R.string.itinerary_delete)) }
+                ) { AutoShrinkText(stringResource(R.string.itinerary_delete)) }
             },
             dismissButton = {
                 TextButton(onClick = { deleteTarget = null }) {
-                    Text(stringResource(R.string.itinerary_cancel))
+                    AutoShrinkText(stringResource(R.string.itinerary_cancel))
                 }
             },
         )
@@ -360,7 +359,7 @@ private fun ItineraryItemCard(
                 targetSize = 40.dp,
             )
             Column(modifier = Modifier.weight(1f).padding(horizontal = 8.dp)) {
-                Text(
+                AutoShrinkText(
                     text =
                         if (isCommute) {
                             stringResource(R.string.itinerary_commute_route, item.fromName, item.toName)
@@ -368,8 +367,6 @@ private fun ItineraryItemCard(
                             item.name
                         },
                     style = MaterialTheme.typography.titleSmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
                 )
                 if (item.plannedTime.isNotBlank()) {
                     Text(

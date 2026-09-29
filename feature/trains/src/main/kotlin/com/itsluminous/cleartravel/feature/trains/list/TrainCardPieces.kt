@@ -20,8 +20,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainTicket
 import com.itsluminous.cleartravel.feature.trains.R
@@ -52,33 +52,27 @@ internal fun TicketHeaderBand(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val onBand = MaterialTheme.colorScheme.onPrimaryContainer
-        Text(
+        AutoShrinkText(
             text = stationCode(ticket.fromStation),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = onBand,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        Text(
+        AutoShrinkText(
             text = bandCenterText(ticket.journeyDate, departureTime),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold,
             color = onBand,
             textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(2f),
         )
-        Text(
+        AutoShrinkText(
             text = stationCode(ticket.toStation),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = onBand,
             textAlign = TextAlign.End,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
     }
@@ -115,7 +109,7 @@ internal fun TicketBodyLines(
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
+            AutoShrinkText(
                 text = cardTitle(ticket).ifBlank { stringResource(R.string.trains_card_untitled) },
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
@@ -190,11 +184,10 @@ internal fun StatusPillRow(
                 contentColor = MaterialTheme.colorScheme.onPrimary,
                 shape = RoundedCornerShape(6.dp),
             ) {
-                Text(
+                AutoShrinkText(
                     text = label,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
                 )
             }

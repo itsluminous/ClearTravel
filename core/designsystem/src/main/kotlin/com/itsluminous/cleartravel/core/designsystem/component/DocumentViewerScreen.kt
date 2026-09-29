@@ -66,7 +66,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -211,7 +210,7 @@ fun DocumentViewerScreen(
                 topBar = {
                     TopAppBar(
                         modifier = Modifier.testTag(DOCUMENT_VIEWER_TOOLBAR_TEST_TAG),
-                        title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        title = { AutoShrinkText(title) },
                         navigationIcon = {
                             ExplainableIcon(
                                 icon = Icons.Filled.Close,

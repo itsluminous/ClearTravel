@@ -125,6 +125,11 @@ exist and the full gate passes.
    `LockScaffold` and the externally hosted forms in `MainActivity`. Never add
    `imePadding()`/`WindowInsets.ime` inside a tab screen — it is already consumed;
    scrollable forms bring the focused field into view on their own.
+   **Single-line labels shrink, never wrap:** every button / chip / segmented /
+   filter / tab label, card title row, stat pill, dialog action and app-bar title is
+   an `AutoShrinkText` (`core:designsystem`), which steps the font down to fit its
+   slot (floor 60%, then ellipsis) — never a plain `Text` that could wrap to a
+   second line or a hand-rolled `maxLines = 1` copy.
 
 ## Working conventions
 

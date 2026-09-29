@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.model.ItineraryItem
 import com.itsluminous.cleartravel.core.model.ItineraryItemType
 import com.itsluminous.cleartravel.core.model.JourneyType
@@ -83,7 +84,7 @@ internal fun ItineraryItemSheet(
                             ),
                     )
                     TextButton(onClick = { onOpenLinkedJourney(journeyType, journeyId) }) {
-                        Text(stringResource(R.string.itinerary_open_in_journeys))
+                        AutoShrinkText(stringResource(R.string.itinerary_open_in_journeys))
                     }
                 }
             }
@@ -112,16 +113,16 @@ internal fun ItineraryItemSheet(
                             context.startActivity(Intent(Intent.ACTION_VIEW, mapTarget.toUri()))
                         }
                     },
-                ) { Text(stringResource(R.string.itinerary_open_link)) }
+                ) { AutoShrinkText(stringResource(R.string.itinerary_open_link)) }
             }
             Row(modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 24.dp)) {
                 Button(onClick = onEdit, modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.itinerary_edit_item))
+                    AutoShrinkText(stringResource(R.string.itinerary_edit_item))
                 }
                 OutlinedButton(
                     onClick = onDelete,
                     modifier = Modifier.weight(1f).padding(start = 8.dp),
-                ) { Text(stringResource(R.string.itinerary_delete_item)) }
+                ) { AutoShrinkText(stringResource(R.string.itinerary_delete_item)) }
             }
         }
     }

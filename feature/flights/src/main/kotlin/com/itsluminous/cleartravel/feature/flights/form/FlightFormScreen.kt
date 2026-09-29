@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.data.share.FlightSharePayload
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.designsystem.component.LocalDatePickerDialog
 import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
@@ -258,12 +259,12 @@ fun FlightFormScreen(
                     onClick = { viewModel.save(onSaved) },
                     enabled = !busy,
                     modifier = Modifier.weight(1f),
-                ) { Text(stringResource(R.string.flights_form_save)) }
+                ) { AutoShrinkText(stringResource(R.string.flights_form_save)) }
                 Button(
                     onClick = { viewModel.save(onSavedAndCheck) },
                     enabled = !busy,
                     modifier = Modifier.weight(1f),
-                ) { Text(stringResource(R.string.flights_form_save_fetch)) }
+                ) { AutoShrinkText(stringResource(R.string.flights_form_save_fetch)) }
             }
         }
     }
@@ -374,7 +375,7 @@ private fun FormField(
         readOnly = onClickReadOnly != null,
         interactionSource = interactionSource,
         onValueChange = onChange,
-        label = { Text(stringResource(labelRes)) },
+        label = { AutoShrinkText(stringResource(labelRes)) },
         isError = error,
         supportingText = {
             when {

@@ -50,6 +50,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ChipRow
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.model.CommuteMode
@@ -170,12 +171,12 @@ internal fun ItineraryItemFormScreen(
                     selected = form.type == ItineraryItemType.PLACE,
                     onClick = { viewModel.update { it.copy(type = ItineraryItemType.PLACE) } },
                     shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                ) { Text(stringResource(R.string.itinerary_type_place)) }
+                ) { AutoShrinkText(stringResource(R.string.itinerary_type_place)) }
                 SegmentedButton(
                     selected = form.type == ItineraryItemType.COMMUTE,
                     onClick = { viewModel.update { it.copy(type = ItineraryItemType.COMMUTE) } },
                     shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                ) { Text(stringResource(R.string.itinerary_type_commute)) }
+                ) { AutoShrinkText(stringResource(R.string.itinerary_type_commute)) }
             }
 
             Text(
@@ -188,7 +189,7 @@ internal fun ItineraryItemFormScreen(
                     FilterChip(
                         selected = form.dayIndex == dayIndex,
                         onClick = { viewModel.update { it.copy(dayIndex = dayIndex) } },
-                        label = { Text(stringResource(R.string.itinerary_day_label, dayIndex + 1)) },
+                        label = { AutoShrinkText(stringResource(R.string.itinerary_day_label, dayIndex + 1)) },
                     )
                 }
             }
@@ -226,7 +227,7 @@ internal fun ItineraryItemFormScreen(
             Button(
                 onClick = viewModel::save,
                 modifier = Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 16.dp),
-            ) { Text(stringResource(R.string.itinerary_save)) }
+            ) { AutoShrinkText(stringResource(R.string.itinerary_save)) }
         }
     }
 
@@ -291,7 +292,7 @@ private fun PlaceFields(
             FilterChip(
                 selected = form.category == category,
                 onClick = { onUpdate { it.copy(category = category) } },
-                label = { Text(stringResource(category.labelRes())) },
+                label = { AutoShrinkText(stringResource(category.labelRes())) },
             )
         }
     }
@@ -318,13 +319,13 @@ private fun PlaceFields(
     )
     Row(modifier = Modifier.fillMaxWidth()) {
         OutlinedButton(onClick = onPickOnMap, modifier = Modifier.weight(1f)) {
-            Text(stringResource(R.string.itinerary_pick_on_map))
+            AutoShrinkText(stringResource(R.string.itinerary_pick_on_map))
         }
         if (form.hasLocation) {
             OutlinedButton(
                 onClick = onClearLocation,
                 modifier = Modifier.weight(1f).padding(start = 8.dp),
-            ) { Text(stringResource(R.string.itinerary_clear_location)) }
+            ) { AutoShrinkText(stringResource(R.string.itinerary_clear_location)) }
         }
     }
     val latLngInvalid = latLngText.isNotBlank() && parseLatLng(latLngText) == null
@@ -377,7 +378,7 @@ private fun CommuteFields(
             FilterChip(
                 selected = form.commuteMode == mode,
                 onClick = { onUpdate { it.copy(commuteMode = mode) } },
-                label = { Text(stringResource(mode.labelRes())) },
+                label = { AutoShrinkText(stringResource(mode.labelRes())) },
             )
         }
     }
@@ -418,7 +419,7 @@ private fun CommuteFields(
         }
     } else {
         OutlinedButton(onClick = onLinkJourney, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(R.string.itinerary_link_journey))
+            AutoShrinkText(stringResource(R.string.itinerary_link_journey))
         }
     }
 }
@@ -481,10 +482,10 @@ private fun PlannedTimePickerDialog(
                 onClick = {
                     onConfirm(String.format(Locale.US, "%02d:%02d", state.hour, state.minute))
                 },
-            ) { Text(stringResource(R.string.itinerary_ok)) }
+            ) { AutoShrinkText(stringResource(R.string.itinerary_ok)) }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.itinerary_cancel)) }
+            TextButton(onClick = onDismiss) { AutoShrinkText(stringResource(R.string.itinerary_cancel)) }
         },
     )
 }
@@ -540,13 +541,14 @@ private fun JourneyPickerSheet(
                             onClick = { onPickTrain(ticket) },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text(
+                            AutoShrinkText(
                                 text =
                                     listOf(
                                         ticket.trainNumber,
                                         ticket.trainName,
                                         ticket.journeyDate?.formatMedium().orEmpty(),
                                     ).filter { it.isNotBlank() }.joinToString(" · "),
+                                minScale = LONG_VALUE_MIN_SCALE,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
@@ -564,7 +566,7 @@ private fun JourneyPickerSheet(
                             onClick = { onPickFlight(flight) },
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text(
+                            AutoShrinkText(
                                 text =
                                     listOf(
                                         "${flight.airlineIata} ${flight.flightNumber}",
@@ -575,6 +577,7 @@ private fun JourneyPickerSheet(
                                         ),
                                         flight.date?.formatMedium().orEmpty(),
                                     ).filter { it.isNotBlank() }.joinToString(" · "),
+                                minScale = LONG_VALUE_MIN_SCALE,
                                 modifier = Modifier.fillMaxWidth(),
                             )
                         }
@@ -584,3 +587,6 @@ private fun JourneyPickerSheet(
         }
     }
 }
+
+/** Dynamic, possibly very long picker values shrink only a little before ellipsizing (legibility first). */
+private const val LONG_VALUE_MIN_SCALE = 0.8f

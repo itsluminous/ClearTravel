@@ -41,6 +41,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelFab
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
@@ -153,12 +154,12 @@ internal fun PresetManagerScreen(
                         viewModel.deletePreset(preset)
                     },
                 ) {
-                    Text(stringResource(R.string.menu_preset_delete_confirm))
+                    AutoShrinkText(stringResource(R.string.menu_preset_delete_confirm))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { presetPendingDelete = null }) {
-                    Text(stringResource(R.string.menu_cancel))
+                    AutoShrinkText(stringResource(R.string.menu_cancel))
                 }
             },
         )
@@ -186,7 +187,7 @@ private fun PresetCard(
             if (preset.builtIn) {
                 AssistChip(
                     onClick = onClick,
-                    label = { Text(stringResource(R.string.menu_preset_built_in)) },
+                    label = { AutoShrinkText(stringResource(R.string.menu_preset_built_in)) },
                 )
             }
             ExplainableIcon(
@@ -230,12 +231,12 @@ private fun CreatePresetDialog(
         },
         confirmButton = {
             TextButton(onClick = { onCreate(name) }, enabled = name.isNotBlank()) {
-                Text(stringResource(R.string.menu_preset_create_confirm))
+                AutoShrinkText(stringResource(R.string.menu_preset_create_confirm))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.menu_cancel))
+                AutoShrinkText(stringResource(R.string.menu_cancel))
             }
         },
     )
