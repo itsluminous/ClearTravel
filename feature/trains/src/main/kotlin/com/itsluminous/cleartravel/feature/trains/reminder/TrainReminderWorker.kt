@@ -104,15 +104,13 @@ class TrainReminderWorker(
 object TrainReminderScheduler {
     const val UNIQUE_WORK_NAME = "trains-journey-reminder"
 
-    /** Coarse on purpose: the lead is hours to days, and the policy's window is open until departure. */
-    val PERIOD: Duration = Duration.ofHours(3)
-
     /**
-     * The first run waits a little instead of firing the moment the job is (re-)enqueued:
-     * the user who just opened the app or flipped the setting is looking at the screen,
-     * and the hermetic e2e drives the pass itself without a concurrent worker racing it.
+     * Coarse on purpose: the lead is hours to days, and the policy's window is open until
+     * departure. No initial delay — the first run may fire as soon as the job is enqueued
+     * (a ticket added inside its window is reminded about at once), and WorkManager
+     * refuses a forced run ahead of the schedule, which the device validation relies on.
      */
-    val FIRST_RUN_DELAY: Duration = Duration.ofMinutes(15)
+    val PERIOD: Duration = Duration.ofHours(3)
 
     fun apply(
         context: Context,
@@ -123,7 +121,7 @@ object TrainReminderScheduler {
             workManager.cancelUniqueWork(UNIQUE_WORK_NAME)
             return
         }
-        val request = PeriodicWorkRequestBuilder<TrainReminderWorker>(PERIOD).setInitialDelay(FIRST_RUN_DELAY).build()
+        val request = PeriodicWorkRequestBuilder<TrainReminderWorker>(PERIOD).build()
         workManager.enqueueUniquePeriodicWork(UNIQUE_WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
     }
 }

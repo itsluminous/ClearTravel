@@ -1172,3 +1172,51 @@ Notes:
   pre-existing `ExistingWorkPolicy.REPLACE` self-reschedule racing the finished
   worker's bookkeeping (ADR-013), not a failure: the result line precedes them and job
   13 was enqueued.
+
+## Train journey reminder (2026-10-02 20:30–21:05 IST, emulator Play_36_Pixel, API 36, ADR-044)
+
+Debug build installed OVER the ADR-043 demo install (demo data intact, vault v2). All UI
+reads are `uiautomator dump` node texts; notification evidence is `dumpsys notification
+--noredact`; plaintext-store evidence is `run-as … cat files/datastore/settings.preferences_pb`
+scanned for `sync_train_*` keys. The emulator clock read **Fri 2 Oct 20:30 IST**, so a
+ticket dated **Sat 3 Oct** is inside the 24 h window.
+
+**Finding that shaped the run.** A `PeriodicWorkRequest` can be forced with `cmd
+jobscheduler run -f` only until its FIRST run — afterwards WorkManager's own
+`calculateNextRunTime` (= last enqueue + period) makes a forced run log `Delaying
+execution … because it is being executed before schedule` and re-enqueue. The first
+build carried a 15-minute `setInitialDelay`, which made even the first forced run defer
+(`Minimum latency: +10m29s`); the delay was dropped (the ticket-added-inside-window case
+wants an immediate first run anyway) and the natural scheduled run was used instead.
+Every later "run again" in this table is a FRESH job (Settings → Off → 24 h re-enqueues:
+`cancelUniqueWork` + KEEP on a cancelled name = new spec), which the in-process
+`GreedyScheduler` executes at once while the app is open — the same path a user hits
+when they change the lead.
+
+| # | Step | Evidence | Verdict |
+|---|---|---|---|
+| r0 | Shared IRCTC SMS `PNR:8524167890,TRN:12951,DOJ:03-10-26,3A,MMCT-NDLS,DP:16:35,REMINDER TESTER+0,B4 32,WL 12` → *What's this text?* (Train ticket suggested) → form prefilled → name `Mumbai Rajdhani` → Save | detail sheet `12951 · Mumbai Rajdhani`, `Oct 3, 2026`, `MMCT → NDLS`, `Booked: WL 12` | PASS |
+| r1 | **Hints written while unlocked** | `settings.preferences_pb` gains `sync_train_departures` = `1790965800000:6913…ce5a4` (temp ticket, Oct 3 00:00 IST — no route stored, so start of day) + `1790965800000:23f5…802a` (demo PNR 8845672310); `sha256("8524167890") = 691300b1…`; the 10 digits appear **nowhere** in the file | PASS |
+| r2 | Settings → **Notifications** | `Train reminder` + description, radios `Off / 12 hours before / 24 hours before / 48 hours before`, `24 hours before` `checked=true` by default; Security → Background sync lists `Train reminders` | PASS |
+| r3 | **Locked run** (HOME → `am kill` → the scheduled job ran on its own at 20:46:51, cold process) | logcat `ClearTravelTrainReminder: reminder deferred: vault locked, nudged=true, backgroundKey=false` — the shared "unlock to sync" nudge went out because a hashed hint was due (the record itself was wiped by the `installDebug` that followed; latch + flags are `TrainReminderRunnerTest` / `AppLockNotifierTest`) | PASS |
+| r4 | **Granted run** (unlocked, Settings Off → 24 h → fresh job, greedy in-process run) | `dumpsys notification`: **two** records on `channel=trains`, `pri=0`, one per ticket inside the window — id **1762853041** = `PnrHash.notificationId("8524167890")`: `Train tomorrow: 12951 Mumbai Rajdhani` / `Departs MMCT Sat 3 Oct. Tap to check PNR & seat status (WL 12).`; id **603303337** = the demo ticket's: `… (CNF).` Both carry `contentIntent … startActivity` | PASS |
+| r5 | **Run again** (Off → 24 h once more, same lead) | logcat `reminder ran: posted=0, lead=ONE_DAY, backgroundKeyUnlocked=false`; notification list unchanged (same two ids) — the reminded set holds | PASS |
+| r6 | **Tap, warm** (`am start -a VIEW -d cleartravel://pnr/8524167890 -p …` with the process alive) | lands on `Check PNR status` / *Tap Submit on the page and solve the captcha…* with the IRCTC page's `Enter PNR No.` field = `8524167890` | PASS |
+| r7 | **Tap, cold** (`am force-stop` → same link) | `Clear Travel is locked` → `TestPass123` → `Check PNR status`, PNR field `8524167890` (resolved inside the gate, ADR-044 §7) | PASS |
+| r8 | Link for an UNKNOWN PNR (`cleartravel://pnr/1234509876`) | `Add train ticket` form carrying `1234509876` — the ADR-020 path is unchanged for PNRs you do not have | PASS |
+| r9 | Settings → **Off** → *Clear all* → `am force-stop` → cold open (locked) → HOME | `Off` `checked=true`; **0** `TrainReminderWorker` jobs registered in `dumpsys jobscheduler`; **0** cleartravel notifications; **0** `ClearTravelTrainReminder` log lines — nothing to run, nothing posted | PASS |
+| r10 | Clean-up: lead → **24 hours before**, temp ticket deleted (detail sheet → Delete → confirm) | job re-registered (`reminder ran: posted=0` — reminded set kept the demo key); Trains list = `12951 - Mumbai Rajdhani · PNR 8845672310` only; `sync_train_departures` collapsed to the demo hash, `sync_train_reminded` pruned to `23f5…:24h`; PNR still absent from the file | PASS |
+| g1 | Full gate `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → `trainrem.log` | BUILD SUCCESSFUL, unit **1191/1191** | PASS |
+| g2 | `connectedDebugAndroidTest` on **Android_16_AOSP_Medium** (`e2e.log`) | **29/29** incl. `TrainReminderE2eTest` (2) — first run failed on `assertIsSelected` of the lead row, fixed by giving `RadioOptionRow` the `selectable` semantics | PASS after fix |
+| g3 | Shutdown | Play_36_Pixel killed (`emu kill`, no `qemu … Play_36_Pixel` process). `emulator-5554` (Android_16_AOSP_Medium) was **left running**: it was started at 20:50 by a different session (`/tmp/clearsms`, `app.clearsms` resumed on it at 21:05) and is not this run's to kill | PASS (see note) |
+
+Notes:
+- Two reminders in r4 is the designed behaviour, not noise: the demo ticket is also
+  dated Oct 3 and inside the 24 h window; each ticket owns one slot (its hash-derived
+  id), so re-posts replace and never stack.
+- The temp ticket had no stored route, so its departure is the start of the journey
+  day and the text prints the day only (`Sat 3 Oct`); with a fetched route the text
+  reads `Sat 3 Oct, 16:35` (`TrainDepartureAndContentTest`, `TrainReminderE2eTest`).
+- `am force-stop` drops the JobScheduler job (WorkManager re-registers it on the next
+  init: `Application was force-stopped, rescheduling`); `am kill` after HOME did NOT
+  kill the freshly-backgrounded process on this image, so r7 used `force-stop`.

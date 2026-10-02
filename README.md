@@ -15,7 +15,13 @@ optional Google account link for Calendar/Drive sync.
   (ixigo, erail.in fallback) stored for an offline route page, a **seat map** of your
   coach with the rake's coach positions, ticket cards with status pills, share a
   ticket as an image + PNR link, detail bottom sheets, archive, deep-linkable
-  notifications.
+  notifications. A **journey reminder** (Settings → Notifications: off / 12 h / 24 h /
+  48 h before, 24 h by default) fires before the boarding station's departure —
+  "Train tomorrow: 12951 Mumbai Rajdhani · Departs Mumbai Central Sat 4 Oct, 16:35.
+  Tap to check PNR & seat status (WL 12)" — and the tap lands straight in that
+  ticket's PNR check, so one tap is the status refresh the app cannot do unattended
+  (the IRCTC captcha needs you). Opening a PNR link for a ticket you already have
+  does the same.
 - **Flight journeys** — add flights manually (date from a picker), import a boarding
   pass (BCBP barcode / OCR) or a booking confirmation (e-ticket PDF/image), or **paste
   the airline's SMS/email** — airline, flight number, PNR, route, date, times and
@@ -118,12 +124,20 @@ Key principles (full details in `AGENTS.md` and `docs/decisions.md`):
 - Sharing or "Save a copy" from the viewer, and exporting a backup to a location
   you choose, produce files outside the app's control: shared copies are plaintext
   (that is the point of sharing); exported backups are encrypted with your password.
-- Background jobs (flight polling, calendar sync, Drive uploads, automatic backups)
-  need the key, which exists only after you unlock the app in the current process;
-  until then they wait quietly. Only an imminent flight (within two days) earns one
-  low-priority "Unlock Clear Travel to sync" reminder per app process. Settings →
-  Security → *Background sync* shows, per job, when it last ran and when it was
-  last skipped while locked.
+- Background jobs (flight polling, train reminders, calendar sync, Drive uploads,
+  automatic backups) need the key, which exists only after you unlock the app in the
+  current process; until then they wait quietly. Only an imminent flight (within two
+  days) or a train reminder that is actually due earns one low-priority "Unlock Clear
+  Travel to sync" reminder per app process — one in total, whichever job gets there
+  first. Settings → Security → *Background sync* shows, per job, when it last ran
+  and when it was last skipped while locked.
+- The train reminder decides while locked from a small plaintext hint the unlocked
+  app keeps up to date: each active ticket's departure instant plus the **SHA-256 of
+  its PNR** (and, once sent, the same hash as the "already reminded" marker). The PNR
+  itself never leaves the encrypted database — ten digits would open the live IRCTC
+  status page — while a hash lets the worker recognise a ticket and nothing more
+  (ten billion possible PNRs make this obscurity against casual reading, not a
+  cryptographic guarantee).
 - **Allow sync while locked** (Settings → Security, off by default) keeps a copy of
   your key wrapped by a device-protected Android Keystore key that needs no
   authentication, so those jobs can run before you unlock. The trade-off, stated in

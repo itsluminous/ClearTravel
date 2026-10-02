@@ -2932,6 +2932,7 @@ unlock for users who accept the trade-off.
     | Job | locked, opt-in OFF | locked, opt-in ON (key usable) | locked, opt-in ON (device screen-locked / key gone) | unlocked |
     |---|---|---|---|---|
     | Flight poll | defer; nudge once per process iff a flight is within 48 h ahead / 6 h behind; `success()`, chain ends until app open | self-unlock, run the pass, refresh hints; `success()` + re-chain | defer silently; `retry()` (backoff) | run; `success()` + re-chain |
+    | Train reminder (ADR-044) | defer; nudge once per process iff a reminder is due per the hashed hints — SAME latch as the flight poll, so one nudge per process in total; `success()` (periodic job stays) | self-unlock, run the pass, refresh hashed hints; `success()` | defer silently; `retry()` (backoff) | run; `success()` |
     | Calendar sync | defer silently; `success()` | self-unlock, reconcile | defer silently; `success()` | reconcile |
     | Drive upload | defer silently; `success()` | self-unlock, drain queue | defer silently; `success()` | drain queue |
     | Scheduled backup | defer silently; `success()` | self-unlock, export (+ Drive) | defer silently; `success()` | export (+ Drive) |
