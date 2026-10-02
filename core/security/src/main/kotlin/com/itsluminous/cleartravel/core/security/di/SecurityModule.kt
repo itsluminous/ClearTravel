@@ -1,6 +1,8 @@
 package com.itsluminous.cleartravel.core.security.di
 
 import android.content.Context
+import com.itsluminous.cleartravel.core.security.background.BackgroundKeyWrapper
+import com.itsluminous.cleartravel.core.security.background.KeystoreBackgroundKeyWrapper
 import com.itsluminous.cleartravel.core.security.biometric.BiometricKeyWrapper
 import com.itsluminous.cleartravel.core.security.biometric.KeystoreBiometricKeyWrapper
 import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
@@ -26,7 +28,13 @@ object SecurityModule {
     @Singleton
     fun provideKeyVault(
         @ApplicationContext context: Context,
-    ): KeyVault = DefaultKeyVault(FileKeyFileStore.default(context.filesDir))
+        backgroundKeyWrapper: BackgroundKeyWrapper,
+    ): KeyVault = DefaultKeyVault(FileKeyFileStore.default(context.filesDir), backgroundKeyWrapper = backgroundKeyWrapper)
+
+    /** ADR-043: the no-auth Keystore key behind the opt-in "allow sync while locked". */
+    @Provides
+    @Singleton
+    fun provideBackgroundKeyWrapper(): BackgroundKeyWrapper = KeystoreBackgroundKeyWrapper()
 
     @Provides
     @Singleton

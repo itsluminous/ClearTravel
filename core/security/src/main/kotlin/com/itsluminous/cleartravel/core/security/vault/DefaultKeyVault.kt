@@ -1,5 +1,7 @@
 package com.itsluminous.cleartravel.core.security.vault
 
+import com.itsluminous.cleartravel.core.security.background.BackgroundKeyWrapper
+import com.itsluminous.cleartravel.core.security.background.NoBackgroundKeyWrapper
 import com.itsluminous.cleartravel.core.security.crypto.CryptoPrimitives
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -9,6 +11,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.security.GeneralSecurityException
+import java.security.ProviderException
 import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.SecretKey
@@ -17,11 +21,16 @@ import javax.crypto.SecretKey
  * [KeyVault] over a [KeyFileStore] (ADR-031). All KDF work runs on [ioDispatcher]
  * (PBKDF2 at 210k iterations is a few hundred ms on a phone). The DEK and the derived
  * sub-keys live only in this object's fields; a process death forgets them.
+ *
+ * ADR-043: [backgroundKeyWrapper] is the Keystore seam of the opt-in background unlock;
+ * the default [NoBackgroundKeyWrapper] keeps every vault built without it strictly
+ * ADR-031 (no slot can ever be created, `unlockWithBackgroundKey` is always false).
  */
 class DefaultKeyVault(
     private val store: KeyFileStore,
     private val iterations: Int = CryptoPrimitives.DEFAULT_PBKDF2_ITERATIONS,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val backgroundKeyWrapper: BackgroundKeyWrapper = NoBackgroundKeyWrapper,
 ) : KeyVault {
     private val mutex = Mutex()
     private val _state = MutableStateFlow(initialState(store.read()))
@@ -39,6 +48,7 @@ class DefaultKeyVault(
             val derived = derive(password, salt, iterations)
             val file =
                 VaultFile(
+                    version = VaultFile.VERSION,
                     salt = salt,
                     iterations = iterations,
                     passwordWrap = wrap(derived.kek, newDek.encoded),
@@ -80,7 +90,9 @@ class DefaultKeyVault(
             store.write(updated)
             // Re-wrap only: the DEK (and therefore every encrypted byte) is unchanged.
             // Backups written before the change stay readable through portableKeyFor's
-            // adopted-key path (the old salt no longer matches → password prompt).
+            // adopted-key path (the old salt no longer matches → password prompt). The
+            // biometric and background (ADR-043) wraps seal the DEK itself, not the
+            // password KEK, so `copy` carries them over untouched and they keep working.
             becomeUnlocked(newDek, updated)
             true
         }
@@ -146,6 +158,51 @@ class DefaultKeyVault(
                 }
             // No password in hand, but the DEK unwraps the stored portable key, so
             // backups and Drive uploads work in a biometric-only session too.
+            becomeUnlocked(CryptoPrimitives.aesKey(raw), file)
+            true
+        }
+
+    override suspend fun enableBackgroundUnlock(password: CharArray): Boolean =
+        mutex.withLock {
+            val file = store.read() ?: return false
+            val derived = derive(password, file.salt, file.iterations)
+            val raw = unwrap(derived.kek, file.passwordWrap) ?: return false
+            val cipher = backgroundKeyWrapper.newEncryptCipher()
+            val ciphertext = cipher.doFinal(raw)
+            val updated = file.copy(version = VaultFile.VERSION, backgroundWrap = WrappedKey(iv = cipher.iv, ciphertext = ciphertext))
+            store.write(updated)
+            // The password just proved itself: the vault is unlocked afterwards either way.
+            becomeUnlocked(CryptoPrimitives.aesKey(raw), updated)
+            true
+        }
+
+    override suspend fun disableBackgroundUnlock() =
+        mutex.withLock {
+            backgroundKeyWrapper.deleteKey()
+            val file = store.read() ?: return
+            if (file.backgroundWrap == null) return
+            val updated = file.copy(backgroundWrap = null)
+            store.write(updated)
+            publish(updated)
+        }
+
+    override suspend fun unlockWithBackgroundKey(): Boolean =
+        mutex.withLock {
+            if (dek != null) return true
+            val file = store.read() ?: return false
+            val wrap = file.backgroundWrap ?: return false
+            val cipher = withContext(ioDispatcher) { backgroundKeyWrapper.decryptCipher(wrap.iv) } ?: return false
+            val raw =
+                try {
+                    withContext(ioDispatcher) { cipher.doFinal(wrap.ciphertext) }
+                } catch (e: GeneralSecurityException) {
+                    return false // AEADBadTagException (tampered/foreign wrap) included
+                } catch (e: IllegalStateException) {
+                    return false
+                } catch (e: ProviderException) {
+                    return false
+                }
+            if (raw.size != CryptoPrimitives.AES_KEY_BYTES) return false
             becomeUnlocked(CryptoPrimitives.aesKey(raw), file)
             true
         }
@@ -222,7 +279,8 @@ class DefaultKeyVault(
 
     private fun publish(file: VaultFile) {
         val biometric = file.biometricWrap != null
-        _state.value = if (dek != null) VaultState.Unlocked(biometric) else VaultState.Locked(biometric)
+        val background = file.backgroundWrap != null
+        _state.value = if (dek != null) VaultState.Unlocked(biometric, background) else VaultState.Locked(biometric, background)
     }
 
     private companion object {
@@ -232,6 +290,13 @@ class DefaultKeyVault(
         const val PORTABLE_WRAP_LABEL = "cleartravel/portable-wrap/v1"
 
         fun initialState(file: VaultFile?): VaultState =
-            if (file == null) VaultState.NotSetUp else VaultState.Locked(biometricEnabled = file.biometricWrap != null)
+            if (file == null) {
+                VaultState.NotSetUp
+            } else {
+                VaultState.Locked(
+                    biometricEnabled = file.biometricWrap != null,
+                    backgroundUnlockEnabled = file.backgroundWrap != null,
+                )
+            }
     }
 }

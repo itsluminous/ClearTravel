@@ -1,5 +1,7 @@
 package com.itsluminous.cleartravel.core.security.vault
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -19,14 +21,28 @@ import java.io.IOException
  *   BIOMETRIC unlock (no password in hand) can still export backups and upload to
  *   Drive. Circular only in appearance: the portable key is protected by the DEK,
  *   which is protected by the password / biometric key.
+ * - [backgroundWrap] (ADR-043, file version 2, OPT-IN): AES-GCM under an Android
+ *   Keystore key that needs NO user authentication (device-unlocked required, StrongBox
+ *   when available), so background workers can open the store before the user has
+ *   unlocked the app in this process. Null — the default — means the ADR-031 model
+ *   holds unchanged: the DEK exists in memory only after a password/biometric unlock.
+ *
+ * Version history: 1 = password + optional biometric + portable wraps (ADR-031 files
+ * carry no `version` key at all — the default on decode is 1); 2 = adds the optional
+ * [backgroundWrap] and always writes `version`. Readers ignore unknown keys, so a v1
+ * build opens a v2 file (it simply never uses the extra slot) and a v2 build reads v1
+ * (slot absent).
  *
  * The file sits in plain app storage BY DESIGN — like a password-manager database,
  * its confidentiality rests entirely on the password. Forgetting the password loses
  * the data (there is no recovery key); this is the documented trade-off.
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class VaultFile(
-    val version: Int = VERSION,
+    /** Highest format the writer knew: ADR-031 files carry no key (decodes as 1); ADR-043 writes 2. */
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
+    val version: Int = 1,
     val salt: ByteArray,
     val iterations: Int,
     val passwordWrap: WrappedKey,
@@ -34,9 +50,11 @@ data class VaultFile(
     val biometricWrap: WrappedKey? = null,
     /** One-time plaintext→encrypted storage migration completed (files + local backups). */
     val filesMigrated: Boolean = false,
+    /** ADR-043: the opt-in background-sync wrap; null while the setting is off. */
+    val backgroundWrap: WrappedKey? = null,
 ) {
     companion object {
-        const val VERSION = 1
+        const val VERSION = 2
     }
 }
 
