@@ -44,7 +44,7 @@ how the code works; **amended** = active, but a later ADR changed part of it (na
 | 028 | Cross-tab integration — journey-add bus, "Part of" lookup, Trips landing hook | active |
 | 029 | Journeys once-only landing, day auto-sort + drag, linked-leg time, Maps-link intake | active |
 | 030 | Shared document viewer — zoom/pan, rotate, share, save-a-copy, PDF paging | active — brightness/fullscreen/landscape amended by 034 |
-| 031 | At-rest encryption + app lock — vault, SQLCipher, CTEF/CTEB, backup v2, biometrics | active — lock default amended by 034; `FLAG_SECURE` follow-up closed by 036 |
+| 031 | At-rest encryption + app lock — vault, SQLCipher, CTEF/CTEB, backup v2, biometrics | active — lock default amended by 034; `FLAG_SECURE` follow-up closed by 036; §7 background-job behaviour amended by 043 (vault file v2, opt-in background key) |
 | 032 | First-run onboarding wizard | active — step-1 enrolment fix in 034 |
 | 033 | UI polish — chained route-fetch landing, bottom Journeys segment, full-width filters, Documents search | active — filter chip hoisted to `core:designsystem` by 036 |
 | 034 | Viewer & lock polish — enrolment fix, 1-minute lock default, no forced brightness, fullscreen + landscape rail | active |
@@ -54,6 +54,9 @@ how the code works; **amended** = active, but a later ADR changed part of it (na
 | 038 | Drive folder identity + convergence, backup listing across folders, boarding passes in local backups | active |
 | 039 | Self-contained share links (trips, checklists, flights) with ID-stable upsert; flight card quick actions | active |
 | 040 | Deterministic built-in preset item ids; restore collapses pre-040 seeded duplicates | active — amends 006 seeding |
+| 041 | UX fixes — tappable boarding-pass marker, app-wide IME insets at the shell, input dialogs ignore outside taps | active |
+| 042 | Flight from SMS/email text + train-or-flight intake for shared text | active |
+| 043 | Background sync while locked — nag fix (once-per-process, imminent-flight-only nudge; silent deferral + status) and the OPT-IN background key | active — relaxes 031 §7 only when the user opts in |
 
 ---
 
@@ -2802,3 +2805,183 @@ preselected → train form prefilled; flight text overridden to Train → train 
 Device validation in `docs/validation-report.md` (2026-09-29). Follow-ups: a passenger
 field on the flight form would let the parsed name land; the `core:ocr`
 `BookingConfirmationExtractor` could adopt the same rules asset for airline aliases.
+
+## ADR-043 — Background sync while locked: the nag fix and the opt-in background key (2026-10-02)
+
+**Context.** ADR-031 §7 keeps the DEK only in process memory, so a background job that
+fires in a process where nobody has unlocked yet cannot read the database. The design
+answer was ONE fixed-id "Unlock Clear Travel to sync" notification. In practice the
+user saw it several times a day: Android routinely kills the process between runs,
+WorkManager cold-starts a key-less process, and EACH of the four jobs
+(`FlightStatusWorker`, `CalendarSyncWorker`, `DriveUploadWorker`,
+`ScheduledBackupWorker`) called `AppLockNotifier.notifyUnlockToSync()` on every run —
+same id, so the entries did not stack, but every `notify()` **re-alerted**. Verified in
+code before this change: the UI lock (`AppLockController`) never evicts the DEK, so the
+nag is purely the cold-process case. Two things were asked for: stop the nag without
+weakening the security model, and — separately, OPT-IN — let the jobs run before an
+unlock for users who accept the trade-off.
+
+**Decision — Part 1, the nag fix (no security change).**
+
+1. **Only the flight poller may nudge, and only for an imminent flight.** Calendar
+   sync, Drive uploads and the automatic backup are not time-critical: a locked vault
+   now defers them **silently** (one `Log.i` line, `Result.success()`; the periodic
+   schedule / app-open re-kick cover them — `ScheduledBackupRunner` lost its
+   `notifyLocked` hook). The flight poller decides with the pure
+   `UnlockNudgePolicy` (`feature:flights/polling`): nudge only when some active flight
+   departs within **48 h** (the widest `opensHoursBefore` in `checkin-windows.json`,
+   so every check-in-open and every 12 h / 3 h status hint the poller could post falls
+   inside) or departed less than `NextPollDelay.LANDING_WATCH` (6 h) ago. A flight
+   three weeks out loses nothing by waiting for the next app open.
+2. **The departures come from a plaintext hint, never from Room.** The locked worker
+   cannot read the flight list, so the unlocked app writes
+   `BackgroundSyncStateStore.setFlightDepartureHints(...)` — the scheduled departures
+   of ALL active flights (not just the earliest: a single value went stale once that
+   flight had flown and hid a later one) — from `AppStartupTasks` on every app open,
+   from a collector that lives as long as the gate is open (add / edit / archive /
+   import / restore all land), and from every granted poll run. Departure instants
+   alone carry no airline, number, route or PNR; they are the only piece of travel
+   data outside the encrypted store and were judged acceptable for that reason.
+3. **At most once per process lifetime.** `AppLockNotifier` latches after the first
+   post (`postedThisProcess`, re-armed by `clear()` which the shell already calls on
+   unlock) and returns whether it posted; the notification is `PRIORITY_LOW` on the
+   reminders channel with `setOnlyAlertOnce(true)`, so even the re-post from a LATER
+   process (after another kill) replaces the entry without sounding again.
+4. **Status instead of noise.** `core:data/sync/BackgroundSyncStateStore`
+   (`DataStoreBackgroundSyncStateStore` over the existing settings Preferences
+   DataStore — one DataStore per file is a library rule, so no second store; keys
+   `sync_*`) records per `SyncWorkKind` (`FLIGHT_POLL`, `CALENDAR_SYNC`,
+   `DRIVE_UPLOAD`, `SCHEDULED_BACKUP`) `lastCompletedAt` (the run got past the vault
+   gate), `lastDeferredAt` and `deferredSinceUnlock` (reset by
+   `AppStartupTasks.runOnAppOpen` → `resetDeferredCounts()`). Timestamps only —
+   deliberately NOT Room, so they are readable while locked and never enter the
+   backup/merge surface. Settings → Security shows a **Background sync** block: the
+   explanation line, then per job "Last successful: …" / "Skipped while locked: …
+   (N since last unlock)" as `AutoShrinkText` one-liners (`DateFormats.formatTimestamp`).
+5. **One gate for every worker.** `core:data/sync/BackgroundSyncGate.open(kind)`:
+   already unlocked → `Granted(viaBackgroundKey = false)`; else try
+   `KeyVault.unlockWithBackgroundKey()` (Part 2; a no-op false when the opt-in is
+   off) → `Granted(viaBackgroundKey = true)`; else `Locked(backgroundKeyEnabled)`.
+   Every outcome is stamped into the state store. The gate never notifies — that is
+   the flight runner's call. `FlightStatusWorker` became a thin shell around the
+   testable `FlightPollRunner` (the ADR-037 runner pattern), with one `Log.i` per run
+   (`ClearTravelFlightPoll: poll deferred: vault locked, nudged=…, backgroundKey=…` /
+   `poll ran: … backgroundKeyUnlocked=…`) that the device validation reads.
+
+**Decision — Part 2, the OPT-IN background key (explicit relaxation of ADR-031 §7).**
+
+6. **Vault file version 2: a third wrapped-DEK slot.** `VaultFile.backgroundWrap:
+   WrappedKey? = null` — AES-256-GCM of the raw DEK under an Android Keystore key.
+   Additive: ADR-031 files carry no `version` key at all and decode as 1 with the slot
+   absent; ADR-043 writes always carry `version` (`@EncodeDefault`, now `2`) and null
+   slots are still not written. A v1 build opens a v2 file (ignores the key; never
+   uses the slot), a v2 build opens v1. `docs/backup-format.md` is untouched: the key
+   file is device-local and never part of a backup.
+7. **`BackgroundKeyWrapper`** (`core:security/background`, next to
+   `BiometricKeyWrapper`; `KeystoreBackgroundKeyWrapper` in production,
+   `NoBackgroundKeyWrapper` as the vault's default so every vault built without the
+   wiring stays strictly ADR-031, plain-AES fakes in tests and the e2e module). The
+   Keystore key: alias `cleartravel.background.dek-wrap`, AES-256, GCM, no padding,
+   **`setUserAuthenticationRequired(false)`** — that is the whole point and the whole
+   risk — with `setUnlockedDeviceRequired(true)` on API 28+ (unusable while the
+   device itself is screen-locked, so a stolen locked phone cannot run the unwrap)
+   and `setIsStrongBoxBacked(true)` first, falling back to the TEE key when the
+   hardware throws (`ProviderException` is caught rather than the API-28
+   `StrongBoxUnavailableException` so the class loads on API 26–27). `decryptCipher`
+   returns null — never throws — for a missing / invalidated key or a locked device.
+8. **`KeyVault` API (additive).** `hasBackgroundKey` (from `VaultState.
+   backgroundUnlockEnabled`, carried by both `Locked` and `Unlocked` with a default so
+   every existing constructor call compiles), `enableBackgroundUnlock(password)` —
+   verifies the password against the stored wrap FIRST (a fresh confirmation is
+   required because the DEK is being placed under a key the device alone protects;
+   wrong password → false, nothing written), then creates a NEW Keystore key and seals
+   the DEK; `disableBackgroundUnlock()` — deletes the Keystore key AND removes the
+   slot; `unlockWithBackgroundKey()` — the worker-side unlock: unwraps and caches the
+   DEK exactly like a password unlock (portable key included, so backups run), true
+   when the DEK is available afterwards (also when already unlocked), false otherwise,
+   never throwing (GCM tag failure, truncated slot, device locked all fail closed).
+   **Password change keeps the slot valid**: it wraps the DEK, not the password KEK,
+   so `changePassword`'s `copy` carries it (and the biometric wrap) over untouched —
+   unit-tested. There is no wipe/reset path in the app (ADR-031: no recovery), so the
+   only removal is the switch itself.
+9. **The UI lock is untouched by a background unlock.** `AppLockViewModel.uiState`
+   derives from `AppLockController.locked` (starts `true` in every process) combined
+   with the vault state: a vault a worker self-unlocked renders `Locked`, the password
+   path always verifies against the stored wrap (`unlockWithPassword`), and the
+   biometric path short-circuits to the already-cached DEK only AFTER `BiometricPrompt`
+   succeeded (unchanged `keyVault.isUnlocked || unlockWithBiometric(cipher)`). Verified
+   by `AppLockViewModelTest.backgroundUnlockedVault_stillShowsTheLockScreen_andNeverAutoPasses`
+   and on the device (switch ON → force-stop → worker ran → app opens on the unlock
+   screen).
+10. **Settings → Security: "Allow sync while locked"** (off by default), description:
+    *Keeps a device-protected copy of your key so flight status, calendar and backups
+    can run before you unlock. Anyone who can run code inside this app on your
+    unlocked phone could read your data without the password.* ON → confirmation
+    dialog (`InputDialogProperties`, `PasswordField` EXISTING role; wrong password →
+    snackbar, dialog stays, switch stays off; Keystore refusal → snackbar, slot
+    removed) → `enableBackgroundUnlock`; OFF → `disableBackgroundUnlock`. The switch
+    has a test tag (`BACKGROUND_SYNC_SWITCH_TAG`) for the e2e.
+11. **Worker behaviour per state** (the table the validation report checks):
+
+    | Job | locked, opt-in OFF | locked, opt-in ON (key usable) | locked, opt-in ON (device screen-locked / key gone) | unlocked |
+    |---|---|---|---|---|
+    | Flight poll | defer; nudge once per process iff a flight is within 48 h ahead / 6 h behind; `success()`, chain ends until app open | self-unlock, run the pass, refresh hints; `success()` + re-chain | defer silently; `retry()` (backoff) | run; `success()` + re-chain |
+    | Calendar sync | defer silently; `success()` | self-unlock, reconcile | defer silently; `success()` | reconcile |
+    | Drive upload | defer silently; `success()` | self-unlock, drain queue | defer silently; `success()` | drain queue |
+    | Scheduled backup | defer silently; `success()` | self-unlock, export (+ Drive) | defer silently; `success()` | export (+ Drive) |
+    | Drive backup upload | runs (sealed file, no key) | runs | runs | runs |
+
+    Every row stamps `lastDeferredAt`/`lastCompletedAt`. "Self-unlock" means the DEK is
+    now cached for the process: later jobs in the same process find `isUnlocked`
+    without touching the Keystore again, and the app — when opened — still shows the
+    unlock screen (§9).
+
+**Threat model.** ADR-031's guarantee was: without the password (or an enrolled
+biometric), the data at rest is unreadable, including to anyone with the device in
+hand and to anything that runs inside the app process before an unlock. With the
+switch ON that guarantee is **deliberately narrowed**: the DEK is recoverable by any
+code executing inside this app's sandbox on an unlocked device (the Keystore key is
+app-private and needs no user authentication — a root-level attacker, a malicious
+library update, or a debugger on a debuggable build could call it). What it still
+holds against: a lost or stolen phone that is screen-locked (`setUnlockedDeviceRequired`
++ Keystore binding — the key file alone, copied off the device, is useless), another
+app on the same device (Keystore keys are per-UID), and offline attacks on backups or
+Drive files (still the password-derived portable envelope). Forgetting the password
+still loses the data — the background key is not a recovery path (it is deleted with
+the switch and lives only in this device's Keystore). The user-facing description
+states the trade-off in one sentence; the default is OFF, enabling requires the
+password, and README's Security notes carry the bullet.
+
+**Contract touches (additive).** `core:security`: `background/BackgroundKeyWrapper` +
+`KeystoreBackgroundKeyWrapper` + `NoBackgroundKeyWrapper`, `VaultFile.backgroundWrap`
+(+ `version` default 1 / `VERSION = 2`), `VaultState.Locked/Unlocked.backgroundUnlockEnabled`,
+`VaultState.backgroundUnlockEnabled` extension, `KeyVault.hasBackgroundKey /
+enableBackgroundUnlock / disableBackgroundUnlock / unlockWithBackgroundKey`,
+`DefaultKeyVault(backgroundKeyWrapper)`, `SecurityModule.provideBackgroundKeyWrapper`.
+`core:data`: new `sync` package (`SyncWorkKind`, `SyncWorkStatus`,
+`BackgroundSyncStateStore`, `DataStoreBackgroundSyncStateStore`, `SyncAccess`,
+`BackgroundSyncGate`), bound in `RepositoryModule`. `core:notifications`:
+`AppLockNotifier.notifyUnlockToSync(): Boolean`, `postedThisProcess`. `core:google`:
+`ScheduledBackupRunner(openVault: suspend () -> Boolean)` replaces `isUnlocked` +
+`notifyLocked`; the three workers' entry points swap `KeyVault`/`AppLockNotifier` for
+`BackgroundSyncGate`. `feature:flights`: `UnlockNudgePolicy`, `FlightPollRunner`,
+`FlightPollOutcome`, `FlightStatusWorker.resolveVerdict/describe`. `feature:menu`:
+`SecurityEvent.BackgroundSync*`, `SecuritySettingsViewModel(backgroundSyncStateStore)`
++ `requestEnableBackgroundSync / enableBackgroundSync / disableBackgroundSync /
+dismissBackgroundSyncConfirmation`, `UiState.backgroundSyncEnabled /
+confirmingBackgroundSync / syncStatuses`, `BACKGROUND_SYNC_SWITCH_TAG`. `app`:
+`AppStartupTasks(backgroundSyncStateStore)` + `keepFlightDepartureHintsFresh()`. No
+schema, repository-interface or backup-format change.
+
+**Consequences.** Tests: 8 `core:security` (slot enable / cold unlock / absent /
+disable / device-locked-key-gone-corrupt / password change / independence / v1↔v2
+JSON), 7 `core:data` (state store defaults, hints, stamps + reset; gate in all four
+states), 1 `core:notifications` (once-per-process + flags), 7 `feature:flights`
+(policy; runner in locked-no-key nudge-once / no-imminent / opt-in self-unlock /
+opt-in-key-unusable retry / unlocked dedupe), 3 `feature:menu` (switch flow, Keystore
+refusal, statuses), 1 `feature:applock` (gate stays locked), `ScheduledBackupRunner`
+re-pointed — 1163 unit tests total; e2e `BackgroundSyncSettingE2eTest`. Device
+validation (nag count, opt-in worker run, lock screen, revert) in
+`docs/validation-report.md` (2026-10-02). AGENTS.md rule 7 names the opt-in as the
+single sanctioned exception. Follow-ups: none planned — a per-job "run now" button in
+the status block would be cheap if users ask.

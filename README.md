@@ -118,9 +118,20 @@ Key principles (full details in `AGENTS.md` and `docs/decisions.md`):
 - Sharing or "Save a copy" from the viewer, and exporting a backup to a location
   you choose, produce files outside the app's control: shared copies are plaintext
   (that is the point of sharing); exported backups are encrypted with your password.
-- Background jobs (flight polling, calendar sync, Drive uploads) need the key, which
-  exists only after you unlock the app in the current process; until then they post
-  a single "Unlock Clear Travel to sync" reminder and skip.
+- Background jobs (flight polling, calendar sync, Drive uploads, automatic backups)
+  need the key, which exists only after you unlock the app in the current process;
+  until then they wait quietly. Only an imminent flight (within two days) earns one
+  low-priority "Unlock Clear Travel to sync" reminder per app process. Settings →
+  Security → *Background sync* shows, per job, when it last ran and when it was
+  last skipped while locked.
+- **Allow sync while locked** (Settings → Security, off by default) keeps a copy of
+  your key wrapped by a device-protected Android Keystore key that needs no
+  authentication, so those jobs can run before you unlock. The trade-off, stated in
+  the switch itself: anyone who can run code inside this app on your unlocked phone
+  could read your data without the password. A screen-locked or stolen phone still
+  cannot (the key is unusable while the device is locked and never leaves its
+  Keystore), the app itself still shows the unlock screen, and turning the switch off
+  deletes the copy. Enabling it asks for your password; it is not a recovery path.
 - Upgrading from a pre-encryption build converts the database and files in place on
   the first unlock; Drive files uploaded before the upgrade remain unencrypted until
   pruned or deleted.
