@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -249,7 +250,15 @@ private fun BackgroundSyncStatus(
             AutoShrinkText(
                 text =
                     status.lastDeferredAt?.let {
-                        stringResource(R.string.menu_security_sync_skipped, DateFormats.formatTimestamp(it), status.deferredSinceUnlock)
+                        stringResource(
+                            R.string.menu_security_sync_skipped,
+                            DateFormats.formatTimestamp(it),
+                            pluralStringResource(
+                                R.plurals.menu_security_sync_skipped_count,
+                                status.deferredSinceUnlock,
+                                status.deferredSinceUnlock,
+                            ),
+                        )
                     } ?: stringResource(R.string.menu_security_sync_skipped_never),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
