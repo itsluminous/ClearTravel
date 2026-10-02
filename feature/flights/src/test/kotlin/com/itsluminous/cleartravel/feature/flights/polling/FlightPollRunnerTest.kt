@@ -48,6 +48,7 @@ private class FakeBackgroundKeyWrapper : BackgroundKeyWrapper {
 private class InMemorySyncStateStore : BackgroundSyncStateStore {
     var hints: List<Instant> = emptyList()
     val state = MutableStateFlow(SyncWorkKind.entries.map { SyncWorkStatus(it) })
+    val pending = mutableMapOf<SyncWorkKind, Int>()
 
     override suspend fun flightDepartureHints(): List<Instant> = hints
 
@@ -61,8 +62,8 @@ private class InMemorySyncStateStore : BackgroundSyncStateStore {
         kind: SyncWorkKind,
         at: Instant,
     ) {
-        state.value =
-            state.value.map { if (it.kind == kind) it.copy(lastDeferredAt = at, deferredSinceUnlock = it.deferredSinceUnlock + 1) else it }
+        pending[kind] = (pending[kind] ?: 0) + 1
+        state.value = state.value.map { if (it.kind == kind) it.copy(lastDeferredAt = at) else it }
     }
 
     override suspend fun recordCompleted(
@@ -73,7 +74,7 @@ private class InMemorySyncStateStore : BackgroundSyncStateStore {
     }
 
     override suspend fun resetDeferredCounts() {
-        state.value = state.value.map { it.copy(deferredSinceUnlock = 0) }
+        state.value = state.value.map { it.copy(deferredSinceUnlock = pending.remove(it.kind) ?: 0) }
     }
 }
 
@@ -137,11 +138,7 @@ class FlightPollRunnerTest {
             assertThat(nudgeCalls).isEqualTo(1) // the policy did not even ask the second time
             assertThat(cold.isUnlocked).isFalse()
             assertThat(posted).isEmpty()
-            assertThat(
-                syncStore.state.value
-                    .first { it.kind == SyncWorkKind.FLIGHT_POLL }
-                    .deferredSinceUnlock,
-            ).isEqualTo(2)
+            assertThat(syncStore.pending[SyncWorkKind.FLIGHT_POLL]).isEqualTo(2)
         }
 
     @Test

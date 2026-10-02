@@ -2852,12 +2852,17 @@ unlock for users who accept the trade-off.
    DataStore — one DataStore per file is a library rule, so no second store; keys
    `sync_*`) records per `SyncWorkKind` (`FLIGHT_POLL`, `CALENDAR_SYNC`,
    `DRIVE_UPLOAD`, `SCHEDULED_BACKUP`) `lastCompletedAt` (the run got past the vault
-   gate), `lastDeferredAt` and `deferredSinceUnlock` (reset by
-   `AppStartupTasks.runOnAppOpen` → `resetDeferredCounts()`). Timestamps only —
+   gate), `lastDeferredAt` and `deferredSinceUnlock`. The counter is ROLLED, not
+   zeroed, at unlock (`AppStartupTasks.runOnAppOpen` → `resetDeferredCounts()`): a
+   running `*_deferred_count` accumulates while locked and becomes the displayed
+   `*_deferred_shown` at the next unlock — the user can only read the screen while
+   unlocked, so the device run showed that a counter zeroed at unlock reads "0" forever
+   (first build; fixed before commit). Timestamps and small counters only —
    deliberately NOT Room, so they are readable while locked and never enter the
    backup/merge surface. Settings → Security shows a **Background sync** block: the
    explanation line, then per job "Last successful: …" / "Skipped while locked: …
-   (N since last unlock)" as `AutoShrinkText` one-liners (`DateFormats.formatTimestamp`).
+   (N times before the last unlock)" as `AutoShrinkText` one-liners
+   (`DateFormats.formatTimestamp`).
 5. **One gate for every worker.** `core:data/sync/BackgroundSyncGate.open(kind)`:
    already unlocked → `Granted(viaBackgroundKey = false)`; else try
    `KeyVault.unlockWithBackgroundKey()` (Part 2; a no-op false when the opt-in is

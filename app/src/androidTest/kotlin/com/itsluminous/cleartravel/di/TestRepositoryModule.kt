@@ -104,6 +104,7 @@ class FakeBackgroundSyncStateStore
     constructor() : BackgroundSyncStateStore {
         private var hints: List<Instant> = emptyList()
         private val state = MutableStateFlow(SyncWorkKind.entries.map { SyncWorkStatus(it) })
+        val pending = mutableMapOf<SyncWorkKind, Int>()
 
         override suspend fun flightDepartureHints(): List<Instant> = hints
 
@@ -117,16 +118,8 @@ class FakeBackgroundSyncStateStore
             kind: SyncWorkKind,
             at: Instant,
         ) {
-            state.value =
-                state.value.map {
-                    if (it.kind ==
-                        kind
-                    ) {
-                        it.copy(lastDeferredAt = at, deferredSinceUnlock = it.deferredSinceUnlock + 1)
-                    } else {
-                        it
-                    }
-                }
+            pending[kind] = (pending[kind] ?: 0) + 1
+            state.value = state.value.map { if (it.kind == kind) it.copy(lastDeferredAt = at) else it }
         }
 
         override suspend fun recordCompleted(
@@ -137,7 +130,7 @@ class FakeBackgroundSyncStateStore
         }
 
         override suspend fun resetDeferredCounts() {
-            state.value = state.value.map { it.copy(deferredSinceUnlock = 0) }
+            state.value = state.value.map { it.copy(deferredSinceUnlock = pending.remove(it.kind) ?: 0) }
         }
     }
 

@@ -50,7 +50,7 @@ interface BackgroundSyncStateStore {
     /** All kinds, in [SyncWorkKind] order, each with its stored timestamps (defaults when never run). */
     val statuses: Flow<List<SyncWorkStatus>>
 
-    /** A run found the vault locked: stamps [SyncWorkStatus.lastDeferredAt] and bumps the counter. */
+    /** A run found the vault locked: stamps [SyncWorkStatus.lastDeferredAt] and bumps the running counter. */
     suspend fun recordDeferred(
         kind: SyncWorkKind,
         at: Instant,
@@ -62,6 +62,9 @@ interface BackgroundSyncStateStore {
         at: Instant,
     )
 
-    /** The user unlocked the app: every "N times since last unlock" counter goes back to 0. */
+    /**
+     * The user unlocked the app: each kind's running counter becomes its displayed
+     * [SyncWorkStatus.deferredSinceUnlock] and a fresh running counter starts.
+     */
     suspend fun resetDeferredCounts()
 }

@@ -44,6 +44,7 @@ class RecordingSyncStateStore : BackgroundSyncStateStore {
     val calls = mutableListOf<String>()
     private var hints: List<Instant> = emptyList()
     private val state = MutableStateFlow(SyncWorkKind.entries.map { SyncWorkStatus(it) })
+    val pending = mutableMapOf<SyncWorkKind, Int>()
 
     override suspend fun flightDepartureHints(): List<Instant> = hints
 
@@ -58,10 +59,8 @@ class RecordingSyncStateStore : BackgroundSyncStateStore {
         at: Instant,
     ) {
         calls += "deferred:${kind.storageKey}"
-        state.value =
-            state.value.map {
-                if (it.kind == kind) it.copy(lastDeferredAt = at, deferredSinceUnlock = it.deferredSinceUnlock + 1) else it
-            }
+        pending[kind] = (pending[kind] ?: 0) + 1
+        state.value = state.value.map { if (it.kind == kind) it.copy(lastDeferredAt = at) else it }
     }
 
     override suspend fun recordCompleted(
@@ -74,7 +73,7 @@ class RecordingSyncStateStore : BackgroundSyncStateStore {
 
     override suspend fun resetDeferredCounts() {
         calls += "reset"
-        state.value = state.value.map { it.copy(deferredSinceUnlock = 0) }
+        state.value = state.value.map { it.copy(deferredSinceUnlock = pending.remove(it.kind) ?: 0) }
     }
 }
 
@@ -112,11 +111,7 @@ class BackgroundSyncGateTest {
             assertThat(access).isEqualTo(SyncAccess.Locked(backgroundKeyEnabled = false))
             assertThat(cold.isUnlocked).isFalse()
             assertThat(store.calls).containsExactly("deferred:flights")
-            assertThat(
-                store.statuses.value
-                    .first { it.kind == SyncWorkKind.FLIGHT_POLL }
-                    .deferredSinceUnlock,
-            ).isEqualTo(1)
+            assertThat(store.pending[SyncWorkKind.FLIGHT_POLL]).isEqualTo(1)
         }
 
     @Test

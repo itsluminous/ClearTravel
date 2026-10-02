@@ -224,7 +224,12 @@ class SecuritySettingsViewModelTest {
                 viewModel.uiState.value.syncStatuses
                     .associateBy { it.kind }
             assertThat(byKind[SyncWorkKind.FLIGHT_POLL]!!.lastDeferredAt).isEqualTo(at)
-            assertThat(byKind[SyncWorkKind.FLIGHT_POLL]!!.deferredSinceUnlock).isEqualTo(1)
+            syncState.resetDeferredCounts() // the unlock rolls the running count into the shown one
+            assertThat(
+                viewModel.uiState.value.syncStatuses
+                    .first { it.kind == SyncWorkKind.FLIGHT_POLL }
+                    .deferredSinceUnlock,
+            ).isEqualTo(1)
             assertThat(byKind[SyncWorkKind.SCHEDULED_BACKUP]!!.lastCompletedAt).isEqualTo(at)
         }
 }

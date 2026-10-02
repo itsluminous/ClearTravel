@@ -59,7 +59,7 @@ class BackgroundSyncStateStoreTest {
         }
 
     @Test
-    fun deferred_stampsAndCounts_perKind_completedStampsOnly_resetClearsCountsNotStamps() =
+    fun deferred_stampsAndCounts_perKind_completedStampsOnly_unlockRollsTheCount() =
         runTest {
             val t1 = Instant.parse("2026-10-02T10:00:00Z")
             val t2 = Instant.parse("2026-10-02T11:00:00Z")
@@ -69,20 +69,40 @@ class BackgroundSyncStateStoreTest {
             store.recordDeferred(SyncWorkKind.CALENDAR_SYNC, t1)
             store.recordCompleted(SyncWorkKind.SCHEDULED_BACKUP, t3)
 
+            // While still locked the DISPLAYED count is the previous period's (none yet).
             val byKind = store.statuses.first().associateBy { it.kind }
             assertThat(byKind[SyncWorkKind.FLIGHT_POLL]).isEqualTo(
-                SyncWorkStatus(SyncWorkKind.FLIGHT_POLL, lastCompletedAt = null, lastDeferredAt = t2, deferredSinceUnlock = 2),
+                SyncWorkStatus(SyncWorkKind.FLIGHT_POLL, lastCompletedAt = null, lastDeferredAt = t2, deferredSinceUnlock = 0),
             )
-            assertThat(byKind[SyncWorkKind.CALENDAR_SYNC]!!.deferredSinceUnlock).isEqualTo(1)
             assertThat(byKind[SyncWorkKind.SCHEDULED_BACKUP]).isEqualTo(
                 SyncWorkStatus(SyncWorkKind.SCHEDULED_BACKUP, lastCompletedAt = t3),
             )
             assertThat(byKind[SyncWorkKind.DRIVE_UPLOAD]).isEqualTo(SyncWorkStatus(SyncWorkKind.DRIVE_UPLOAD))
 
+            // Unlock: the two flight deferrals and one calendar deferral become the shown counts.
             store.resetDeferredCounts()
             val afterUnlock = store.statuses.first().associateBy { it.kind }
-            assertThat(afterUnlock[SyncWorkKind.FLIGHT_POLL]!!.deferredSinceUnlock).isEqualTo(0)
+            assertThat(afterUnlock[SyncWorkKind.FLIGHT_POLL]!!.deferredSinceUnlock).isEqualTo(2)
             assertThat(afterUnlock[SyncWorkKind.FLIGHT_POLL]!!.lastDeferredAt).isEqualTo(t2) // history stays
-            assertThat(afterUnlock[SyncWorkKind.CALENDAR_SYNC]!!.deferredSinceUnlock).isEqualTo(0)
+            assertThat(afterUnlock[SyncWorkKind.CALENDAR_SYNC]!!.deferredSinceUnlock).isEqualTo(1)
+            assertThat(afterUnlock[SyncWorkKind.DRIVE_UPLOAD]!!.deferredSinceUnlock).isEqualTo(0)
+
+            // Next locked period: one more flight deferral, then unlock → shows 1, not 3.
+            store.recordDeferred(SyncWorkKind.FLIGHT_POLL, t3)
+            store.resetDeferredCounts()
+            assertThat(
+                store.statuses
+                    .first()
+                    .first { it.kind == SyncWorkKind.FLIGHT_POLL }
+                    .deferredSinceUnlock,
+            ).isEqualTo(1)
+            // An unlock with no deferrals in between shows 0.
+            store.resetDeferredCounts()
+            assertThat(
+                store.statuses
+                    .first()
+                    .first { it.kind == SyncWorkKind.FLIGHT_POLL }
+                    .deferredSinceUnlock,
+            ).isEqualTo(0)
         }
 }

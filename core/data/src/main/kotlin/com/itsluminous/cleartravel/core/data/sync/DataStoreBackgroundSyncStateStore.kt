@@ -47,7 +47,7 @@ class DataStoreBackgroundSyncStateStore
                         kind = kind,
                         lastCompletedAt = prefs[completedKey(kind)]?.let(Instant::ofEpochMilli),
                         lastDeferredAt = prefs[deferredKey(kind)]?.let(Instant::ofEpochMilli),
-                        deferredSinceUnlock = prefs[deferredCountKey(kind)] ?: 0,
+                        deferredSinceUnlock = prefs[deferredShownKey(kind)] ?: 0,
                     )
                 }
             }
@@ -70,7 +70,12 @@ class DataStoreBackgroundSyncStateStore
         }
 
         override suspend fun resetDeferredCounts() {
-            dataStore.edit { prefs -> SyncWorkKind.entries.forEach { prefs.remove(deferredCountKey(it)) } }
+            dataStore.edit { prefs ->
+                SyncWorkKind.entries.forEach { kind ->
+                    prefs[deferredShownKey(kind)] = prefs[deferredCountKey(kind)] ?: 0
+                    prefs.remove(deferredCountKey(kind))
+                }
+            }
         }
 
         private companion object {
@@ -80,6 +85,10 @@ class DataStoreBackgroundSyncStateStore
 
             fun deferredKey(kind: SyncWorkKind) = longPreferencesKey("sync_${kind.storageKey}_deferred_at")
 
+            /** Running count of the current locked period. */
             fun deferredCountKey(kind: SyncWorkKind) = intPreferencesKey("sync_${kind.storageKey}_deferred_count")
+
+            /** Count of the locked period that ended at the last unlock — what Settings shows. */
+            fun deferredShownKey(kind: SyncWorkKind) = intPreferencesKey("sync_${kind.storageKey}_deferred_shown")
         }
     }
