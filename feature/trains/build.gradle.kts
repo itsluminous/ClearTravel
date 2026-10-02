@@ -44,6 +44,7 @@ dependencies {
     implementation(project(":core:designsystem"))
     implementation(project(":core:model"))
     implementation(project(":core:data"))
+    implementation(project(":core:notifications"))
     implementation(project(":core:scrape"))
     implementation(project(":core:ocr"))
 
@@ -52,6 +53,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.work.runtime.ktx)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
@@ -65,6 +67,7 @@ dependencies {
     implementation(libs.androidx.hilt.navigation.compose)
 
     testImplementation(project(":core:testing"))
+    testImplementation(project(":core:security"))
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.kotlinx.coroutines.test)

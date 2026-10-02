@@ -1,0 +1,76 @@
+package com.itsluminous.cleartravel.feature.trains
+
+import com.itsluminous.cleartravel.core.data.repository.SettingsRepository
+import com.itsluminous.cleartravel.core.model.BackupSchedule
+import com.itsluminous.cleartravel.core.model.ThemeMode
+import com.itsluminous.cleartravel.core.model.TrainReminderLead
+import com.itsluminous.cleartravel.core.security.lock.LockTiming
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+
+/** In-memory [SettingsRepository] for the reminder runner tests (ADR-044). */
+class FakeSettingsRepository : SettingsRepository {
+    private val theme = MutableStateFlow(ThemeMode.SYSTEM)
+    private val trainProvider = MutableStateFlow<String?>(null)
+    private val flightProvider = MutableStateFlow<String?>(null)
+    private var trainKey: String? = null
+    private var flightKey: String? = null
+
+    override val themeMode: Flow<ThemeMode> = theme
+
+    override suspend fun setThemeMode(mode: ThemeMode) {
+        theme.value = mode
+    }
+
+    override val trainProviderId: Flow<String?> = trainProvider
+
+    override suspend fun setTrainProviderId(providerId: String?) {
+        trainProvider.value = providerId
+    }
+
+    override val flightProviderId: Flow<String?> = flightProvider
+
+    override suspend fun setFlightProviderId(providerId: String?) {
+        flightProvider.value = providerId
+    }
+
+    override suspend fun trainApiKey(): String? = trainKey
+
+    override suspend fun setTrainApiKey(key: String?) {
+        trainKey = key
+    }
+
+    override suspend fun flightApiKey(): String? = flightKey
+
+    override suspend fun setFlightApiKey(key: String?) {
+        flightKey = key
+    }
+
+    private val timing = MutableStateFlow(LockTiming.DEFAULT)
+    override val lockTiming: Flow<LockTiming> = timing
+
+    override suspend fun setLockTiming(timing: LockTiming) {
+        this.timing.value = timing
+    }
+
+    private val onboarding = MutableStateFlow(false)
+    override val onboardingPending: Flow<Boolean> = onboarding
+
+    override suspend fun setOnboardingPending(pending: Boolean) {
+        onboarding.value = pending
+    }
+
+    private val schedule = MutableStateFlow(BackupSchedule.DEFAULT)
+    override val backupSchedule: Flow<BackupSchedule> = schedule
+
+    override suspend fun setBackupSchedule(schedule: BackupSchedule) {
+        this.schedule.value = schedule
+    }
+
+    private val reminderLead = MutableStateFlow(TrainReminderLead.DEFAULT)
+    override val trainReminderLead: Flow<TrainReminderLead> = reminderLead
+
+    override suspend fun setTrainReminderLead(lead: TrainReminderLead) {
+        reminderLead.value = lead
+    }
+}
