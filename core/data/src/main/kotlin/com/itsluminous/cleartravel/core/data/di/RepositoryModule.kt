@@ -22,6 +22,8 @@ import com.itsluminous.cleartravel.core.data.repository.offline.OfflineItinerary
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTrainRepository
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTravelDocumentRepository
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTripRepository
+import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncStateStore
+import com.itsluminous.cleartravel.core.data.sync.DataStoreBackgroundSyncStateStore
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -75,4 +77,9 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindBackupManager(impl: DefaultBackupManager): BackupManager
+
+    /** ADR-043: plaintext worker bookkeeping, readable while the vault is locked. */
+    @Binds
+    @Singleton
+    abstract fun bindBackgroundSyncStateStore(impl: DataStoreBackgroundSyncStateStore): BackgroundSyncStateStore
 }
