@@ -3,6 +3,7 @@ package com.itsluminous.cleartravel.feature.applock
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.data.security.SecureStorageInitializer
 import com.itsluminous.cleartravel.core.data.security.StorageMigrationReport
+import com.itsluminous.cleartravel.core.security.background.BackgroundKeyWrapper
 import com.itsluminous.cleartravel.core.security.biometric.BiometricKeyWrapper
 import com.itsluminous.cleartravel.core.security.crypto.CryptoPrimitives
 import com.itsluminous.cleartravel.core.security.lock.AppLockController
@@ -314,5 +315,56 @@ class AppLockViewModelTest {
             assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Locked(biometricEnabled = false))
             viewModel.unlock("pw-pw-pw-1")
             assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Ready)
+        }
+
+    /** ADR-043: a Keystore stand-in that always has its key (device unlocked). */
+    private class AlwaysOnBackgroundKeyWrapper : BackgroundKeyWrapper {
+        private var key = CryptoPrimitives.randomKey()
+
+        override fun newEncryptCipher(): Cipher {
+            key = CryptoPrimitives.randomKey()
+            return Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, key) }
+        }
+
+        override fun decryptCipher(iv: ByteArray): Cipher =
+            Cipher.getInstance("AES/GCM/NoPadding").apply {
+                init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv))
+            }
+
+        override fun deleteKey() = Unit
+    }
+
+    /**
+     * ADR-043: a worker unlocked the vault with the background key before the user showed
+     * up. The gate derives from the UI lock, so it must STILL show the unlock screen, a
+     * wrong password must still be refused, and only a verified password opens it.
+     */
+    @Test
+    fun backgroundUnlockedVault_stillShowsTheLockScreen_andNeverAutoPasses() =
+        runTest {
+            val keystore = AlwaysOnBackgroundKeyWrapper()
+            DefaultKeyVault(store, iterations = 1_000, ioDispatcher = UnconfinedTestDispatcher(), backgroundKeyWrapper = keystore).also {
+                it.setUp("long-enough-1".toCharArray())
+                it.enableBackgroundUnlock("long-enough-1".toCharArray())
+            }
+            wizardDone()
+            // Cold process: a worker ran first and self-unlocked the vault.
+            val vault =
+                DefaultKeyVault(store, iterations = 1_000, ioDispatcher = UnconfinedTestDispatcher(), backgroundKeyWrapper = keystore)
+            assertThat(vault.unlockWithBackgroundKey()).isTrue()
+            assertThat(vault.isUnlocked).isTrue()
+
+            val viewModel = viewModel(vault)
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Locked(biometricEnabled = false))
+            assertThat(lockController.locked.value).isTrue()
+
+            viewModel.unlock("wrong-password")
+            assertThat(viewModel.feedback.value.wrongPassword).isTrue()
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Locked(biometricEnabled = false))
+            assertThat(initializer.calls).isEqualTo(0)
+
+            viewModel.unlock("long-enough-1")
+            assertThat(viewModel.uiState.value).isEqualTo(AppLockUiState.Ready)
+            assertThat(initializer.calls).isEqualTo(1)
         }
 }
