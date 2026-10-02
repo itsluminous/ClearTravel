@@ -2,6 +2,9 @@ package com.itsluminous.cleartravel.feature.menu
 
 import com.itsluminous.cleartravel.core.data.repository.ChecklistPresetRepository
 import com.itsluminous.cleartravel.core.data.repository.SettingsRepository
+import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncStateStore
+import com.itsluminous.cleartravel.core.data.sync.SyncWorkKind
+import com.itsluminous.cleartravel.core.data.sync.SyncWorkStatus
 import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ChecklistPreset
 import com.itsluminous.cleartravel.core.model.ChecklistPresetItem
@@ -10,6 +13,7 @@ import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import java.time.Instant
 
 /** In-memory [SettingsRepository] for menu ViewModel tests. */
 class FakeSettingsRepository : SettingsRepository {
@@ -136,4 +140,37 @@ class FakePresetRepository : ChecklistPresetRepository {
     }
 
     override suspend fun seedBuiltInPresets() = Unit
+}
+
+/** In-memory [BackgroundSyncStateStore] (ADR-043) for the security ViewModel tests. */
+class FakeBackgroundSyncStateStore : BackgroundSyncStateStore {
+    private var hints: List<Instant> = emptyList()
+    val state = MutableStateFlow(SyncWorkKind.entries.map { SyncWorkStatus(it) })
+
+    override suspend fun flightDepartureHints(): List<Instant> = hints
+
+    override suspend fun setFlightDepartureHints(departures: Collection<Instant>) {
+        hints = departures.toList()
+    }
+
+    override val statuses: Flow<List<SyncWorkStatus>> = state
+
+    override suspend fun recordDeferred(
+        kind: SyncWorkKind,
+        at: Instant,
+    ) {
+        state.value =
+            state.value.map { if (it.kind == kind) it.copy(lastDeferredAt = at, deferredSinceUnlock = it.deferredSinceUnlock + 1) else it }
+    }
+
+    override suspend fun recordCompleted(
+        kind: SyncWorkKind,
+        at: Instant,
+    ) {
+        state.value = state.value.map { if (it.kind == kind) it.copy(lastCompletedAt = at) else it }
+    }
+
+    override suspend fun resetDeferredCounts() {
+        state.value = state.value.map { it.copy(deferredSinceUnlock = 0) }
+    }
 }

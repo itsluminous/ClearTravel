@@ -147,4 +147,23 @@
     <string name="menu_security_lock_5m">5 minutes</string>
     <string name="menu_security_lock_15m">15 minutes</string>
     <string name="menu_security_lock_never">Never - only when the app is closed</string>
+    <string name="menu_security_background_sync_switch_title">Allow sync while locked</string>
+    <string name="menu_security_background_sync_switch_description">Keeps a device-protected copy of your key so flight status, calendar and backups can run before you unlock. Anyone who can run code inside this app on your unlocked phone could read your data without the password.</string>
+    <string name="menu_security_background_sync_confirm_title">Confirm your password</string>
+    <string name="menu_security_background_sync_confirm_body">Your key will be re-wrapped so background jobs can use it without the password. Enter your password to confirm.</string>
+    <string name="menu_security_background_sync_confirm_action">Allow</string>
+    <string name="menu_security_background_sync_enabled">Sync while locked allowed</string>
+    <string name="menu_security_background_sync_disabled">Sync while locked turned off</string>
+    <string name="menu_security_background_sync_wrong_password">The password is not correct.</string>
+    <string name="menu_security_background_sync_failed">Sync while locked could not be enabled on this device.</string>
+    <string name="menu_security_sync_status_title">Background sync</string>
+    <string name="menu_security_sync_status_explanation">Background jobs need your key. Until you unlock the app after it was closed, they wait; a flight within two days posts one quiet reminder.</string>
+    <string name="menu_security_sync_kind_flights">Flight status</string>
+    <string name="menu_security_sync_kind_calendar">Calendar sync</string>
+    <string name="menu_security_sync_kind_drive">Drive uploads</string>
+    <string name="menu_security_sync_kind_backup">Automatic backup</string>
+    <string name="menu_security_sync_last_success">Last successful: %1$s</string>
+    <string name="menu_security_sync_last_success_never">Last successful: never</string>
+    <string name="menu_security_sync_skipped">Skipped while locked: %1$s (%2$d since last unlock)</string>
+    <string name="menu_security_sync_skipped_never">Skipped while locked: never</string>
 </resources>
