@@ -1,7 +1,6 @@
 package com.itsluminous.cleartravel.feature.menu
 
 import androidx.annotation.StringRes
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -30,8 +30,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.role
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -324,16 +322,17 @@ internal fun RadioOptionRow(
     onSelect: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // `selectable` (not clickable + role) so the ROW carries the selected state — what
+    // TalkBack announces and what the e2e asserts on; the inner button is decorative.
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
-                .semantics { role = Role.RadioButton }
-                .clickable(onClick = onSelect)
+                .selectable(selected = selected, role = Role.RadioButton, onClick = onSelect)
                 .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RadioButton(selected = selected, onClick = onSelect)
+        RadioButton(selected = selected, onClick = null)
         Text(text = stringResource(labelRes), style = MaterialTheme.typography.bodyLarge)
     }
 }
