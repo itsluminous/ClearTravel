@@ -1123,3 +1123,52 @@ Notes:
 - The audit script: any `Text(` within 14 lines of a `*Button(`/`*Chip(`/`SegmentedButton(`/
   `NavigationBarItem(`/`TopAppBar(` opener, plus `grep -rn "maxLines = 1"` — both now
   return zero hits outside `AutoShrinkText.kt`.
+
+## Background sync while locked — nag fix + opt-in key (2026-10-02 19:05–19:30 IST, emulator Play_36_Pixel, API 36, ADR-043)
+
+Build installed OVER the demo install (0.0.3 → debug; vault.json v1 read by the v2
+code, demo data intact). All UI reads are `uiautomator dump` node texts; the
+notification counts are `dumpsys notification --noredact | grep -c
+"pkg=com.itsluminous.cleartravel.*id=1280262987"` (0x4C4F434B = the fixed "unlock to
+sync" id); worker runs are `cmd jobscheduler run -f -n androidx.work.systemjobscheduler
+com.itsluminous.cleartravel <jobId>` against the job id from `dumpsys jobscheduler`
+(the first forced run after a kill only cold-starts the process — WorkManager
+re-registers the job on init — so each scenario issues the command twice). The
+process was killed with `am kill` after HOME, not `am force-stop`: force-stop also
+drops the JobScheduler job, which is NOT what Android's memory killer does and would
+have hidden the bug.
+
+**Horizon check.** The demo flight EK 501 departs Oct 6 04:30 (≈81 h away) — OUTSIDE
+`UnlockNudgePolicy`'s 48 h horizon — so a temporary flight `6E 2345` for Oct 3 14:00
+(≈19 h) was added through *Paste SMS or email text* for the "nudge once" rows and
+deleted at the end (Flights list back to EK 501 only; the live hint collector
+collapsed `sync_flight_departures` to the single remaining departure).
+
+| # | Step | Evidence | Verdict |
+|---|---|---|---|
+| a0 | Unlock → hints written while unlocked | `settings.preferences_pb` gains `sync_flight_departures` + `sync_flights_completed_at` | PASS |
+| a1 | Switch OFF, no flight within 48 h: kill → worker run ×2 | logcat `ClearTravelFlightPoll: poll deferred: vault locked, nudged=false, backgroundKey=false`; LOCK count **0** both times; `sync_flights_deferred_at/_count` stamped | PASS |
+| a2 | Switch OFF, flight within 48 h (6E 2345): kill → worker run (cold process #1) | `poll deferred: vault locked, nudged=true, backgroundKey=false`; LOCK count **1**; record flags `ONLY_ALERT_ONCE\|AUTO_CANCEL`, `pri=-1`, `channel=reminders` | PASS |
+| a3 | Unlock (clears) → kill → worker run ×2 (cold process #2) | after unlock count **0**; after the two forced runs one deferred line, count **1** — never 2 (same-process second run is latched: `FlightPollRunnerTest`, `AppLockNotifierTest`) | PASS |
+| a4 | Chain behaviour while locked, switch OFF | no `androidx.work.systemjobscheduler` job left after the deferred run (chain ends; app-open re-kick restores it — job ids 9 → 10 → 11 → 12 across opens) | PASS |
+| b1 | Settings → Security → **Allow sync while locked** → ON | *Confirm your password* dialog (`Current password`, `Cancel`, `Allow`); after `TestPass123` → snackbar `Sync while locked allowed`, switch `checked=true`; `vault.json` now `version 2` with a 48-byte `backgroundWrap` | PASS |
+| b2 | Switch ON: kill → worker run (cold process, pid 7010) | `SQLiteConnection: Database keying operation returned:0` then `poll ran: posted=1, nextDelay=PT3H, backgroundKeyUnlocked=true`; LOCK count **0**; the one posted notification is the 6E check-in-open (reminders channel, id 391138738); next poll re-chained (job 13) | PASS |
+| b3 | Open the app in that SAME process (pid 7010, vault background-unlocked) | `Clear Travel is locked` / `Enter your password…` — NOT auto-unlocked | PASS |
+| b4 | Wrong password / right password | `That password is not correct.` stays on the lock screen; `TestPass123` opens Settings normally | PASS |
+| b5 | Status rows after b2 | `Flight status — Last successful: Oct 2, 2026, 7:15PM` (the background-key run counts as completed) | PASS |
+| c1 | Switch → OFF | switch `checked=false`; `vault.json` `backgroundWrap` **absent** (version stays 2) | PASS |
+| c2 | Switch OFF: kill → worker | `poll deferred: vault locked, nudged=true, backgroundKey=false` (6E still imminent; new process → one nudge), count 1 | PASS |
+| c3 | Unlock → Settings → Security | count 0 (cleared); `Skipped while locked: Oct 2, 2026, 7:22PM (1 time before the last unlock)` | **PASS after fix** — the first build zeroed the counter AT unlock, so the row read `(0 since last unlock)`; the unlock now rolls the running count into the shown one (`sync_*_deferred_shown`) |
+| c4 | Clean-up | temp flight deleted (list = EK 501), switch OFF, demo data untouched; `am kill` + e2e reinstall leave the snapshot install (0.0.3 demo) as found | PASS |
+| g1 | Full gate `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → `bgsync.log` | BUILD SUCCESSFUL, unit **1163/1163** | PASS |
+| g2 | `connectedDebugAndroidTest` on **Android_16_AOSP_Medium** (`e2e.log`) and again on Play_36_Pixel after the counter fix (`e2e2.log`) | **27/27** both runs, incl. `BackgroundSyncSettingE2eTest` | PASS |
+| g3 | Shutdown | both emulators killed, `adb devices` empty, no `qemu`/`emulator` processes | PASS |
+
+Notes:
+- Keystore on the Play image: `setIsStrongBoxBacked(true)` is attempted first; the
+  emulator has no StrongBox, so the `ProviderException` fallback created the TEE key —
+  the b2 run proves the fallback path end-to-end.
+- The `WorkerWrapper … was cancelled / WorkerStoppedException` lines after b2 are the
+  pre-existing `ExistingWorkPolicy.REPLACE` self-reschedule racing the finished
+  worker's bookkeeping (ADR-013), not a failure: the result line precedes them and job
+  13 was enqueued.
