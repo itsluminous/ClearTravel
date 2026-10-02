@@ -7,7 +7,7 @@ import kotlinx.coroutines.CancellationException
 
 /** What one automatic backup pass did (ADR-037) — the worker maps it to a verdict. */
 sealed interface ScheduledBackupOutcome {
-    /** The vault is locked: nothing ran, the "unlock to sync" nudge was posted. */
+    /** The vault is locked (and the ADR-043 background key, if any, could not open it): nothing ran, silently. */
     data object Locked : ScheduledBackupOutcome
 
     /** Local backup written; Drive was not attempted (toggle off / not linked). */
@@ -29,7 +29,9 @@ sealed interface ScheduledBackupOutcome {
 
 /**
  * ADR-037: one automatic backup pass, kept free of WorkManager/Hilt so it runs against
- * fakes. Order is fixed and observable: (1) gate on the vault, (2) local export through
+ * fakes. Order is fixed and observable: (1) gate on the vault via [openVault] (the
+ * ADR-043 `BackgroundSyncGate`: unlocked, or self-unlocked with the opt-in background
+ * key; a locked vault is deferred WITHOUT any notification), (2) local export through
  * [BackupManager.exportLatestToAppStorage] — encrypted, pruned to the newest three,
  * exactly the file the manual export keeps —, (3) only when Drive backups are enabled
  * AND an account is linked, [DriveBackupService.uploadLatestBackup] (the same call the
@@ -41,20 +43,16 @@ sealed interface ScheduledBackupOutcome {
  * the network-gated one-shot Drive backup worker, which has its own backoff.
  */
 class ScheduledBackupRunner(
-    private val isUnlocked: () -> Boolean,
+    /** True when the encrypted store can be read now (already unlocked or self-unlocked). */
+    private val openVault: suspend () -> Boolean,
     private val backupManager: BackupManager,
     private val linkStore: GoogleLinkStore,
     private val driveBackupService: DriveBackupService,
-    /** Posts the ADR-031 "unlock to sync" notification. */
-    private val notifyLocked: () -> Unit,
     /** Queues the network-gated Drive backup upload for later. */
     private val deferUpload: () -> Unit,
 ) {
     suspend fun run(): ScheduledBackupOutcome {
-        if (!isUnlocked()) {
-            notifyLocked()
-            return ScheduledBackupOutcome.Locked
-        }
+        if (!openVault()) return ScheduledBackupOutcome.Locked
         try {
             backupManager.exportLatestToAppStorage()
         } catch (e: CancellationException) {

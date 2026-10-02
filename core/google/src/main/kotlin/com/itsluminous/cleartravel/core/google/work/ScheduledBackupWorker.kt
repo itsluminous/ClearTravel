@@ -10,14 +10,15 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.itsluminous.cleartravel.core.data.backup.BackupManager
+import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncGate
+import com.itsluminous.cleartravel.core.data.sync.SyncAccess
+import com.itsluminous.cleartravel.core.data.sync.SyncWorkKind
 import com.itsluminous.cleartravel.core.google.auth.GoogleLinkStore
 import com.itsluminous.cleartravel.core.google.auth.GoogleSyncScheduler
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupService
 import com.itsluminous.cleartravel.core.google.backup.ScheduledBackupOutcome
 import com.itsluminous.cleartravel.core.google.backup.ScheduledBackupRunner
 import com.itsluminous.cleartravel.core.model.BackupSchedule
-import com.itsluminous.cleartravel.core.notifications.AppLockNotifier
-import com.itsluminous.cleartravel.core.security.vault.KeyVault
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -36,9 +37,11 @@ private const val TAG = "ClearTravelBackup"
  * [DriveBackupService] and `core:google` already composes `core:data`'s
  * [BackupManager].
  *
- * ADR-031: needs the vault (the export reads Room). Before the first unlock of this
- * process it posts the "unlock to sync" nudge and succeeds quietly — no retry storm;
- * the next period (or the app-open re-affirm) tries again.
+ * ADR-031/043: needs the vault (the export reads Room), so the runner passes the
+ * [BackgroundSyncGate] first (already unlocked → the opt-in background key → locked).
+ * A locked vault defers SILENTLY — a missed automatic backup is not worth a
+ * notification — and succeeds quietly, no retry storm; the next period (or the
+ * app-open re-affirm) tries again.
  */
 class ScheduledBackupWorker(
     appContext: Context,
@@ -47,9 +50,7 @@ class ScheduledBackupWorker(
     @EntryPoint
     @InstallIn(SingletonComponent::class)
     interface ScheduledBackupEntryPoint {
-        fun keyVault(): KeyVault
-
-        fun appLockNotifier(): AppLockNotifier
+        fun backgroundSyncGate(): BackgroundSyncGate
 
         fun backupManager(): BackupManager
 
@@ -64,15 +65,18 @@ class ScheduledBackupWorker(
         val deps = EntryPointAccessors.fromApplication(applicationContext, ScheduledBackupEntryPoint::class.java)
         val runner =
             ScheduledBackupRunner(
-                isUnlocked = { deps.keyVault().isUnlocked },
+                openVault = { deps.backgroundSyncGate().open(SyncWorkKind.SCHEDULED_BACKUP) !is SyncAccess.Locked },
                 backupManager = deps.backupManager(),
                 linkStore = deps.googleLinkStore(),
                 driveBackupService = deps.driveBackupService(),
-                notifyLocked = { deps.appLockNotifier().notifyUnlockToSync() },
                 deferUpload = { deps.googleSyncScheduler().scheduleBackupUpload() },
             )
         val outcome = runner.run()
-        if (outcome is ScheduledBackupOutcome.ExportFailed) Log.w(TAG, "automatic backup attempt $runAttemptCount failed", outcome.cause)
+        when (outcome) {
+            is ScheduledBackupOutcome.ExportFailed -> Log.w(TAG, "automatic backup attempt $runAttemptCount failed", outcome.cause)
+            ScheduledBackupOutcome.Locked -> Log.i(TAG, "automatic backup deferred: vault locked")
+            else -> Unit
+        }
         return resolveVerdict(outcome, runAttemptCount)
     }
 

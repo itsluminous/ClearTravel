@@ -4,9 +4,10 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncGate
+import com.itsluminous.cleartravel.core.data.sync.SyncAccess
+import com.itsluminous.cleartravel.core.data.sync.SyncWorkKind
 import com.itsluminous.cleartravel.core.google.auth.GoogleNotAvailableException
-import com.itsluminous.cleartravel.core.notifications.AppLockNotifier
-import com.itsluminous.cleartravel.core.security.vault.KeyVault
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -18,10 +19,11 @@ import kotlinx.coroutines.CancellationException
  * worker resolved through an entry point (the ADR-013 pattern) so no custom
  * `Configuration.Provider` is needed in :app.
  *
- * ADR-031: reconciliation reads Room, so before the first unlock of this process the
- * worker posts the "unlock to sync" nudge and succeeds quietly (the 6-hourly
- * periodic pass and the app-open re-kick cover it). The calendar-delete action needs
- * no database and runs regardless.
+ * ADR-031/043: reconciliation reads Room, so it passes the [BackgroundSyncGate] first
+ * (already unlocked → the opt-in background key → locked). A locked vault is NOT
+ * time-critical here: the worker defers SILENTLY — no notification, ever — and
+ * succeeds quietly (the 6-hourly periodic pass and the app-open re-kick cover it).
+ * The calendar-delete action needs no database and runs regardless.
  */
 class CalendarSyncWorker(
     appContext: Context,
@@ -32,9 +34,7 @@ class CalendarSyncWorker(
     interface CalendarSyncEntryPoint {
         fun calendarSyncEngine(): CalendarSyncEngine
 
-        fun keyVault(): KeyVault
-
-        fun appLockNotifier(): AppLockNotifier
+        fun backgroundSyncGate(): BackgroundSyncGate
     }
 
     override suspend fun doWork(): Result {
@@ -47,8 +47,9 @@ class CalendarSyncWorker(
                     engine.deleteCalendar(calendarId)
                 }
                 else -> {
-                    if (!deps.keyVault().isUnlocked) {
-                        deps.appLockNotifier().notifyUnlockToSync()
+                    val access = deps.backgroundSyncGate().open(SyncWorkKind.CALENDAR_SYNC)
+                    if (access is SyncAccess.Locked) {
+                        Log.i(TAG, "calendar sync deferred: vault locked (backgroundKey=${access.backgroundKeyEnabled})")
                         return Result.success()
                     }
                     engine.reconcile()

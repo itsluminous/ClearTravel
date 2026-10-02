@@ -4,13 +4,14 @@ import android.content.Context
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncGate
+import com.itsluminous.cleartravel.core.data.sync.SyncAccess
+import com.itsluminous.cleartravel.core.data.sync.SyncWorkKind
 import com.itsluminous.cleartravel.core.google.auth.GoogleNotAvailableException
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupService
 import com.itsluminous.cleartravel.core.google.backup.DriveBackupUploadResult
 import com.itsluminous.cleartravel.core.google.drive.DriveUploadEngine
 import com.itsluminous.cleartravel.core.google.drive.DriveUploadResult
-import com.itsluminous.cleartravel.core.notifications.AppLockNotifier
-import com.itsluminous.cleartravel.core.security.vault.KeyVault
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
@@ -24,9 +25,10 @@ private const val MAX_ATTEMPTS = 5
  * Drains the Drive attachment/boarding-pass upload queue with retry/backoff. Plain
  * (non-Hilt) worker resolved through an entry point (the ADR-013 pattern).
  *
- * ADR-031: needs the vault (database + file keys). Before the first unlock of this
- * process it posts the "unlock to sync" nudge and succeeds quietly — the periodic
- * drain and the toggle/link passes pick the queue up later.
+ * ADR-031/043: needs the vault (database + file keys), so it passes the
+ * [BackgroundSyncGate] first (already unlocked → the opt-in background key → locked).
+ * A locked vault defers SILENTLY — never a notification — and succeeds quietly; the
+ * periodic drain and the toggle/link passes pick the queue up later.
  */
 class DriveUploadWorker(
     appContext: Context,
@@ -37,15 +39,14 @@ class DriveUploadWorker(
     interface DriveUploadEntryPoint {
         fun driveUploadEngine(): DriveUploadEngine
 
-        fun keyVault(): KeyVault
-
-        fun appLockNotifier(): AppLockNotifier
+        fun backgroundSyncGate(): BackgroundSyncGate
     }
 
     override suspend fun doWork(): Result {
         val deps = EntryPointAccessors.fromApplication(applicationContext, DriveUploadEntryPoint::class.java)
-        if (!deps.keyVault().isUnlocked) {
-            deps.appLockNotifier().notifyUnlockToSync()
+        val access = deps.backgroundSyncGate().open(SyncWorkKind.DRIVE_UPLOAD)
+        if (access is SyncAccess.Locked) {
+            Log.i(TAG, "drive upload deferred: vault locked (backgroundKey=${access.backgroundKeyEnabled})")
             return Result.success()
         }
         val engine = deps.driveUploadEngine()

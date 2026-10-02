@@ -69,11 +69,13 @@ class ScheduledBackupRunnerTest {
 
     private fun runner(link: GoogleLinkSnapshot = GoogleLinkSnapshot()) =
         ScheduledBackupRunner(
-            isUnlocked = { unlocked },
+            openVault = {
+                trace.calls += "gate"
+                unlocked
+            },
             backupManager = backupManager,
             linkStore = FakeGoogleLinkStore(link),
             driveBackupService = driveService,
-            notifyLocked = { trace.calls += "notify-locked" },
             deferUpload = { trace.calls += "defer-upload" },
         )
 
@@ -81,14 +83,14 @@ class ScheduledBackupRunnerTest {
         GoogleLinkSnapshot(email = "traveler@example.com", driveBackupEnabled = true)
 
     @Test
-    fun `locked vault posts the unlock nudge and touches nothing`() =
+    fun `locked vault defers silently and touches nothing`() =
         runTest {
             unlocked = false
 
             val outcome = runner(linkedWithDriveBackup).run()
 
             assertThat(outcome).isEqualTo(ScheduledBackupOutcome.Locked)
-            assertThat(trace.calls).containsExactly("notify-locked")
+            assertThat(trace.calls).containsExactly("gate") // no notification hook exists any more
         }
 
     @Test
@@ -97,7 +99,7 @@ class ScheduledBackupRunnerTest {
             val outcome = runner(GoogleLinkSnapshot(email = "traveler@example.com", driveBackupEnabled = false)).run()
 
             assertThat(outcome).isEqualTo(ScheduledBackupOutcome.LocalOnly)
-            assertThat(trace.calls).containsExactly("export")
+            assertThat(trace.calls).containsExactly("gate", "export").inOrder()
         }
 
     @Test
@@ -106,7 +108,7 @@ class ScheduledBackupRunnerTest {
             val outcome = runner(GoogleLinkSnapshot(email = null, driveBackupEnabled = true)).run()
 
             assertThat(outcome).isEqualTo(ScheduledBackupOutcome.LocalOnly)
-            assertThat(trace.calls).containsExactly("export")
+            assertThat(trace.calls).containsExactly("gate", "export").inOrder()
         }
 
     @Test
@@ -115,7 +117,7 @@ class ScheduledBackupRunnerTest {
             val outcome = runner(linkedWithDriveBackup).run()
 
             assertThat(outcome).isEqualTo(ScheduledBackupOutcome.Uploaded)
-            assertThat(trace.calls).containsExactly("export", "upload").inOrder()
+            assertThat(trace.calls).containsExactly("gate", "export", "upload").inOrder()
         }
 
     @Test
@@ -126,7 +128,7 @@ class ScheduledBackupRunnerTest {
             val outcome = runner(linkedWithDriveBackup).run()
 
             assertThat(outcome).isInstanceOf(ScheduledBackupOutcome.ExportFailed::class.java)
-            assertThat(trace.calls).containsExactly("export")
+            assertThat(trace.calls).containsExactly("gate", "export").inOrder()
         }
 
     @Test
@@ -137,7 +139,7 @@ class ScheduledBackupRunnerTest {
             val outcome = runner(linkedWithDriveBackup).run()
 
             assertThat(outcome).isInstanceOf(ScheduledBackupOutcome.UploadDeferred::class.java)
-            assertThat(trace.calls).containsExactly("export", "upload", "defer-upload").inOrder()
+            assertThat(trace.calls).containsExactly("gate", "export", "upload", "defer-upload").inOrder()
         }
 
     @Test
@@ -148,6 +150,6 @@ class ScheduledBackupRunnerTest {
             val outcome = runner(linkedWithDriveBackup).run()
 
             assertThat(outcome).isEqualTo(ScheduledBackupOutcome.LocalOnly)
-            assertThat(trace.calls).containsExactly("export", "upload").inOrder()
+            assertThat(trace.calls).containsExactly("gate", "export", "upload").inOrder()
         }
 }
