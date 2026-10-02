@@ -4,9 +4,9 @@ import androidx.work.ListenableWorker
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncGate
 import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncStateStore
-import com.itsluminous.cleartravel.core.data.sync.TrainDepartureHint
 import com.itsluminous.cleartravel.core.data.sync.SyncWorkKind
 import com.itsluminous.cleartravel.core.data.sync.SyncWorkStatus
+import com.itsluminous.cleartravel.core.data.sync.TrainDepartureHint
 import com.itsluminous.cleartravel.core.security.background.BackgroundKeyWrapper
 import com.itsluminous.cleartravel.core.security.crypto.CryptoPrimitives
 import com.itsluminous.cleartravel.core.security.vault.DefaultKeyVault
