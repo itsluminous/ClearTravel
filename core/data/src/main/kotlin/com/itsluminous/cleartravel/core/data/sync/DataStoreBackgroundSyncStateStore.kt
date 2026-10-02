@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -23,16 +24,18 @@ class DataStoreBackgroundSyncStateStore
     constructor(
         private val dataStore: DataStore<Preferences>,
     ) : BackgroundSyncStateStore {
-        override suspend fun nextFlightDeparture(): Instant? = dataStore.data.first()[KEY_NEXT_FLIGHT_DEPARTURE]?.let(Instant::ofEpochMilli)
+        override suspend fun flightDepartureHints(): List<Instant> =
+            dataStore.data
+                .first()[KEY_FLIGHT_DEPARTURES]
+                .orEmpty()
+                .mapNotNull { it.toLongOrNull()?.let(Instant::ofEpochMilli) }
 
-        override suspend fun setNextFlightDeparture(departure: Instant?) {
+        override suspend fun setFlightDepartureHints(departures: Collection<Instant>) {
             dataStore.edit { prefs ->
-                if (departure ==
-                    null
-                ) {
-                    prefs.remove(KEY_NEXT_FLIGHT_DEPARTURE)
+                if (departures.isEmpty()) {
+                    prefs.remove(KEY_FLIGHT_DEPARTURES)
                 } else {
-                    prefs[KEY_NEXT_FLIGHT_DEPARTURE] = departure.toEpochMilli()
+                    prefs[KEY_FLIGHT_DEPARTURES] = departures.map { it.toEpochMilli().toString() }.toSet()
                 }
             }
         }
@@ -71,7 +74,7 @@ class DataStoreBackgroundSyncStateStore
         }
 
         private companion object {
-            val KEY_NEXT_FLIGHT_DEPARTURE = longPreferencesKey("sync_next_flight_departure")
+            val KEY_FLIGHT_DEPARTURES = stringSetPreferencesKey("sync_flight_departures")
 
             fun completedKey(kind: SyncWorkKind) = longPreferencesKey("sync_${kind.storageKey}_completed_at")
 

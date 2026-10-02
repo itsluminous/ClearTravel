@@ -44,17 +44,18 @@ class BackgroundSyncStateStoreTest {
             val statuses = store.statuses.first()
             assertThat(statuses.map { it.kind }).containsExactlyElementsIn(SyncWorkKind.entries).inOrder()
             assertThat(statuses).containsExactlyElementsIn(SyncWorkKind.entries.map { SyncWorkStatus(it) })
-            assertThat(store.nextFlightDeparture()).isNull()
+            assertThat(store.flightDepartureHints()).isEmpty()
         }
 
     @Test
-    fun flightHint_roundTrips_andClears() =
+    fun flightHints_roundTrip_dedupe_andClear() =
         runTest {
-            val departure = Instant.parse("2026-10-05T08:30:00Z")
-            store.setNextFlightDeparture(departure)
-            assertThat(store.nextFlightDeparture()).isEqualTo(departure)
-            store.setNextFlightDeparture(null)
-            assertThat(store.nextFlightDeparture()).isNull()
+            val a = Instant.parse("2026-10-05T08:30:00Z")
+            val b = Instant.parse("2026-10-12T20:15:00Z")
+            store.setFlightDepartureHints(listOf(b, a, a))
+            assertThat(store.flightDepartureHints()).containsExactly(a, b)
+            store.setFlightDepartureHints(emptyList())
+            assertThat(store.flightDepartureHints()).isEmpty()
         }
 
     @Test

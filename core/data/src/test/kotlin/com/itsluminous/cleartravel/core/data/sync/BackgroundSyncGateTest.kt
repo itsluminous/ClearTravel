@@ -42,13 +42,13 @@ private class FakeBackgroundKeyWrapper : BackgroundKeyWrapper {
 /** In-memory [BackgroundSyncStateStore] recording every call. */
 class RecordingSyncStateStore : BackgroundSyncStateStore {
     val calls = mutableListOf<String>()
-    private var hint: Instant? = null
+    private var hints: List<Instant> = emptyList()
     private val state = MutableStateFlow(SyncWorkKind.entries.map { SyncWorkStatus(it) })
 
-    override suspend fun nextFlightDeparture(): Instant? = hint
+    override suspend fun flightDepartureHints(): List<Instant> = hints
 
-    override suspend fun setNextFlightDeparture(departure: Instant?) {
-        hint = departure
+    override suspend fun setFlightDepartureHints(departures: Collection<Instant>) {
+        hints = departures.toList()
     }
 
     override val statuses = state

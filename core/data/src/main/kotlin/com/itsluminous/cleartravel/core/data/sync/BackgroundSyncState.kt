@@ -33,17 +33,19 @@ data class SyncWorkStatus(
  * vault is locked — a Preferences DataStore, deliberately NOT Room. Two things live
  * here: (1) the per-kind "last completed / last deferred (N times)" timestamps that
  * Settings → Security shows under *Background sync*, and (2) the flight-poll hint
- * [nextFlightDeparture] — the earliest scheduled departure among the active flights,
- * written whenever the unlocked app sees the flight list — so the locked worker can
- * tell whether there is any imminent flight worth an "unlock to sync" nudge without
- * touching the encrypted database. A departure instant alone reveals nothing about the
- * journey (no airline, number, route or PNR).
+ * [flightDepartureHints] — the scheduled departures of the active (non-archived)
+ * flights, written whenever the unlocked app sees the flight list — so the locked
+ * worker can tell whether any flight is imminent enough to be worth an "unlock to
+ * sync" nudge without touching the encrypted database. The whole list (not just the
+ * earliest) is kept so a hint written weeks ago still answers correctly once the first
+ * flight has flown. Departure instants alone reveal nothing about the journeys (no
+ * airline, number, route or PNR).
  */
 interface BackgroundSyncStateStore {
-    /** Earliest active-flight departure the unlocked app last observed; null = none / unknown. */
-    suspend fun nextFlightDeparture(): Instant?
+    /** Scheduled departures of the active flights the unlocked app last observed (unordered). */
+    suspend fun flightDepartureHints(): List<Instant>
 
-    suspend fun setNextFlightDeparture(departure: Instant?)
+    suspend fun setFlightDepartureHints(departures: Collection<Instant>)
 
     /** All kinds, in [SyncWorkKind] order, each with its stored timestamps (defaults when never run). */
     val statuses: Flow<List<SyncWorkStatus>>
