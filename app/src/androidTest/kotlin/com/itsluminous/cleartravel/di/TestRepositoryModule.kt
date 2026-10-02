@@ -23,9 +23,9 @@ import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTrainRepo
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTravelDocumentRepository
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTripRepository
 import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncStateStore
-import com.itsluminous.cleartravel.core.data.sync.TrainDepartureHint
 import com.itsluminous.cleartravel.core.data.sync.SyncWorkKind
 import com.itsluminous.cleartravel.core.data.sync.SyncWorkStatus
+import com.itsluminous.cleartravel.core.data.sync.TrainDepartureHint
 import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ThemeMode
 import com.itsluminous.cleartravel.core.model.TrainReminderLead

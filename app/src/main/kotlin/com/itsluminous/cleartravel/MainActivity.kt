@@ -50,6 +50,8 @@ import com.itsluminous.cleartravel.startup.AppStartupTasks
 import com.itsluminous.cleartravel.ui.ClearTravelApp
 import com.itsluminous.cleartravel.ui.JourneyPickCoordinator
 import com.itsluminous.cleartravel.ui.JourneysDeepLink
+import com.itsluminous.cleartravel.ui.PnrLinkRoute
+import com.itsluminous.cleartravel.ui.PnrLinkViewModel
 import com.itsluminous.cleartravel.ui.ThemeViewModel
 import com.itsluminous.cleartravel.ui.intake.IntakeRoute
 import com.itsluminous.cleartravel.ui.intake.SharedFileIntakeDialog
@@ -66,6 +68,8 @@ import com.itsluminous.cleartravel.ui.share.ShareImportViewModel
 import com.itsluminous.cleartravel.ui.share.ShareLinkRoute
 import com.itsluminous.cleartravel.ui.share.routeShareLink
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -111,6 +115,12 @@ class MainActivity : FragmentActivity() {
      */
     private val pendingEntry = mutableStateOf<ExternalEntry?>(null)
 
+    /**
+     * A PNR link (ADR-020 share link / ADR-044 reminder tap) awaiting resolution INSIDE
+     * the gate (ADR-044 §7): an existing live ticket → its PNR check, else the add form.
+     */
+    private val pendingPnrLink = mutableStateOf<PnrLink?>(null)
+
     /** A shared image/PDF awaiting the "What's this file?" intake dialog. */
     private val pendingSharedFile = mutableStateOf<Uri?>(null)
 
@@ -147,6 +157,7 @@ class MainActivity : FragmentActivity() {
         val textIntakeViewModel: SharedTextIntakeViewModel by viewModels()
         val pickCoordinator: JourneyPickCoordinator by viewModels()
         val shareImportViewModel: ShareImportViewModel by viewModels()
+        val pnrLinkViewModel: PnrLinkViewModel by viewModels()
         setContent {
             val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
             // ADR-028: an itinerary leg asked for a new journey → land on Journeys in
@@ -166,10 +177,20 @@ class MainActivity : FragmentActivity() {
                         onUnlocked = {
                             appLockNotifier.clear()
                             startupTasks.runOnAppOpen()
-                            startupTasks.keepFlightDepartureHintsFresh()
+                            coroutineScope {
+                                launch { startupTasks.keepFlightDepartureHintsFresh() }
+                                launch { startupTasks.keepTrainRemindersFresh() }
+                            }
                         },
                     ) {
-                        ShellContent(themeViewModel, intakeViewModel, textIntakeViewModel, pickCoordinator, shareImportViewModel)
+                        ShellContent(
+                            themeViewModel,
+                            intakeViewModel,
+                            textIntakeViewModel,
+                            pickCoordinator,
+                            shareImportViewModel,
+                            pnrLinkViewModel,
+                        )
                     }
                 }
             }
@@ -184,11 +205,24 @@ class MainActivity : FragmentActivity() {
         textIntakeViewModel: SharedTextIntakeViewModel,
         pickCoordinator: JourneyPickCoordinator,
         shareImportViewModel: ShareImportViewModel,
+        pnrLinkViewModel: PnrLinkViewModel,
     ) {
         // Runs only once the gate is open (password set, storage prepared, first-run
         // wizard finished): the system permission dialog must never sit over the
         // first-run password screen or the wizard (ADR-032 follow-up).
         NotificationPermissionEffect()
+        // ADR-044 §7: a PNR link is resolved here — inside the gate — because the lookup
+        // needs the encrypted ticket store. Keyed by nonce so the same link tapped twice
+        // resolves twice (e.g. the reminder re-tapped after backing out of the check).
+        val pnrLink = pendingPnrLink.value
+        LaunchedEffect(pnrLink) {
+            pnrLink ?: return@LaunchedEffect
+            when (val route = pnrLinkViewModel.resolve(pnrLink.pnr)) {
+                is PnrLinkRoute.CheckExisting -> pendingDeepLink.value = PnrLinkRoute.landing(route)
+                is PnrLinkRoute.AddNew -> pendingEntry.value = ExternalEntry.Trains(TrainsEntryRequest.Pnr(route.pnr))
+            }
+            if (pendingPnrLink.value == pnrLink) pendingPnrLink.value = null
+        }
         when (val entry = pendingEntry.value) {
             // External entry: a feature's add form rendered over the shell
             // until saved/cancelled; keyed by nonce so a repeated request
@@ -301,7 +335,8 @@ class MainActivity : FragmentActivity() {
      * share import, ADR-039; a Google Maps link → the "Add place" intake, ADR-029;
      * anything else → the train-or-flight text intake, ADR-042), ACTION_SEND image/PDF (→ intake
      * dialog), ACTION_VIEW share link (→ import confirm / prefilled flight form) or
-     * PNR link (→ train form carrying the PNR), else a notification deep link.
+     * PNR link (→ resolved inside the gate: the ticket's PNR check or the train form
+     * carrying the PNR, ADR-044 §7), else a notification deep link.
      */
     private fun consumeIntent(intent: Intent?) {
         intent ?: return
@@ -324,7 +359,7 @@ class MainActivity : FragmentActivity() {
             Intent.ACTION_VIEW -> {
                 if (consumeShareLink(intent.dataString)) return
                 TicketShareLinks.parsePnr(intent.dataString)?.let { pnr ->
-                    pendingEntry.value = ExternalEntry.Trains(TrainsEntryRequest.Pnr(pnr))
+                    pendingPnrLink.value = PnrLink(pnr)
                     return
                 }
             }
@@ -352,6 +387,12 @@ class MainActivity : FragmentActivity() {
         const val MIME_TEXT_PLAIN = "text/plain"
     }
 }
+
+/** An incoming PNR link awaiting resolution; [nonce] makes a repeat of the same PNR distinct. */
+private data class PnrLink(
+    val pnr: String,
+    val nonce: Long = System.nanoTime(),
+)
 
 /**
  * Which feature form an external launch (share sheet / link) is hosting. [nonce]
