@@ -24,7 +24,16 @@
     <string name="notifications_flight_belt_text">Collect your bags at belt %1$s</string>
     <string name="notifications_flight_status_check_title">%1$s status may have changed</string>
     <string name="notifications_flight_status_check_text">Tap to check the latest status.</string>
-    <!-- ADR-031: background job could not run before the first unlock -->
+    <!-- ADR-044: train journey reminder. %1$s = train label ("12951 Mumbai Rajdhani"), %2$s = departure day ("Sat 4 Oct"). -->
+    <string name="notifications_train_reminder_title_today">Train today: %1$s</string>
+    <string name="notifications_train_reminder_title_tomorrow">Train tomorrow: %1$s</string>
+    <string name="notifications_train_reminder_title_on_day">Train on %2$s: %1$s</string>
+    <!-- %1$s = boarding station, %2$s = departure day + time ("Sat 4 Oct, 16:35"), %3$s = known seat status ("WL 12"). -->
+    <string name="notifications_train_reminder_text">Departs %1$s %2$s. Tap to check PNR &amp; seat status.</string>
+    <string name="notifications_train_reminder_text_with_status">Departs %1$s %2$s. Tap to check PNR &amp; seat status (%3$s).</string>
+    <string name="notifications_train_reminder_text_no_station">Departs %2$s. Tap to check PNR &amp; seat status.</string>
+    <string name="notifications_train_reminder_text_no_station_with_status">Departs %2$s. Tap to check PNR &amp; seat status (%3$s).</string>
+    <!-- ADR-031/043/044: background job could not run before the first unlock -->
     <string name="notifications_unlock_to_sync_title">Unlock Clear Travel to sync</string>
-    <string name="notifications_unlock_to_sync_text">Flight updates, calendar sync and Drive uploads resume once you open and unlock the app.</string>
+    <string name="notifications_unlock_to_sync_text">Flight updates, train reminders, calendar sync and Drive uploads resume once you open and unlock the app.</string>
 </resources>
