@@ -22,6 +22,9 @@ import com.itsluminous.cleartravel.core.data.repository.offline.OfflineItinerary
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTrainRepository
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTravelDocumentRepository
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTripRepository
+import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncStateStore
+import com.itsluminous.cleartravel.core.data.sync.SyncWorkKind
+import com.itsluminous.cleartravel.core.data.sync.SyncWorkStatus
 import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ThemeMode
 import com.itsluminous.cleartravel.core.security.lock.LockTiming
@@ -31,6 +34,7 @@ import dagger.hilt.components.SingletonComponent
 import dagger.hilt.testing.TestInstallIn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import java.time.Instant
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -86,7 +90,56 @@ abstract class TestRepositoryModule {
     @Binds
     @Singleton
     abstract fun bindBackupManager(impl: DefaultBackupManager): BackupManager
+
+    /** ADR-043: in-memory stand-in — the production one rides the (absent) settings DataStore. */
+    @Binds
+    @Singleton
+    abstract fun bindBackgroundSyncStateStore(impl: FakeBackgroundSyncStateStore): BackgroundSyncStateStore
 }
+
+/** In-memory [BackgroundSyncStateStore]: pure Kotlin flows, no disk, safe across test classes. */
+@Singleton
+class FakeBackgroundSyncStateStore
+    @Inject
+    constructor() : BackgroundSyncStateStore {
+        private var hints: List<Instant> = emptyList()
+        private val state = MutableStateFlow(SyncWorkKind.entries.map { SyncWorkStatus(it) })
+
+        override suspend fun flightDepartureHints(): List<Instant> = hints
+
+        override suspend fun setFlightDepartureHints(departures: Collection<Instant>) {
+            hints = departures.toList()
+        }
+
+        override val statuses: Flow<List<SyncWorkStatus>> = state
+
+        override suspend fun recordDeferred(
+            kind: SyncWorkKind,
+            at: Instant,
+        ) {
+            state.value =
+                state.value.map {
+                    if (it.kind ==
+                        kind
+                    ) {
+                        it.copy(lastDeferredAt = at, deferredSinceUnlock = it.deferredSinceUnlock + 1)
+                    } else {
+                        it
+                    }
+                }
+        }
+
+        override suspend fun recordCompleted(
+            kind: SyncWorkKind,
+            at: Instant,
+        ) {
+            state.value = state.value.map { if (it.kind == kind) it.copy(lastCompletedAt = at) else it }
+        }
+
+        override suspend fun resetDeferredCounts() {
+            state.value = state.value.map { it.copy(deferredSinceUnlock = 0) }
+        }
+    }
 
 /** In-memory [SettingsRepository]: pure Kotlin flows, no disk, safe across test classes. */
 @Singleton

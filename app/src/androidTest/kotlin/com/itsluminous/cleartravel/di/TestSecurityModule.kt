@@ -1,5 +1,6 @@
 package com.itsluminous.cleartravel.di
 
+import com.itsluminous.cleartravel.core.security.background.BackgroundKeyWrapper
 import com.itsluminous.cleartravel.core.security.biometric.BiometricKeyWrapper
 import com.itsluminous.cleartravel.core.security.crypto.CryptoPrimitives
 import com.itsluminous.cleartravel.core.security.di.SecurityModule
@@ -14,6 +15,7 @@ import dagger.hilt.components.SingletonComponent
 import dagger.hilt.testing.TestInstallIn
 import kotlinx.coroutines.runBlocking
 import javax.crypto.Cipher
+import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import javax.inject.Singleton
 
@@ -40,10 +42,15 @@ object TestSecurityModule {
 
     @Provides
     @Singleton
-    fun provideKeyVault(): KeyVault =
-        DefaultKeyVault(InMemoryKeyFileStore(), iterations = 1_000).also { vault ->
+    fun provideKeyVault(backgroundKeyWrapper: BackgroundKeyWrapper): KeyVault =
+        DefaultKeyVault(InMemoryKeyFileStore(), iterations = 1_000, backgroundKeyWrapper = backgroundKeyWrapper).also { vault ->
             if (!freshInstall) runBlocking { vault.setUp(TEST_PASSWORD.toCharArray()) }
         }
+
+    /** ADR-043: the opt-in background key, also a plain-AES stand-in (no Keystore in the hermetic suite). */
+    @Provides
+    @Singleton
+    fun provideBackgroundKeyWrapper(): BackgroundKeyWrapper = FakeBackgroundKeyWrapper()
 
     @Provides
     @Singleton
@@ -68,4 +75,24 @@ class FakeBiometricKeyWrapper : BiometricKeyWrapper {
         Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(128, iv)) }
 
     override fun deleteKey() = Unit
+}
+
+/** Keystore stand-in for the ADR-043 background key: an ordinary AES key behind GCM ciphers. */
+class FakeBackgroundKeyWrapper : BackgroundKeyWrapper {
+    private var key: SecretKey? = null
+
+    override fun newEncryptCipher(): Cipher {
+        val fresh = CryptoPrimitives.randomKey()
+        key = fresh
+        return Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.ENCRYPT_MODE, fresh) }
+    }
+
+    override fun decryptCipher(iv: ByteArray): Cipher? {
+        val current = key ?: return null
+        return Cipher.getInstance("AES/GCM/NoPadding").apply { init(Cipher.DECRYPT_MODE, current, GCMParameterSpec(128, iv)) }
+    }
+
+    override fun deleteKey() {
+        key = null
+    }
 }

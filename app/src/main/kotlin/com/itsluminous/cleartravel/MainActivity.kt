@@ -160,10 +160,13 @@ class MainActivity : FragmentActivity() {
                 CompositionLocalProvider(LocalDocumentFileReader provides documentFileReader) {
                     AppLockGate(
                         // Housekeeping (auto-archive past journeys, restart the flight
-                        // poll chain) runs on IO once the encrypted store is open.
+                        // poll chain, reset the ADR-043 deferral counters) runs on IO once
+                        // the encrypted store is open; the departure-hint collector then
+                        // lives as long as this LaunchedEffect (re-lock cancels it).
                         onUnlocked = {
                             appLockNotifier.clear()
                             startupTasks.runOnAppOpen()
+                            startupTasks.keepFlightDepartureHintsFresh()
                         },
                     ) {
                         ShellContent(themeViewModel, intakeViewModel, textIntakeViewModel, pickCoordinator, shareImportViewModel)
