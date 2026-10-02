@@ -56,7 +56,8 @@ how the code works; **amended** = active, but a later ADR changed part of it (na
 | 040 | Deterministic built-in preset item ids; restore collapses pre-040 seeded duplicates | active — amends 006 seeding |
 | 041 | UX fixes — tappable boarding-pass marker, app-wide IME insets at the shell, input dialogs ignore outside taps | active |
 | 042 | Flight from SMS/email text + train-or-flight intake for shared text | active |
-| 043 | Background sync while locked — nag fix (once-per-process, imminent-flight-only nudge; silent deferral + status) and the OPT-IN background key | active — relaxes 031 §7 only when the user opts in |
+| 043 | Background sync while locked — nag fix (once-per-process, imminent-flight-only nudge; silent deferral + status) and the OPT-IN background key | active — relaxes 031 §7 only when the user opts in; nudge rule + worker table extended by 044 |
+| 044 | Train journey reminder — lead-time setting, periodic worker over hashed plaintext hints, PNR link opens the status check | active — extends 043 (second nudging job, shared latch) |
 
 ---
 
@@ -2990,3 +2991,126 @@ validation (nag count, opt-in worker run, lock screen, revert) in
 `docs/validation-report.md` (2026-10-02). AGENTS.md rule 7 names the opt-in as the
 single sanctioned exception. Follow-ups: none planned — a per-job "run now" button in
 the status block would be cheap if users ask.
+
+## ADR-044 — Train journey reminder: lead-time setting, hashed plaintext hints, PNR link → status check (2026-10-02)
+
+**Context.** The user asked for "a reminder notification for a train journey 24 hours
+before — basically I want to check train and seat status earlier". A PNR refresh cannot
+run in the background: the IRCTC page needs the user to solve a captcha in the
+foreground `PnrCheck` WebView (ADR-011). So the app cannot *do* the check for the user;
+what it can do is remind them while there is still time to act on a RAC / waitlisted
+berth, and make the tap land directly in the check. Flights already have a background
+poller (ADR-013) and ADR-043 defined how any job behaves against the locked vault; this
+ADR adds the second — and last planned — job that is allowed to nudge.
+
+**Decision.**
+
+1. **Setting.** `core:model/TrainReminderLead` — `OFF / TWELVE_HOURS / ONE_DAY /
+   TWO_DAYS` (`storageValue` `off / 12h / 24h / 48h`, `lead: Duration?`), default
+   **`ONE_DAY`** (on without setup — the whole point is to be reminded).
+   `SettingsRepository.trainReminderLead / setTrainReminderLead` (DataStore key
+   `train_reminder_lead`, plaintext like every other preference, so the worker reads it
+   while locked). Settings gains a **Notifications** section (new; before this every
+   notification was implicit) with the four radio rows; `SettingsViewModel` carries the
+   flow + setter.
+2. **Window math (pure `TrainReminderPolicy`, `feature:trains/reminder`).** A ticket is
+   *due* at instant `now` when `departure − lead ≤ now < departure` and its key is not in
+   the reminded set. The window is deliberately open-ended up to departure (the task's
+   initial `[departure − lead, departure − lead + 6 h)` was dropped): the reminded set
+   already makes the reminder fire once, and an open window is what makes a ticket
+   **added inside the window** (10 h before departure with a 24 h lead) remind on the
+   next worker run instead of never. `departure` = `journeyDate` at the **boarding
+   station's** scheduled departure from the stored route (`departureTime(stops,
+   fromStation)`, the same match the card and the itinerary leg use) in the device zone;
+   a ticket whose route is not fetched yet departs at **start of the journey day** — the
+   earliest it could, so the reminder is never late (it may be early). Archived,
+   tombstoned (`observeActive` excludes both) and already-departed tickets never
+   remind; a ticket without a journey date has no departure and is skipped.
+   The reminder **key** is `SHA-256(pnr) + ":" + lead.storageValue`: changing the lead
+   re-arms the reminder for the new lead (the user asked for a different moment), the
+   same lead never repeats.
+3. **Scheduling.** A `PeriodicWorkRequest` (`TrainReminderScheduler`, unique
+   `trains-journey-reminder`, every **3 h**, `KEEP`) — not one `OneTimeWorkRequest` per
+   ticket: exact timing is not needed (the lead is a day), the periodic job survives
+   reboots, and the per-ticket variant would have to be re-planned on every add / edit /
+   archive / lead change. `AppStartupTasks.runOnAppOpen` ensures it (or **cancels** it
+   when the lead is `OFF`), and `keepTrainRemindersFresh()` — a collector alive while the
+   gate is open — re-applies the schedule on every lead change and rewrites the hints
+   (§4) on every change of the active ticket list. The worker (`TrainReminderWorker`,
+   `feature:trains/reminder`, ADR-013 `EntryPoint` pattern, thin shell around the
+   testable `TrainReminderRunner`) goes through `BackgroundSyncGate.open(TRAIN_REMINDER)`
+   like every other job; `SyncWorkKind.TRAIN_REMINDER` (`storageKey "train_reminder"`)
+   shows in Settings → Security → Background sync as "Train reminders".
+4. **Plaintext hints carry a HASH, never the PNR.** `BackgroundSyncStateStore` gains
+   `trainDepartureHints` (`sync_train_departures`, a set of `"<epochMillis>:<sha256(pnr)>"`
+   per active ticket), `remindedTrainKeys` / `addRemindedTrainKey` /
+   `retainRemindedTrainKeys` (`sync_train_reminded`), and `core:data/sync/PnrHash`
+   (SHA-256 hex of the trimmed, upper-cased PNR; `notificationId(pnr)` = its first 31
+   bits). ADR-043 judged bare departure instants acceptable outside the encrypted store;
+   a PNR is not — ten digits open the live IRCTC status page — so the only PNR-derived
+   value stored in the clear is its hash, which lets the worker recognise a ticket it
+   already reminded about and nothing else (a 10^10 preimage space is obscurity against
+   casual reading, not a cryptographic guarantee; stated in the README). The reminded
+   set lives here and not in a Room column because (a) the worker must read AND write it
+   while the vault is locked and (b) notification bookkeeping must never enter the
+   backup/merge surface (same reasoning as the flights `PollStateStore`). It is pruned
+   on every granted run to the keys of the tickets that still exist.
+5. **Behaviour per vault state** (extends the ADR-043 table):
+
+   | locked, opt-in OFF | locked, opt-in ON (key usable) | locked, opt-in ON (key unusable) | unlocked |
+   |---|---|---|---|
+   | defer; **nudge once per process** iff some hint is due and not yet reminded; `success()` | self-unlock, run the pass; `success()` | defer silently; `retry()` | run the pass; `success()` |
+
+   The locked branch evaluates the SAME policy over the plaintext hints (departure + hash
+   → key) and the plaintext lead, so it only nudges when the unlocked run would have
+   posted something. The nudge is the ADR-043 `AppLockNotifier.notifyUnlockToSync()` —
+   **the once-per-process latch is shared** between the flight poller and this worker
+   (it is the notifier's `postedThisProcess`, a singleton), so a process still posts at
+   most ONE "Unlock Clear Travel to sync", whichever job got there first. Its text now
+   names train reminders. The pure flight `UnlockNudgePolicy` is untouched; the train
+   twin is `TrainReminderPolicy.shouldNudge`.
+6. **Notification.** `core:notifications/TrainNotifier.notifyJourneyReminder` on
+   `CHANNEL_TRAINS`, default priority, id `PnrHash.notificationId(pnr)` (one slot per
+   ticket — a second post replaces, never stacks). Title by calendar distance in the
+   device zone: *Train today: 12951 Mumbai Rajdhani* / *Train tomorrow: …* / *Train on
+   Sat 4 Oct: …*; text *Departs Mumbai Central Sat 4 Oct, 16:35. Tap to check PNR & seat
+   status (WL 12).* — the parenthetical is the distinct effective passenger statuses
+   (current, falling back to booking) and is omitted when nothing is known. The
+   content intent is `ACTION_VIEW cleartravel://pnr/<pnr>` scoped to the package — the
+   ADR-020 link, so the same URL works from a notification, a shared caption or `adb`.
+7. **The PNR link opens the CHECK for a ticket you already have.** Before: every
+   `cleartravel://pnr/<pnr>` (and its https twin) opened the add form carrying the PNR;
+   for an existing PNR the only way out was Save → "already present" notice → the
+   ticket's detail sheet (ADR-024). Now `MainActivity` parks the PNR
+   (`pendingPnrLink`) and resolves it **inside the gate** (Room is encrypted; the
+   intent may arrive before the unlock) through `PnrLinkViewModel` → pure
+   `PnrLinkRoute.resolve(ticket)`: a live, non-archived ticket with that PNR → land on
+   Journeys/Trains with `TrainsLandingAction.OPEN_PNR_CHECK` (the existing ADR-023
+   landing: the captcha WebView for that ticket); anything else (unknown PNR, archived
+   ticket) → the add form exactly as before. ADR-024's duplicate guard is unchanged for
+   every *save* path; only the link's entry point got smarter.
+
+**Contract touches (additive).** `core:model`: `TrainReminderLead`. `core:data`:
+`SettingsRepository.trainReminderLead/setTrainReminderLead`, `SyncWorkKind.TRAIN_REMINDER`,
+`TrainDepartureHint`, `BackgroundSyncStateStore.trainDepartureHints / setTrainDepartureHints
+/ remindedTrainKeys / addRemindedTrainKey / retainRemindedTrainKeys`, `sync/PnrHash`.
+`core:notifications`: `TrainNotifier`, `notifications_train_reminder_*` strings, the
+unlock-nudge text. `feature:trains`: `reminder/` (`TrainReminderPolicy`, `TrainDeparture`,
+`TrainReminderRunner`, `TrainReminderWorker`, `TrainReminderScheduler`, `TrainReminderHints`),
+`work-runtime-ktx` + `core:notifications` + `core:security` dependencies. `feature:menu`:
+Notifications section, `SettingsViewModel.trainReminderLead/setTrainReminderLead`,
+`SyncWorkKind.TRAIN_REMINDER` label. `app`: `AppStartupTasks` (schedule + hints +
+`keepTrainRemindersFresh`), `PnrLinkViewModel` / `PnrLinkRoute`, `MainActivity`
+`pendingPnrLink`. No schema or backup-format change.
+
+**Consequences.** Tests: policy (window math incl. added-inside-window, each lead, the
+reminded set, archived / past / dateless, title bucket), departure derivation (boarding
+match, first-stop fallback, no-route start-of-day), runner (locked-no-key nudges once
+through the shared latch, no nudge when nothing is due, granted posts + marks + prunes,
+idempotent second run, OFF does nothing), hint store round-trip, `PnrHash`, settings
+default + round-trip, `SettingsViewModel`, `PnrLinkRoute`; e2e `TrainReminderE2eTest`
+(seeded ticket 20 h out → runner posts exactly one reminder with the right title and
+marks it; second run posts nothing; Settings lead selector). Device validation in
+`docs/validation-report.md`. Follow-ups: a per-ticket "remind me" override on the card
+if users ask; the flight poller could share the train's `TrainReminderPolicy` shape if a
+third nudging job ever appears (none planned).

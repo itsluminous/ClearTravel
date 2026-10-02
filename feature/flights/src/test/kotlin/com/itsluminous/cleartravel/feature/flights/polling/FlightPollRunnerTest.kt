@@ -4,6 +4,7 @@ import androidx.work.ListenableWorker
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncGate
 import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncStateStore
+import com.itsluminous.cleartravel.core.data.sync.TrainDepartureHint
 import com.itsluminous.cleartravel.core.data.sync.SyncWorkKind
 import com.itsluminous.cleartravel.core.data.sync.SyncWorkStatus
 import com.itsluminous.cleartravel.core.security.background.BackgroundKeyWrapper
@@ -54,6 +55,25 @@ private class InMemorySyncStateStore : BackgroundSyncStateStore {
 
     override suspend fun setFlightDepartureHints(departures: Collection<Instant>) {
         hints = departures.toList()
+    }
+
+    var trainHints: List<TrainDepartureHint> = emptyList()
+    val reminded = mutableSetOf<String>()
+
+    override suspend fun trainDepartureHints(): List<TrainDepartureHint> = trainHints
+
+    override suspend fun setTrainDepartureHints(hints: Collection<TrainDepartureHint>) {
+        trainHints = hints.toList()
+    }
+
+    override suspend fun remindedTrainKeys(): Set<String> = reminded.toSet()
+
+    override suspend fun addRemindedTrainKey(key: String) {
+        reminded += key
+    }
+
+    override suspend fun retainRemindedTrainKeys(keys: Collection<String>) {
+        reminded.retainAll(keys.toSet())
     }
 
     override val statuses = state

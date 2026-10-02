@@ -40,6 +40,35 @@ class DataStoreBackgroundSyncStateStore
             }
         }
 
+        override suspend fun trainDepartureHints(): List<TrainDepartureHint> =
+            dataStore.data
+                .first()[KEY_TRAIN_DEPARTURES]
+                .orEmpty()
+                .mapNotNull(::decodeTrainHint)
+
+        override suspend fun setTrainDepartureHints(hints: Collection<TrainDepartureHint>) {
+            dataStore.edit { prefs ->
+                if (hints.isEmpty()) {
+                    prefs.remove(KEY_TRAIN_DEPARTURES)
+                } else {
+                    prefs[KEY_TRAIN_DEPARTURES] = hints.map(::encodeTrainHint).toSet()
+                }
+            }
+        }
+
+        override suspend fun remindedTrainKeys(): Set<String> = dataStore.data.first()[KEY_TRAIN_REMINDED].orEmpty()
+
+        override suspend fun addRemindedTrainKey(key: String) {
+            dataStore.edit { prefs -> prefs[KEY_TRAIN_REMINDED] = prefs[KEY_TRAIN_REMINDED].orEmpty() + key }
+        }
+
+        override suspend fun retainRemindedTrainKeys(keys: Collection<String>) {
+            dataStore.edit { prefs ->
+                val kept = prefs[KEY_TRAIN_REMINDED].orEmpty().intersect(keys.toSet())
+                if (kept.isEmpty()) prefs.remove(KEY_TRAIN_REMINDED) else prefs[KEY_TRAIN_REMINDED] = kept
+            }
+        }
+
         override val statuses: Flow<List<SyncWorkStatus>> =
             dataStore.data.map { prefs ->
                 SyncWorkKind.entries.map { kind ->
@@ -80,6 +109,22 @@ class DataStoreBackgroundSyncStateStore
 
         private companion object {
             val KEY_FLIGHT_DEPARTURES = stringSetPreferencesKey("sync_flight_departures")
+
+            /** ADR-044: `<epochMillis>:<sha256(pnr)>` per active ticket. */
+            val KEY_TRAIN_DEPARTURES = stringSetPreferencesKey("sync_train_departures")
+
+            /** ADR-044: opaque reminder keys (hash + lead) already posted. */
+            val KEY_TRAIN_REMINDED = stringSetPreferencesKey("sync_train_reminded")
+            const val TRAIN_HINT_SEPARATOR = ':'
+
+            fun encodeTrainHint(hint: TrainDepartureHint): String = "${hint.departure.toEpochMilli()}$TRAIN_HINT_SEPARATOR${hint.pnrHash}"
+
+            fun decodeTrainHint(raw: String): TrainDepartureHint? {
+                val at = raw.indexOf(TRAIN_HINT_SEPARATOR)
+                if (at <= 0 || at == raw.lastIndex) return null
+                val millis = raw.substring(0, at).toLongOrNull() ?: return null
+                return TrainDepartureHint(Instant.ofEpochMilli(millis), raw.substring(at + 1))
+            }
 
             fun completedKey(kind: SyncWorkKind) = longPreferencesKey("sync_${kind.storageKey}_completed_at")
 

@@ -276,6 +276,7 @@ private fun SyncWorkKind.labelRes(): Int =
         SyncWorkKind.CALENDAR_SYNC -> R.string.menu_security_sync_kind_calendar
         SyncWorkKind.DRIVE_UPLOAD -> R.string.menu_security_sync_kind_drive
         SyncWorkKind.SCHEDULED_BACKUP -> R.string.menu_security_sync_kind_backup
+        SyncWorkKind.TRAIN_REMINDER -> R.string.menu_security_sync_kind_train_reminder
     }
 
 /** ADR-043: the fresh password confirmation before the DEK is re-wrapped under the background key. */

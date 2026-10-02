@@ -162,6 +162,7 @@
     <string name="menu_security_sync_kind_calendar">Calendar sync</string>
     <string name="menu_security_sync_kind_drive">Drive uploads</string>
     <string name="menu_security_sync_kind_backup">Automatic backup</string>
+    <string name="menu_security_sync_kind_train_reminder">Train reminders</string>
     <string name="menu_security_sync_last_success">Last successful: %1$s</string>
     <string name="menu_security_sync_last_success_never">Last successful: never</string>
     <string name="menu_security_sync_skipped">Skipped while locked: %1$s (%2$s)</string>

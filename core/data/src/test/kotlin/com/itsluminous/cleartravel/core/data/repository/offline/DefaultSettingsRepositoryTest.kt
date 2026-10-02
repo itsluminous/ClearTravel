@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ThemeMode
+import com.itsluminous.cleartravel.core.model.TrainReminderLead
 import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -134,6 +135,18 @@ class DefaultSettingsRepositoryTest {
             for (schedule in BackupSchedule.entries) {
                 repository.setBackupSchedule(schedule)
                 assertThat(repository.backupSchedule.first()).isEqualTo(schedule)
+            }
+        }
+
+    @Test
+    fun `train reminder lead defaults to one day and round-trips every choice`() =
+        runTest(testDispatcher) {
+            // ADR-044: the reminder is on by default so a fresh install reminds without setup.
+            assertThat(repository.trainReminderLead.first()).isEqualTo(TrainReminderLead.ONE_DAY)
+
+            for (lead in TrainReminderLead.entries) {
+                repository.setTrainReminderLead(lead)
+                assertThat(repository.trainReminderLead.first()).isEqualTo(lead)
             }
         }
 }

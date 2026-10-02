@@ -58,6 +58,33 @@ class BackgroundSyncStateStoreTest {
             assertThat(store.flightDepartureHints()).isEmpty()
         }
 
+    /** ADR-044: `<epoch>:<hash>` pairs round-trip; malformed entries are skipped, never thrown. */
+    @Test
+    fun trainHints_roundTrip_dedupe_andClear() =
+        runTest {
+            assertThat(store.trainDepartureHints()).isEmpty()
+            val a = TrainDepartureHint(Instant.parse("2026-10-05T16:35:00Z"), PnrHash.of("8524167890"))
+            val b = TrainDepartureHint(Instant.parse("2026-10-12T02:10:00Z"), PnrHash.of("1234509876"))
+            store.setTrainDepartureHints(listOf(b, a, a))
+            assertThat(store.trainDepartureHints()).containsExactly(a, b)
+            store.setTrainDepartureHints(emptyList())
+            assertThat(store.trainDepartureHints()).isEmpty()
+        }
+
+    @Test
+    fun remindedTrainKeys_addAccumulates_retainPrunesToTheGivenSet() =
+        runTest {
+            assertThat(store.remindedTrainKeys()).isEmpty()
+            store.addRemindedTrainKey("k1")
+            store.addRemindedTrainKey("k2")
+            store.addRemindedTrainKey("k2")
+            assertThat(store.remindedTrainKeys()).containsExactly("k1", "k2")
+            store.retainRemindedTrainKeys(listOf("k2", "k3"))
+            assertThat(store.remindedTrainKeys()).containsExactly("k2")
+            store.retainRemindedTrainKeys(emptyList())
+            assertThat(store.remindedTrainKeys()).isEmpty()
+        }
+
     @Test
     fun deferred_stampsAndCounts_perKind_completedStampsOnly_unlockRollsTheCount() =
         runTest {

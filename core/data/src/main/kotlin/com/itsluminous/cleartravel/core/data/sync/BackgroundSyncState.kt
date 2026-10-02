@@ -15,7 +15,20 @@ enum class SyncWorkKind(
     CALENDAR_SYNC("calendar"),
     DRIVE_UPLOAD("drive"),
     SCHEDULED_BACKUP("backup"),
+
+    /** ADR-044: the periodic train journey reminder. */
+    TRAIN_REMINDER("train_reminder"),
 }
+
+/**
+ * ADR-044: one active train ticket as the locked worker may know it — its boarding
+ * departure instant and the [PnrHash] of its PNR (never the PNR). Written by the
+ * unlocked app; read while locked to decide whether a reminder is due and not yet sent.
+ */
+data class TrainDepartureHint(
+    val departure: Instant,
+    val pnrHash: String,
+)
 
 /** Device-local bookkeeping of one job kind; timestamps only, nothing about the data. */
 data class SyncWorkStatus(
@@ -40,12 +53,32 @@ data class SyncWorkStatus(
  * earliest) is kept so a hint written weeks ago still answers correctly once the first
  * flight has flown. Departure instants alone reveal nothing about the journeys (no
  * airline, number, route or PNR).
+ *
+ * ADR-044 adds the train twins: [trainDepartureHints] (departure + hashed PNR per active
+ * ticket) and [remindedTrainKeys] — the opaque keys of the reminders already posted
+ * (`PnrHash` + lead), kept here rather than in Room so (a) the worker can mark and read
+ * them while the vault is locked and (b) notification bookkeeping never enters the
+ * backup/merge surface. [retainRemindedTrainKeys] prunes the set to the tickets that
+ * still exist so it cannot grow forever.
  */
 interface BackgroundSyncStateStore {
     /** Scheduled departures of the active flights the unlocked app last observed (unordered). */
     suspend fun flightDepartureHints(): List<Instant>
 
     suspend fun setFlightDepartureHints(departures: Collection<Instant>)
+
+    /** Boarding departures + hashed PNRs of the active train tickets the unlocked app last observed (unordered). */
+    suspend fun trainDepartureHints(): List<TrainDepartureHint>
+
+    suspend fun setTrainDepartureHints(hints: Collection<TrainDepartureHint>)
+
+    /** Opaque keys of the train reminders already posted (see `TrainReminderPolicy.key`). */
+    suspend fun remindedTrainKeys(): Set<String>
+
+    suspend fun addRemindedTrainKey(key: String)
+
+    /** Drops every reminded key not in [keys] — called with the keys of the tickets that still exist. */
+    suspend fun retainRemindedTrainKeys(keys: Collection<String>)
 
     /** All kinds, in [SyncWorkKind] order, each with its stored timestamps (defaults when never run). */
     val statuses: Flow<List<SyncWorkStatus>>

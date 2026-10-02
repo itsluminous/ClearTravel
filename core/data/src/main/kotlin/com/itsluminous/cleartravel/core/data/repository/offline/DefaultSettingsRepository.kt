@@ -11,6 +11,7 @@ import com.itsluminous.cleartravel.core.data.di.SecurePreferences
 import com.itsluminous.cleartravel.core.data.repository.SettingsRepository
 import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ThemeMode
+import com.itsluminous.cleartravel.core.model.TrainReminderLead
 import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -73,6 +74,13 @@ class DefaultSettingsRepository
             dataStore.edit { it[KEY_BACKUP_SCHEDULE] = schedule.storageValue }
         }
 
+        override val trainReminderLead: Flow<TrainReminderLead> =
+            dataStore.data.map { TrainReminderLead.fromStorage(it[KEY_TRAIN_REMINDER_LEAD]) }
+
+        override suspend fun setTrainReminderLead(lead: TrainReminderLead) {
+            dataStore.edit { it[KEY_TRAIN_REMINDER_LEAD] = lead.storageValue }
+        }
+
         override suspend fun trainApiKey(): String? = readSecure(SECURE_KEY_TRAIN_API)
 
         override suspend fun setTrainApiKey(key: String?) = writeSecure(SECURE_KEY_TRAIN_API, key)
@@ -99,6 +107,7 @@ class DefaultSettingsRepository
             private val KEY_LOCK_TIMING = stringPreferencesKey("lock_timing")
             private val KEY_ONBOARDING_PENDING = booleanPreferencesKey("onboarding_pending")
             private val KEY_BACKUP_SCHEDULE = stringPreferencesKey("backup_schedule")
+            private val KEY_TRAIN_REMINDER_LEAD = stringPreferencesKey("train_reminder_lead")
             private const val SECURE_KEY_TRAIN_API = "train_api_key"
             private const val SECURE_KEY_FLIGHT_API = "flight_api_key"
         }

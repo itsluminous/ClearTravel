@@ -23,10 +23,12 @@ import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTrainRepo
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTravelDocumentRepository
 import com.itsluminous.cleartravel.core.data.repository.offline.OfflineTripRepository
 import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncStateStore
+import com.itsluminous.cleartravel.core.data.sync.TrainDepartureHint
 import com.itsluminous.cleartravel.core.data.sync.SyncWorkKind
 import com.itsluminous.cleartravel.core.data.sync.SyncWorkStatus
 import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ThemeMode
+import com.itsluminous.cleartravel.core.model.TrainReminderLead
 import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import dagger.Binds
 import dagger.Module
@@ -112,6 +114,25 @@ class FakeBackgroundSyncStateStore
             hints = departures.toList()
         }
 
+        var trainHints: List<TrainDepartureHint> = emptyList()
+        val reminded = mutableSetOf<String>()
+
+        override suspend fun trainDepartureHints(): List<TrainDepartureHint> = trainHints
+
+        override suspend fun setTrainDepartureHints(hints: Collection<TrainDepartureHint>) {
+            trainHints = hints.toList()
+        }
+
+        override suspend fun remindedTrainKeys(): Set<String> = reminded.toSet()
+
+        override suspend fun addRemindedTrainKey(key: String) {
+            reminded += key
+        }
+
+        override suspend fun retainRemindedTrainKeys(keys: Collection<String>) {
+            reminded.retainAll(keys.toSet())
+        }
+
         override val statuses: Flow<List<SyncWorkStatus>> = state
 
         override suspend fun recordDeferred(
@@ -195,5 +216,12 @@ class FakeSettingsRepository
 
         override suspend fun setBackupSchedule(schedule: BackupSchedule) {
             this.schedule.value = schedule
+        }
+
+        private val reminderLead = MutableStateFlow(TrainReminderLead.DEFAULT)
+        override val trainReminderLead: Flow<TrainReminderLead> = reminderLead
+
+        override suspend fun setTrainReminderLead(lead: TrainReminderLead) {
+            reminderLead.value = lead
         }
     }

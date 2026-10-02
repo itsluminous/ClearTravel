@@ -52,6 +52,25 @@ class RecordingSyncStateStore : BackgroundSyncStateStore {
         hints = departures.toList()
     }
 
+    var trainHints: List<TrainDepartureHint> = emptyList()
+    val reminded = mutableSetOf<String>()
+
+    override suspend fun trainDepartureHints(): List<TrainDepartureHint> = trainHints
+
+    override suspend fun setTrainDepartureHints(hints: Collection<TrainDepartureHint>) {
+        trainHints = hints.toList()
+    }
+
+    override suspend fun remindedTrainKeys(): Set<String> = reminded.toSet()
+
+    override suspend fun addRemindedTrainKey(key: String) {
+        reminded += key
+    }
+
+    override suspend fun retainRemindedTrainKeys(keys: Collection<String>) {
+        reminded.retainAll(keys.toSet())
+    }
+
     override val statuses = state
 
     override suspend fun recordDeferred(

@@ -2,6 +2,7 @@ package com.itsluminous.cleartravel.core.data.repository
 
 import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ThemeMode
+import com.itsluminous.cleartravel.core.model.TrainReminderLead
 import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import kotlinx.coroutines.flow.Flow
 
@@ -55,4 +56,13 @@ interface SettingsRepository {
     val backupSchedule: Flow<BackupSchedule>
 
     suspend fun setBackupSchedule(schedule: BackupSchedule)
+
+    /**
+     * ADR-044: lead time of the train journey reminder (Off / 12 h / 24 h / 48 h);
+     * [TrainReminderLead.DEFAULT] (24 h) when never set. Plaintext — the reminder
+     * worker reads it while the vault is locked.
+     */
+    val trainReminderLead: Flow<TrainReminderLead>
+
+    suspend fun setTrainReminderLead(lead: TrainReminderLead)
 }

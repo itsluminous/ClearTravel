@@ -3,6 +3,7 @@ package com.itsluminous.cleartravel.feature.applock
 import com.itsluminous.cleartravel.core.data.repository.SettingsRepository
 import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ThemeMode
+import com.itsluminous.cleartravel.core.model.TrainReminderLead
 import com.itsluminous.cleartravel.core.security.lock.LockTiming
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -61,5 +62,12 @@ class FakeSettingsRepository : SettingsRepository {
 
     override suspend fun setBackupSchedule(schedule: BackupSchedule) {
         this.schedule.value = schedule
+    }
+
+    private val reminderLead = MutableStateFlow(TrainReminderLead.DEFAULT)
+    override val trainReminderLead: Flow<TrainReminderLead> = reminderLead
+
+    override suspend fun setTrainReminderLead(lead: TrainReminderLead) {
+        reminderLead.value = lead
     }
 }
