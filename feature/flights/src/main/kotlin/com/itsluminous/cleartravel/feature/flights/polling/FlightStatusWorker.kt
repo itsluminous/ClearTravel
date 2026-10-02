@@ -1,21 +1,22 @@
 package com.itsluminous.cleartravel.feature.flights.polling
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.itsluminous.cleartravel.core.data.repository.FlightRepository
+import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncGate
+import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncStateStore
 import com.itsluminous.cleartravel.core.notifications.AppLockNotifier
 import com.itsluminous.cleartravel.core.notifications.FlightNotifier
-import com.itsluminous.cleartravel.core.security.vault.KeyVault
 import com.itsluminous.cleartravel.feature.flights.checkin.CheckInRuleSource
 import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
-import kotlinx.coroutines.flow.first
 import java.time.Duration
 import java.time.Instant
 
@@ -37,10 +38,15 @@ import java.time.Instant
  * only thing gained is constructor injection of the same five dependencies. Not worth
  * the surface; the EntryPoint keeps the worker a plain WorkManager class.
  *
- * ADR-031: the flight list lives in the encrypted database, whose key exists only
- * after an unlock in this process. A run that fires before that posts the "unlock to
- * sync" nudge and ends WITHOUT re-chaining; `AppStartupTasks` re-kicks the chain on
- * the next unlocked app open.
+ * ADR-031/043: the flight list lives in the encrypted database, whose key exists only
+ * after an unlock in this process — or, when the user opted into "allow sync while
+ * locked", after the [BackgroundSyncGate] unwrapped it with the background key. A run
+ * that finds the vault locked ([FlightPollOutcome.Deferred]) posts the "unlock to sync"
+ * nudge ONLY when [UnlockNudgePolicy] says an imminent flight makes it worth it (once
+ * per process), then ends WITHOUT re-chaining when the opt-in is off (`AppStartupTasks`
+ * re-kicks the chain on the next unlocked app open) and with `Result.retry()` when it is
+ * on (the device was merely screen-locked; WorkManager's backoff tries again). The
+ * actual pass is [FlightPollRunner].
  */
 class FlightStatusWorker(
     appContext: Context,
@@ -55,41 +61,67 @@ class FlightStatusWorker(
 
         fun flightNotifier(): FlightNotifier
 
-        fun keyVault(): KeyVault
-
         fun appLockNotifier(): AppLockNotifier
+
+        fun backgroundSyncGate(): BackgroundSyncGate
+
+        fun backgroundSyncStateStore(): BackgroundSyncStateStore
     }
 
     override suspend fun doWork(): Result {
         val deps = EntryPointAccessors.fromApplication(applicationContext, Dependencies::class.java)
-        if (!deps.keyVault().isUnlocked) {
-            deps.appLockNotifier().notifyUnlockToSync()
-            return Result.success()
-        }
-        val stateStore = PollStateStore(applicationContext)
-
-        val flights = deps.flightRepository().observeActive().first()
-        val plan =
-            FlightPollEvaluator.evaluate(
-                flights = flights,
-                rules = deps.checkInRuleSource().load(),
-                now = Instant.now(),
-                alreadySent = stateStore.sentKeys(),
-            )
-
+        val pollState = PollStateStore(applicationContext)
         val notifier = deps.flightNotifier()
-        for (notification in plan.notifications) {
-            val flight = notification.flight
-            val label = "${flight.airlineIata} ${flight.flightNumber}"
-            when (notification) {
-                is PollNotification.CheckInOpen -> notifier.notifyCheckInOpen(flight.id, label)
-                is PollNotification.StatusCheckHint -> notifier.notifyStatusMayHaveChanged(flight.id, label)
-            }
-            stateStore.markSent(notification.dedupeKey)
+        val lockNotifier = deps.appLockNotifier()
+        val runner =
+            FlightPollRunner(
+                gate = deps.backgroundSyncGate(),
+                stateStore = deps.backgroundSyncStateStore(),
+                flightRepository = deps.flightRepository(),
+                checkInRuleSource = deps.checkInRuleSource(),
+                sentKeys = pollState::sentKeys,
+                markSent = pollState::markSent,
+                post = { notification ->
+                    val flight = notification.flight
+                    val label = "${flight.airlineIata} ${flight.flightNumber}"
+                    when (notification) {
+                        is PollNotification.CheckInOpen -> notifier.notifyCheckInOpen(flight.id, label)
+                        is PollNotification.StatusCheckHint -> notifier.notifyStatusMayHaveChanged(flight.id, label)
+                    }
+                },
+                notifyUnlockToSync = lockNotifier::notifyUnlockToSync,
+                nudgeAlreadyPosted = { lockNotifier.postedThisProcess },
+            )
+        val outcome = runner.run()
+        Log.i(TAG, describe(outcome))
+        if (outcome is FlightPollOutcome.Ran) {
+            outcome.nextDelay?.let { delay -> FlightPollScheduler.schedule(applicationContext, delay) }
         }
+        return resolveVerdict(outcome)
+    }
 
-        plan.nextDelay?.let { delay -> FlightPollScheduler.schedule(applicationContext, delay) }
-        return Result.success()
+    companion object {
+        private const val TAG = "ClearTravelFlightPoll"
+
+        /**
+         * Pure verdict mapping. A deferred run with the opt-in key on retries (the device
+         * was screen-locked — WorkManager's backoff tries again soon); without it, success
+         * and NO re-chain: nothing changes until the user opens the app, which re-kicks.
+         */
+        internal fun resolveVerdict(outcome: FlightPollOutcome): Result =
+            when (outcome) {
+                is FlightPollOutcome.Deferred -> if (outcome.backgroundKeyEnabled) Result.retry() else Result.success()
+                is FlightPollOutcome.Ran -> Result.success()
+            }
+
+        /** One logcat line per run — the on-device proof of ADR-043 reads these. */
+        internal fun describe(outcome: FlightPollOutcome): String =
+            when (outcome) {
+                is FlightPollOutcome.Deferred ->
+                    "poll deferred: vault locked, nudged=${outcome.nudged}, backgroundKey=${outcome.backgroundKeyEnabled}"
+                is FlightPollOutcome.Ran ->
+                    "poll ran: posted=${outcome.posted}, nextDelay=${outcome.nextDelay}, backgroundKeyUnlocked=${outcome.viaBackgroundKey}"
+            }
     }
 }
 
