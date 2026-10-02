@@ -322,10 +322,11 @@ internal fun RadioOptionRow(
     @StringRes labelRes: Int,
     selected: Boolean,
     onSelect: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Row(
         modifier =
-            Modifier
+            modifier
                 .fillMaxWidth()
                 .semantics { role = Role.RadioButton }
                 .clickable(onClick = onSelect)

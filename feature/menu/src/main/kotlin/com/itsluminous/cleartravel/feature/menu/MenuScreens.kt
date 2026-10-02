@@ -26,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
@@ -37,6 +38,7 @@ import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.model.ThemeMode
+import com.itsluminous.cleartravel.core.model.TrainReminderLead
 
 /**
  * One row of the Menu root list. The list is data-driven so later milestones
@@ -100,6 +102,7 @@ internal fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val themeMode by viewModel.themeMode.collectAsStateWithLifecycle()
+    val trainReminderLead by viewModel.trainReminderLead.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
     Scaffold(
@@ -146,11 +149,64 @@ internal fun SettingsScreen(
                 selected = themeMode == ThemeMode.DARK,
                 onSelect = { viewModel.setThemeMode(ThemeMode.DARK) },
             )
+            NotificationsSection(
+                trainReminderLead = trainReminderLead,
+                onTrainReminderLeadSelected = viewModel::setTrainReminderLead,
+            )
             SecuritySection(snackbarHostState = snackbarHostState)
             GoogleAccountSection(snackbarHostState = snackbarHostState)
         }
     }
 }
+
+/** Test tag of the ADR-044 train-reminder lead rows: `TRAIN_REMINDER_LEAD_TAG_PREFIX + lead.storageValue`. */
+const val TRAIN_REMINDER_LEAD_TAG_PREFIX = "menu_train_reminder_lead_"
+
+/**
+ * Settings → Notifications (ADR-044): the train journey reminder's lead time. The only
+ * notification the user configures — flight notifications follow the live status and
+ * the data-driven check-in windows (ADR-013) and have no setting here.
+ */
+@Composable
+internal fun NotificationsSection(
+    trainReminderLead: TrainReminderLead,
+    onTrainReminderLeadSelected: (TrainReminderLead) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier.padding(top = 24.dp)) {
+        Text(
+            text = stringResource(R.string.menu_notifications_title),
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        ClearTravelCard {
+            Text(stringResource(R.string.menu_notifications_train_reminder_title), style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = stringResource(R.string.menu_notifications_train_reminder_description),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
+            )
+            for (lead in TrainReminderLead.entries) {
+                RadioOptionRow(
+                    labelRes = lead.labelRes(),
+                    selected = trainReminderLead == lead,
+                    onSelect = { onTrainReminderLeadSelected(lead) },
+                    modifier = Modifier.testTag(TRAIN_REMINDER_LEAD_TAG_PREFIX + lead.storageValue),
+                )
+            }
+        }
+    }
+}
+
+@StringRes
+private fun TrainReminderLead.labelRes(): Int =
+    when (this) {
+        TrainReminderLead.OFF -> R.string.menu_notifications_train_reminder_off
+        TrainReminderLead.TWELVE_HOURS -> R.string.menu_notifications_train_reminder_12h
+        TrainReminderLead.ONE_DAY -> R.string.menu_notifications_train_reminder_24h
+        TrainReminderLead.TWO_DAYS -> R.string.menu_notifications_train_reminder_48h
+    }
 
 @Composable
 private fun ThemeOptionRow(

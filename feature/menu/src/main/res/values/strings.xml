@@ -16,6 +16,15 @@
     <string name="menu_theme_light">Light</string>
     <string name="menu_theme_dark">Dark</string>
 
+    <!-- Notifications section (ADR-044) -->
+    <string name="menu_notifications_title">Notifications</string>
+    <string name="menu_notifications_train_reminder_title">Train reminder</string>
+    <string name="menu_notifications_train_reminder_description">Reminds you before a train journey so you can check the PNR and seat status while there is still time to act. Tapping the reminder opens the status check for that ticket.</string>
+    <string name="menu_notifications_train_reminder_off">Off</string>
+    <string name="menu_notifications_train_reminder_12h">12 hours before</string>
+    <string name="menu_notifications_train_reminder_24h">24 hours before</string>
+    <string name="menu_notifications_train_reminder_48h">48 hours before</string>
+
     <string name="menu_presets_title">Manage presets</string>
     <string name="menu_presets_empty_title">No presets</string>
     <string name="menu_presets_empty_message">Create a preset to reuse it when building checklists.</string>

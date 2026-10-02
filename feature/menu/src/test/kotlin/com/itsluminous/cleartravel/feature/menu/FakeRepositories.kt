@@ -3,9 +3,9 @@ package com.itsluminous.cleartravel.feature.menu
 import com.itsluminous.cleartravel.core.data.repository.ChecklistPresetRepository
 import com.itsluminous.cleartravel.core.data.repository.SettingsRepository
 import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncStateStore
-import com.itsluminous.cleartravel.core.data.sync.TrainDepartureHint
 import com.itsluminous.cleartravel.core.data.sync.SyncWorkKind
 import com.itsluminous.cleartravel.core.data.sync.SyncWorkStatus
+import com.itsluminous.cleartravel.core.data.sync.TrainDepartureHint
 import com.itsluminous.cleartravel.core.model.BackupSchedule
 import com.itsluminous.cleartravel.core.model.ChecklistPreset
 import com.itsluminous.cleartravel.core.model.ChecklistPresetItem
