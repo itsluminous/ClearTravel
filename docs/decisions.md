@@ -1208,6 +1208,12 @@ check never auto-completes. ERS PDFs import passengers with statuses. Test fakes
 
 ## ADR-025 — Flight de-duplication (2026-09-21)
 
+> **Amended by ADR-046 (2026-10-27).** The identity (airline + number + date) and the
+> `findByFlight` guard stand, but a match is no longer a flat refusal: the incoming
+> passenger is compared with the journey's passengers (`FlightPassengerMatching`) — a
+> new person is ADDED to the existing journey, a known one is "Already saved", and only
+> a save naming nobody is refused as below.
+
 **Context.** ADR-024 closed the duplicate-PNR hole for trains and explicitly deferred
 flights: every add path (manual, boarding-pass import, booking-confirmation import,
 share-sheet intake) created a fresh `FlightJourney` row, so importing a boarding pass
@@ -3120,6 +3126,12 @@ third nudging job ever appears (none planned).
 
 ## ADR-045 — Multi-flight documents: segmented extraction, review step, per-segment save (2026-10-27)
 
+> **Amended by ADR-046 (2026-10-27).** §5's per-segment "ADR-025 match = skipped" became
+> "match = add the segment's passenger when new, skip when already on board"; the file
+> copy is keyed by PASSENGER id (`boarding_passes/<passengerId>.<ext>`) rather than by
+> flight id; `FlightBatchOutcome` gained `addedPassengers`. The §5 extractor dedupe of
+> two passes for the same flight within ONE file is unchanged.
+
 **Context.** Flight imports (ADR-017) read ONE flight per file: the boarding-pass and
 booking-confirmation extractors returned a single flat record, a return trip surfaced
 only as a "return leg detected — add it separately" hint (`additionalFlights`), a
@@ -3356,16 +3368,24 @@ the same.
    identity matches a live journey now asks *who is on it*:
    - the incoming passenger has info (name and/or seat) and is NOT on the flight →
      **added as a new passenger** of the existing journey (their own boarding-pass copy
-     under `boarding_passes/<passengerId>.<ext>`), reported as
-     `FlightFormEvent.PassengerAdded(flightId, passengerName)` → "Added Bandana Kumari to
+     under `boarding_passes/<passengerId>.<ext>`), reported through
+     `FlightFormEvent.BatchImported(outcome.addedPassengers)` → "Added Bandana Kumari to
      IX 2019" with **View**; blank fields of a matched passenger are filled in (a
      migrated seat-only row gains its name and pass when the real pass arrives);
    - the passenger IS already on it → **"Already saved"** (`DuplicateFlight`, as today);
    - no passenger info at all (manual form without rows, bare confirmation) → the
      current duplicate refusal.
    The ADR-045 direct batch save and walk-through apply the same rule per segment:
-   `FlightBatchOutcome` gains `passengerAddedIds` and the notice reads "Added 1 flight,
-   added 1 passenger, skipped 1 already saved". The ADR-045 §5 extractor dedupe by
+   `FlightBatchOutcome` gains `addedPassengers` (`AddedPassenger(flightId, label,
+   flightLabel)`) and the notice reads "Added 1 flight, added 1 passenger, skipped 1
+   already saved" / "Added 2 passengers to existing flights" — the single-passenger
+   wording "Added X to IX 2019" is used when ONE passenger joined ONE journey and
+   nothing else happened (`isSinglePassengerAdd`). The same `FlightFormEvent.BatchImported`
+   carries a single save's passenger add, so the share-sheet intake lands through the
+   existing `BATCH_IMPORTED` route without an app-module change. Re-pointing an EDITED
+   journey onto another's identity stays a plain refusal. A matched journey with no
+   passenger rows but a mirror seat/pass first materialises its legacy row
+   (`FlightPassengerIds.legacy`), the same row the migration would have created. The ADR-045 §5 extractor dedupe by
    carrier + number + date is unchanged for ONE file (two passes for the same flight in
    one file still fold — the second passenger arrives from their own file).
 6. **Files per passenger (`BoardingPassFileStore`).** The encrypted copy is keyed by
@@ -3399,9 +3419,10 @@ the same.
    edit loads the live rows, save `replacePassengers` (removed rows tombstoned, kept
    rows keep their ids and passes). The pending boarding pass of a single-pass import
    belongs to row 1. Detail sheet: a Passengers list (`Name · Seat 12A`, a per-passenger
-   "View boarding pass" trailing control when they have one), the Documents list shows
-   one boarding-pass row per passenger (`Boarding pass · Name`); the standalone "View
-   boarding pass" button is gone. Card: seats joined (`12A, 12B`, `AutoShrinkText`),
+   "View boarding pass" trailing control when they have one; a nameless row reads
+   `Passenger N`), the Documents list shows one boarding-pass row per passenger
+   (`Boarding pass · Name`); the standalone "View boarding pass" button remains only
+   for a flight with no passenger rows at all. Card: seats joined (`12A, 12B`, `AutoShrinkText`),
    the pass marker shows when ANY passenger has a pass — a tap opens the single pass,
    or a small chooser listing passengers when several. Share image: a passengers line.
    Review sheet (ADR-045): the segment card names the passenger. Status check, polling
@@ -3417,8 +3438,8 @@ relation reads, `MIGRATION_3_4`, `BackupDao.dumpFlightPassengers/upsertFlightPas
 `BackupSnapshot.flightPassengers`, `FlightSharePayload.passengers` +
 `SharedFlightPassenger`, `SharePayloadMappers.toPassengerRows`. `core:google`:
 `DriveUploadEngine.registerBoardingPasses` iterates passengers. `feature:flights`:
-`PassengerFormRow`, `FlightFormState.passengers`, `FlightFormEvent.PassengerAdded`,
-`FlightBatchOutcome.passengerAddedIds`, `FlightListUiState.flights:
+`PassengerFormRow`, `FlightFormState.passengers`, `AddedPassenger`,
+`FlightBatchOutcome.addedPassengers`, `FlightListUiState.flights:
 List<FlightWithPassengers>`, `FlightDetailSheet(passengers)`, `FlightDocument.passengerName`,
 `BoardingPassImporter.store(uri, passengerId)` (the key is a passenger id now), strings
 `flights_passenger*`. `core:testing`: `Fixtures.flightPassenger`.

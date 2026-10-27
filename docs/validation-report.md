@@ -1261,3 +1261,42 @@ Notes:
 - Dates on the PNG are MEDIUM (unlabeled, weekday-prefixed route header), the PNG's
   seats MEDIUM (attached from the `Seat Fare` table by route), the PDF's seats HIGH
   (`Seat 12B` labeled in the passenger table) — matching the recorded fixtures.
+
+## Multi-passenger flights — upgrade, second-passenger merge, backup (2026-10-27 20:40–21:30 IST, emulator Play_36_Pixel, API 36, ADR-046)
+
+Debug build (`versionName 0.0.6`, schema **v4**) installed **OVER** the ADR-044/045 demo
+install (`versionName 0.0.4`, schema v3 — `cleartravel.db` + WAL from 2026-10-02, one
+legacy pass `files/boarding_passes/f9062548-….pdf`), no `pm clear`. All UI reads are
+`uiautomator dump` node texts (no screenshots viewed). Reference documents pushed to
+`/sdcard/Download/`: the real OTA itinerary image `blr_lko.png` (two Air India Express
+legs, passenger **Prakash Kumar**, seats 12A / 10A) and the real 3-page e-ticket
+`blr_lko.pdf` for the same two flights (passenger **Bandana Kumari**, seats 12B / 10A —
+the return leg prints the SAME seat as the image for a different person).
+
+| # | Step | Evidence | Verdict |
+|---|---|---|---|
+| a1 | Launch → unlock `TestPass123` (migration 3→4 runs on open) | Trips tab with the demo trips (Tokyo / Ladakh Trek / Paris / Teosa) — no crash, no data loss | PASS |
+| a2 | Journeys → Flights → **Archived** (every demo flight has departed) | cards `EK 501 … Seat 7A`, `UK 955 … Boarding pass attached - tap to view`, `AI 131 … Seat 32C`, `6E 6801 …` — the old `seat` column shows through the backfilled passenger (`FlightWithPassengers.seats`) | PASS |
+| a3 | EK 501 detail | `Passengers` section with one row, supporting `Seat 7A`; `Cabin Business`, `PNR R8TZ4W` intact | PASS |
+| a4 | UK 955 detail | `Passengers` → `Passenger 1` / `No seat yet` with the **`View this passenger's boarding pass`** control; `Documents` → `Boarding pass · Passenger 1 · Tap to view`; tapping the control opens the viewer (`Boarding pass` / `Stored document`) on the LEGACY `<flightId>.pdf` file — nothing was renamed | PASS |
+| — | Rebuild + install over again (the `Passenger N` headline fix found in a3/a4 — the row used to read `Seat 7A` twice) | unlock, same data | — |
+| b1 | FAB → **Import booking confirmation** → `blr_lko.png` → review `Found 2 flights in this file`: `IX 2019 · BLR → LKO` / `Thu, 29 Oct 2026 · 10:30 · PNR R87T5G · Seat 12A · **PRAKASH KUMAR**`, `IX 1542 · LKO → BLR` / `… PNR D2FE9V · Seat 10A · PRAKASH KUMAR` → **Add 2 flights** | two cards (`Seat 12A`, `Seat 10A`), snackbar `Added 2 flights` | PASS |
+| b2 | FAB → Import booking confirmation → `blr_lko.pdf` → review: `… PNR X3C9GI · Seat 12B · **BANDANA KUMARI**`, `… PNR 07N3VZ · Seat 10A · BANDANA KUMARI` → **Add 2 flights** | STILL two cards: `IX 2019 … **Seats 12A, 12B**`, `IX 1542 … **Seats 10A, 10A**` (same seat, different name → name wins, second passenger added); snackbar **`Added 2 passengers to existing flights`** with `View` | PASS |
+| b3 | IX 2019 detail | `Passengers`: `PRAKASH KUMAR` / `Seat 12A` and `BANDANA KUMARI` / `Seat 12B · PNR X3C9GI` (her locator differs from the booking's `R87T5G`); `Documents`: **two** `Booking confirmation · Tap to view` rows (the PNG attached at save, the PDF attached when she joined) — both open in the viewer (`Stored document`, image then PDF page) | PASS |
+| c | Re-import `blr_lko.pdf` → review → Add 2 flights | snackbar **`Skipped 2 already saved`**; cards unchanged (`Seats 12A, 12B` / `Seats 10A, 10A`) — both passengers already on board | PASS |
+| d | IX 2019 → Edit → **Remove this passenger** on `BANDANA KUMARI` → Save | card `IX 2019 … Seat 12A`; detail `Passengers` → only `PRAKASH KUMAR / Seat 12A`; both `Booking confirmation` documents still listed and the first still opens (`Stored document`) | PASS |
+| e | Menu → Backup & Restore → **Export backup** → `cleartravel-backup-20261027-2123.zip` (1.1 MB) → pulled, envelope decrypted on the host with the password | `manifest.json` counts `"flight_journeys":8,"flight_passengers":9`; `entities/flight_passengers.json` holds the 5 backfilled legacy rows (derived v3 UUIDs, name `""`, seats `21F / 14A / 32C / 7A`, the UK 955 row pointing at the legacy pdf with `boardingPassBundled:true`), Prakash ×2 (`R87T5G` / `D2FE9V`), Bandana on IX 1542 (`07N3VZ`) and her **tombstoned** IX 2019 row (`deletedAt` set); exactly ONE `boarding_passes/<passengerId>` entry (87247 bytes) and no flight-keyed duplicate | PASS |
+| — | Clean-up: delete IX 2019 and IX 1542 (detail → Delete → confirm); remove the two documents + the exported zip from `/sdcard/Download/` | `No flight journeys yet` (Active); Archived still `EK 501 / UK 955 / AI 131 / 6E 6801 …` — demo data intact | PASS |
+| g1 | Full gate `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → `passengers.log` | BUILD SUCCESSFUL, unit **1264/1264** (1233 before ADR-046) | PASS |
+| g2 | `connectedDebugAndroidTest` on **Android_16_AOSP_Medium** (`e2e.log`) | **32/32** app e2e incl. the new `FlightPassengersE2eTest` (seeded flight with passenger A → a rendered pass for passenger B shared in → form → Save → `Added RAHUL SHARMA to 6E 2345` → one card `Seats 11C, 12A` → detail: two passenger rows, both seats, `Boarding pass · RAHUL SHARMA`, one view-pass control → re-share → `Already saved`) + `MultiFlightImportE2eTest` (review cards now name the passenger) + `core:ocr` instrumented, BUILD SUCCESSFUL | PASS |
+| g3 | Shutdown | Android_16_AOSP_Medium (started headless for g2) killed first; Play_36_Pixel killed after e; `adb devices` empty, no `qemu` process | PASS |
+
+Notes:
+- `Seats 10A, 10A` on IX 1542 is faithful to the documents: the image seats Prakash in
+  10A and the e-ticket seats Bandana in 10A. A different name on the same seat is a
+  second passenger by design (ADR-046 decision 4); the user corrects a seat in Edit.
+- The booking-confirmation path attaches the file to the FLIGHT (ADR-017), so step b3
+  shows two confirmation documents rather than per-passenger passes; the per-passenger
+  pass path is exercised by `FlightPassengersE2eTest` and the migrated UK 955 (a4).
+- Two batch segments both joining existing flights read `Added 2 passengers to existing
+  flights`; a single pass joining one flight reads `Added <name> to <flight>` (g2).

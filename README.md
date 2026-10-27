@@ -35,7 +35,14 @@ optional Google account link for Calendar/Drive sync.
   **review sheet** ("Found 2 flights in this file") listing them, untick any you do
   not want, and add them in one tap; segments missing their route or date are walked
   through the form one at a time instead. Every flight gets its own copy of the
-  file; flights you already have are skipped ("Added 1, skipped 1 already saved"). One-tap "Save & check status" opens the airline's status page in a
+  file; flights you already have are skipped ("Added 1, skipped 1 already saved").
+  **Multiple passengers per flight:** a flight carries a passenger list (name, seat,
+  their own boarding pass). Importing a second person's pass or e-ticket for a flight
+  you already have **adds them to that flight** instead of refusing it ("Added Bandana
+  Kumari to IX 2019"); the same person again is "Already saved". Cards show the seats
+  joined (`Seats 12A, 12B`), the detail sheet lists every passenger with a per-person
+  "View boarding pass" control, and the form has a Passengers section to add, edit or
+  remove people. One-tap "Save & check status" opens the airline's status page in a
   WebView, auto-fills the query, dismisses consent walls, and extracts status / gate /
   terminal / times into the app — and for every airline without a dedicated rule the
   same flow reads **Google's flight-status card** (cancelled / delayed / landed, gates,
