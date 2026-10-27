@@ -1220,3 +1220,44 @@ Notes:
 - `am force-stop` drops the JobScheduler job (WorkManager re-registers it on the next
   init: `Application was force-stopped, rescheduling`); `am kill` after HOME did NOT
   kill the freshly-backgrounded process on this image, so r7 used `force-stop`.
+
+## Multi-flight documents — review step + per-segment save (2026-10-27 12:40–13:00 IST, emulator Play_36_Pixel, API 36, ADR-045)
+
+Debug build installed OVER the ADR-044 demo install (demo trips/checklists intact, the
+two demo trains archived; the Flights list was empty). All UI reads are `uiautomator
+dump` node texts (no screenshots viewed); file evidence is `run-as … ls
+files/boarding_passes/`. Reference documents pushed to `/sdcard/Download/`: the real OTA
+itinerary image `blr_lko.png` (1278×1898, two Air India Express legs + a hotel + a
+seat-fare table) and the real 3-page MakeMyTrip e-ticket `blr_lko.pdf` for the same
+route (different booking: its own PNRs/seats; baggage + payment pages repeat the
+flights without dates).
+
+**OCR fixtures were recorded on-device first** (`OcrCaptureHarnessTest.captureFlightDocumentOcr`
+on Android_16_AOSP_Medium, both files through the production rasterize → preprocess →
+ML Kit path) — `blr-lko-confirmation.txt` is the PNG's row text, `blr-lko-confirmation-pdf.txt`
+the three pages' row text joined by blank lines; neither is `pdftotext` output (the PDF
+text layer differs: `IX-2019` vs the image's `Air India Express 2019`, `₹` vs OCR's `Z`/`T`).
+
+| # | Step | Evidence | Verdict |
+|---|---|---|---|
+| a1 | Journeys → Flights → FAB → **Import booking confirmation** → `blr_lko.png` | review sheet `Found 2 flights in this file` / `Each flight gets the confirmation attached. Untick any you do not want.`; rows **`IX 2019 · BLR → LKO`** / `Thu, 29 Oct 2026 · 10:30 · PNR R87T5G · Seat 12A` and **`IX 1542 · LKO → BLR`** / `Sat, 31 Oct 2026 · 20:30 · PNR D2FE9V · Seat 10A`; buttons `Cancel` / `Add 2 flights` — the hotel (`La Place Sarovar Portico`, 29–31 Oct) and fares appear nowhere | PASS |
+| a2 | **Add 2 flights** | list: card `IX 2019 · Scheduled · BLR → LKO · Thu, 29 Oct 2026 · Dep 10:30 · Arr 13:05` and card `IX 1542 · LKO → BLR · Sat, 31 Oct 2026 · Dep 20:30 · Arr 23:00`; snackbar **`Added 2 flights`** with `View` | PASS |
+| a3 | Detail sheets | IX 2019: Departure `Scheduled: 10:30` **`Terminal: 2`**, Arrival `Scheduled: 13:05` **`Terminal: 3`**, Seat `12A`, Cabin `ECONOMY`, PNR `R87T5G`, Documents → `Booking confirmation · Tap to view`. IX 1542: Departure **`Terminal: 3`**, Arrival **`Terminal: 2`**, Seat `10A`, `ECONOMY`, PNR `D2FE9V` | PASS |
+| c | **Re-import** the same PNG → review (both rows again) → Add 2 flights | snackbar **`Skipped 2 already saved`**; still exactly two cards (ADR-025 guard per segment, nothing written) | PASS |
+| — | Delete both (detail → Delete → confirm) | `No flight journeys yet` | — |
+| b1 | FAB → **Import boarding pass** → `blr_lko.pdf` (3 pages, read page by page) | review sheet `Found 2 flights in this file` / `Each flight gets its own copy of the boarding pass…`; rows `IX 2019 · BLR → LKO` / `Thu, 29 Oct 2026 · 10:30 · PNR X3C9GI · Seat 12B` and `IX 1542 · LKO → BLR` / `Sat, 31 Oct 2026 · 20:30 · PNR 07N3VZ · Seat 10A` — pages 2–3 (baggage repeats, `₹` amounts OCR'd as `Z14723.00`…) add no segment | PASS |
+| b2 | **Add 2 flights** | two cards each with `Boarding pass attached - tap to view`; `Added 2 flights`; `files/boarding_passes/` gains **two** new `<flightId>.pdf` files, 92056 bytes each (92007 + CTEF header/tags — two independent encrypted copies) | PASS |
+| b3 | Tap the pass marker on each card | viewer `Boarding pass` / `Stored document` / **`Page 1 of 3`** for both | PASS |
+| d | Delete IX 2019 → tap IX 1542's pass marker | one card left with its marker; viewer `Boarding pass` / `Page 1 of 3` — the other flight's copy is untouched | PASS |
+| — | Clean-up: delete IX 1542; remove the two files from `/sdcard/Download/` | `No flight journeys yet`; Trips (Tokyo / Ladakh Trek / Paris), Checklist (`Tokyo packing`), archived trains (`12951 - Mumbai Rajdhani`, `20933 - UDN DANAPUR EXP`) all present | PASS |
+| g1 | Full gate `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → `multiflight.log` | BUILD SUCCESSFUL, unit **1233/1233** | PASS |
+| g2 | `connectedDebugAndroidTest` on **Android_16_AOSP_Medium** (`e2e.log`) | **31/31** app e2e incl. `MultiFlightImportE2eTest` (2: the real itinerary image shared in → intake → review lists both segments with dates/times/PNRs/seats → Add → two cards + `Added 2 flights`; re-import → `Skipped 2 already saved`; a rendered single pass → form, no review step) + `core:ocr` instrumented (capture harness skipped by design), BUILD SUCCESSFUL | PASS |
+| g3 | Shutdown | Play_36_Pixel killed (`emu kill`); Android_16_AOSP_Medium (started headless by this session) killed after g2; `adb devices` empty | PASS |
+
+Notes:
+- The OCR'd return PNR of the PDF reads `07N3VZ` where the text layer says `O7N3VZ`
+  (ML Kit's O/0 confusion on the real document) — the form field is editable and the
+  marker says HIGH for a labeled PNR; this is the known OCR limitation, not a parser bug.
+- Dates on the PNG are MEDIUM (unlabeled, weekday-prefixed route header), the PNG's
+  seats MEDIUM (attached from the `Seat Fare` table by route), the PDF's seats HIGH
+  (`Seat 12B` labeled in the passenger table) — matching the recorded fixtures.

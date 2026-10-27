@@ -3210,8 +3210,51 @@ real 3-page MakeMyTrip e-ticket for the same route.
    arrTerminal`, name dropped); `fromExtraction` / `fromBookingExtraction` map the FIRST
    segment (the single-flight path), `fromBoardingPassFlight` / `fromBookingFlight` one
    reviewed segment. The review step and per-segment save are decision 5.
-5. **Review step and per-segment save** — see the addendum below (landed in the
-   following commits of the same change).
+5. **Review step and per-segment save (`feature:flights`).** `FlightFormViewModel`
+   keeps the single-flight paths EXACTLY as they were: a file yielding one segment
+   prefills the form (confidence markers, source banner, file pending). A file yielding
+   MORE than one segment opens the ADR-045 **review step** instead — `importReview:
+   StateFlow<FlightImportReview?>` rendered by `FlightImportReviewSheet` as a modal
+   bottom sheet over the (blank) form: "Found N flights in this file", one card per
+   segment (`IX 2019 · BLR → LKO` / `Thu, 29 Oct 2026 · 10:30 · PNR R87T5G · Seat
+   12A`) with a checkbox (all kept by default; `Needs details` on a segment missing
+   the direct-save minimum), Cancel and "Add N flights" (disabled at zero). Dismissing
+   writes nothing and closes the form. Confirming:
+   - every kept segment complete (`FlightFormState.isCompleteForDirectSave` = valid
+     per `validate` AND both airports) → **direct batch save**: each segment runs the
+     ADR-025 `findByFlight` guard — a match is recorded as *skipped*, the rest still
+     save — then the journey row is written and the FILE IS STORED FOR THAT FLIGHT
+     (`FlightImportKind.BOARDING_PASS` → `BoardingPassFileStore` writes its own
+     encrypted copy `boarding_passes/<flightId>.<ext>` and sets `boardingPassPath`;
+     `BOOKING_CONFIRMATION` → its own `Attachment` row + encrypted copy via
+     `BookingConfirmationImporter.attach`, ADR-017). The outcome arrives as
+     `FlightFormEvent.BatchImported(FlightBatchOutcome(savedIds, skippedExistingIds))`.
+   - any kept segment incomplete → **walk-through**: the kept segments' prefilled forms
+     are shown one at a time with a `Flight i of N` chip in the app bar
+     (`FlightFormState.walkthrough: WalkthroughProgress`); `Save` writes the current one
+     (same guard + file-per-flight; a duplicate counts as skipped) and ADVANCES instead
+     of calling `onSaved`; "Save & check status" is hidden meanwhile (it needs one
+     journey to chain into); an invalid form shows its errors and stays; the last save
+     emits the same `BatchImported`.
+   *Why copy the file per flight rather than share one copy?* `boardingPassPath` is a
+   per-row column (frozen schema, ADR-004) and attachment rows are per owner; a shared
+   file would need reference counting through soft-deletes, backup restore and the
+   Drive prune. Two 100 KB copies cost nothing and deleting one journey can never break
+   the other's document — `BoardingPassFileStoreTest` proves it with the real cipher.
+   *Why dedupe by carrier + number + date and not by seat?* Two passes for the same
+   flight (two passengers) are one journey in this app (ADR-025 identity has no seat);
+   a second seat would be refused at save anyway, so the extractor folds them and keeps
+   the first seat.
+6. **Hosts.** `FlightFormScreen(onBatchImported)` (defaulted to the single-flight
+   callbacks). `FlightsContent` returns to the list with `BatchImportNotice(outcome)`;
+   `FlightListScreen(batchNotice)` shows "Added 2 flights" / "Added 1 flight, skipped 1
+   already saved" / "Skipped 2 already saved" with a **View** action opening the first
+   added (else first existing) journey's sheet; in ADR-028 pick mode the leg links the
+   first journey the file produced. Share-sheet intake: `FlightsEntryResult.BatchImported`
+   → `JourneysDeepLink.forFlightsEntry` with the new `FlightsLandingAction.BATCH_IMPORTED`
+   and `flightsBatch` counts (carried on `SegmentLanding.flightsBatch`) →
+   `FlightsContent(initialBatch)` → the same notice. `JourneyPickRouting.resultFor`
+   maps a batch to the first journey.
 
 **Contract touches (additive unless noted).** `core:ocr`: `model/ExtractedFlight`;
 `BoardingPassExtraction` / `BookingConfirmationExtraction` **reshaped** to
@@ -3219,6 +3262,30 @@ real 3-page MakeMyTrip e-ticket for the same route.
 app intake score, both updated); `BcbpLeg.toExtractedFlight`, `BcbpData.toExtractedFlights`;
 `extract/FlightSegments.dedupe/flightKey`, `FlightDocumentRules` + resource
 `flight-document-rules.json`; `PdfPageRasterizer.rasterizeAll` + `DEFAULT_MAX_PAGES`.
-`feature:flights`: `FlightFormState.fromFlight / fromBoardingPassFlight / fromBookingFlight`.
-`app`: `pickLikelyDocType` scores a document by its best segment. No schema, repository
-or backup-format change.
+`feature:flights`: `FlightFormState.fromFlight / fromBoardingPassFlight / fromBookingFlight /
+walkthrough / isCompleteForDirectSave`, `WalkthroughProgress`, `FlightImportKind`,
+`FlightImportReview(Item)`, `FlightBatchOutcome`, `FlightFormEvent.BatchImported`,
+`FlightFormViewModel.importReview / toggleReviewItem / dismissReview / confirmReview`,
+`FlightImportReviewSheet` (+ `IMPORT_REVIEW_CONFIRM_TAG`), `BoardingPassFileStore`
+(the storage half of `OcrBoardingPassImporter`), `FlightFormScreen(onBatchImported)`,
+`FlightListScreen(batchNotice)` + `BatchImportNotice`, `FlightsContent(initialBatch)`,
+`FlightsEntryResult.BatchImported`, `FlightsLandingAction.BATCH_IMPORTED`, strings
+`flights_import_*`. `app`: `pickLikelyDocType` scores a document by its best segment;
+`JourneysDeepLink.flightsBatch`, `SegmentLanding.flightsBatch`. No schema, repository or
+backup-format change.
+
+**Consequences.** Tests: `core:ocr` 82 (fixtures per segment, segmentation edge cases —
+hotel block between flights, seat-fare attach, booking id vs airline PNR, same number on
+two dates = 2 / same number + date = 1, undated repeat folds in, alias carrier, unit /
+aircraft / amount guards, terminal columns, AM/PM, `M2` BCBP, rules sync); `feature:flights`
++12 (1 vs N segments, direct batch with a pass copy per flight, booking attach per flight,
+per-segment dedupe, re-import skips all, untick, dismiss, walk-through advance, duplicate
+mid-walk, invalid form stays; `BoardingPassFileStore` two independent copies). e2e
+`MultiFlightImportE2eTest` (the real itinerary image shared in → intake → review lists
+`IX 2019 · BLR → LKO` and `IX 1542 · LKO → BLR` with dates/times/PNRs/seats → Add → two
+cards + "Added 2 flights"; re-import → "Skipped 2 already saved"; a rendered single pass →
+form, no review). Device validation in `docs/validation-report.md`. Follow-ups: the
+SMS/email text parser (ADR-042) still reads the FIRST flight + a hint — the same review
+step could take `List<ExtractedFlight>` from it; `feature:flights` could read airline
+aliases from the `core:ocr` rules file instead of its own copy once the sync test has
+earned trust; a single OCR pass for the intake probe (it still runs three).

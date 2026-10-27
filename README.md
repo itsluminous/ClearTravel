@@ -27,7 +27,15 @@ optional Google account link for Calendar/Drive sync.
   the airline's SMS/email** — airline, flight number, PNR, route, date, times and
   terminal are read from the text by a rule-driven parser (per-airline patterns and
   code→name table in a versioned data file) into the form for review; duplicates
-  are refused. One-tap "Save & check status" opens the airline's status page in a
+  are refused. **One file, several flights:** a confirmation that lists a return trip
+  or a multi-city itinerary (hotel and fare tables included), a multi-leg barcode, a
+  PDF with one boarding pass per page or two passes on one page is read page by page
+  and split into flight segments — each with its own PNR, route, date, times,
+  terminals, cabin and seat (the seat-fare table is matched back by route). You see a
+  **review sheet** ("Found 2 flights in this file") listing them, untick any you do
+  not want, and add them in one tap; segments missing their route or date are walked
+  through the form one at a time instead. Every flight gets its own copy of the
+  file; flights you already have are skipped ("Added 1, skipped 1 already saved"). One-tap "Save & check status" opens the airline's status page in a
   WebView, auto-fills the query, dismisses consent walls, and extracts status / gate /
   terminal / times into the app — and for every airline without a dedicated rule the
   same flow reads **Google's flight-status card** (cancelled / delayed / landed, gates,
