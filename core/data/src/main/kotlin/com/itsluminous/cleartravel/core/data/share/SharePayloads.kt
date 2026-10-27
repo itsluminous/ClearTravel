@@ -99,10 +99,12 @@ data class SharedChecklistItem(
 
 /**
  * The ADD data of a flight (ADR-039 part A): what the recipient needs to add the same
- * flight to their Journeys. Deliberately WITHOUT the sharer's booking reference, seat
- * and cabin — those are personal; the recipient fills their own in the prefilled form.
- * Also no id: a flight is not upserted, it goes through the add form (and its ADR-025
- * duplicate guard) like every other add path.
+ * flight to their Journeys. WITHOUT the sharer's booking reference and cabin — those
+ * are personal; the recipient fills their own in the prefilled form. Since ADR-046 the
+ * sharer's [passengers] (name + seat) DO travel: the use case is sharing with people on
+ * the same booking, who delete the rows that are not theirs. Also no id: a flight is
+ * not upserted, it goes through the add form (and its ADR-025/046 guard) like every
+ * other add path.
  */
 @Serializable
 data class FlightSharePayload(
@@ -118,6 +120,15 @@ data class FlightSharePayload(
     val schedArr: Long? = null,
     val depTerminal: String = "",
     val arrTerminal: String = "",
+    /** ADR-046 — absent in links made before it (decodes as empty). */
+    val passengers: List<SharedFlightPassenger> = emptyList(),
 ) : SharePayload {
     override val kind: ShareKind get() = ShareKind.FLIGHT
 }
+
+/** One passenger on a shared flight (ADR-046): what the recipient's passenger row is prefilled with. */
+@Serializable
+data class SharedFlightPassenger(
+    val name: String = "",
+    val seat: String = "",
+)

@@ -90,6 +90,22 @@ class BackupMappersTest {
     }
 
     @Test
+    fun `flight passenger round-trips - bundled flag is transport-only`() {
+        val passenger =
+            Fixtures.flightPassenger(
+                pnrBookingRef = "R87T5G",
+                boardingPassPath = "/data/x/p.pdf",
+                sequenceNumber = "42",
+                cabinClass = "Y",
+                sortOrder = 1,
+                deletedAt = deletedAt,
+            )
+        assertThat(passenger.toDto().toModel()).isEqualTo(passenger)
+        assertThat(passenger.toDto(boardingPassBundled = true).toModel()).isEqualTo(passenger)
+        assertThat(passenger.toDto().boardingPassBundled).isFalse()
+    }
+
+    @Test
     fun `attachment round-trips - bundled flag is transport-only`() {
         val attachment = Fixtures.attachment(driveFileId = "drive-123", deletedAt = deletedAt)
         assertThat(attachment.toDto(bundled = false).toModel()).isEqualTo(attachment)

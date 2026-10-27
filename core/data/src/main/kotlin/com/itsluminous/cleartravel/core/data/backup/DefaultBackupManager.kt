@@ -10,6 +10,8 @@ import com.itsluminous.cleartravel.core.data.security.AppFileLayout
 import com.itsluminous.cleartravel.core.database.ClearTravelDatabase
 import com.itsluminous.cleartravel.core.database.entity.toEntity
 import com.itsluminous.cleartravel.core.database.entity.toModel
+import com.itsluminous.cleartravel.core.model.FlightPassenger
+import com.itsluminous.cleartravel.core.model.FlightPassengerIds
 import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
 import com.itsluminous.cleartravel.core.security.file.NotAnEnvelopeException
 import com.itsluminous.cleartravel.core.security.file.PortableCipher
@@ -167,18 +169,33 @@ class DefaultBackupManager
         private suspend fun exportInto(target: File): ExportResult {
             val createdAt = clock.instant()
 
+            // Passenger boarding passes (ADR-046): each live passenger's own file rides
+            // along under boarding_passes/<passengerId>.
+            val passengers = backupDao.dumpFlightPassengers().map { it.toModel() }
+            val bundledPassengerPasses =
+                passengers
+                    .filter { it.deletedAt == null && it.boardingPassPath != null }
+                    .mapNotNull { passenger ->
+                        val file = File(passenger.boardingPassPath!!)
+                        if (file.isFile) passenger.id to file else null
+                    }.toMap()
+            val passengerPassPaths = bundledPassengerPasses.values.map { it.absolutePath }.toSet()
+            val flightPassengers = passengers.map { it.toDto(boardingPassBundled = bundledPassengerPasses.containsKey(it.id)) }
+
             // Boarding passes (ADR-038): the flight row's file rides along under
             // boarding_passes/<flightId> whenever it exists — regardless of any Drive
-            // mirror attachment row, so a LOCAL backup is self-contained.
+            // mirror attachment row, so a LOCAL backup is self-contained. Since ADR-046
+            // that path is a MIRROR of a passenger's; a file already bundled under the
+            // passenger is not bundled twice (the import re-points the mirror instead).
             val flights = backupDao.dumpFlightJourneys().map { it.toModel() }
             val bundledBoardingPasses =
                 flights
                     .filter { it.deletedAt == null && it.boardingPassPath != null }
                     .mapNotNull { flight ->
                         val file = File(flight.boardingPassPath!!)
-                        if (file.isFile) flight.id to file else null
+                        if (file.isFile && file.absolutePath !in passengerPassPaths) flight.id to file else null
                     }.toMap()
-            val bundledBoardingPassPaths = bundledBoardingPasses.values.map { it.absolutePath }.toSet()
+            val bundledBoardingPassPaths = (bundledBoardingPasses.values + bundledPassengerPasses.values).map { it.absolutePath }.toSet()
             val flightJourneys = flights.map { it.toDto(boardingPassBundled = bundledBoardingPasses.containsKey(it.id)) }
 
             val attachments = backupDao.dumpAttachments().map { it.toModel() }
@@ -234,6 +251,7 @@ class DefaultBackupManager
                             BackupEntries.KEY_TRAIN_ROUTE_STOPS to trainRouteStops.size,
                             BackupEntries.KEY_TRAIN_COACHES to trainCoaches.size,
                             BackupEntries.KEY_FLIGHT_JOURNEYS to flightJourneys.size,
+                            BackupEntries.KEY_FLIGHT_PASSENGERS to flightPassengers.size,
                             BackupEntries.KEY_ATTACHMENTS to attachmentDtos.size,
                             BackupEntries.KEY_TRAVEL_DOCUMENTS to documentDtos.size,
                         ),
@@ -252,6 +270,7 @@ class DefaultBackupManager
                     trainRouteStops = trainRouteStops,
                     trainCoaches = trainCoaches,
                     flightJourneys = flightJourneys,
+                    flightPassengers = flightPassengers,
                     attachments = attachmentDtos,
                     travelDocuments = documentDtos,
                 )
@@ -261,7 +280,8 @@ class DefaultBackupManager
                 // are decrypted from disk so the payload is plaintext inside it.
                 val bundledEntries =
                     (bundledFiles + bundledDocumentFiles).mapKeys { (id, _) -> BackupEntries.attachmentEntry(id) } +
-                        bundledBoardingPasses.mapKeys { (flightId, _) -> BackupEntries.boardingPassEntry(flightId) }
+                        bundledBoardingPasses.mapKeys { (flightId, _) -> BackupEntries.boardingPassEntry(flightId) } +
+                        bundledPassengerPasses.mapKeys { (passengerId, _) -> BackupEntries.boardingPassEntry(passengerId) }
                 PortableCipher.encryptingStream(target.outputStream().buffered(), portableKey).use { out ->
                     BackupCodec.writeZip(snapshot, bundledEntries, out) { file -> fileCipher.openDecrypted(file) }
                 }
@@ -488,6 +508,28 @@ class DefaultBackupManager
             // attachment row keep pointing at the SAME file after a restore.
             val pathRemap = mutableMapOf<String, String>()
 
+            // Passengers (ADR-046) go first: a winner with bundled pass bytes gets them
+            // restored at filesDir/boarding_passes/<passengerId>.<ext> and re-pointed, and
+            // the remap lets the flight row's mirror path follow below.
+            val bundledPassengerPasses = snapshot.flightPassengers.filter { it.boardingPassBundled }.associateBy { it.id }
+            val localPassengers = backupDao.dumpFlightPassengers().map { it.toModel() }
+            val passengerPlan = BackupMerger.merge(localPassengers, snapshot.flightPassengers.map { it.toModel() })
+            val passengersRestored =
+                passengerPlan.toWrite.map { passenger ->
+                    val oldPath = passenger.boardingPassPath
+                    if (oldPath != null && bundledPassengerPasses.containsKey(passenger.id)) {
+                        val target = File(AppFileLayout.boardingPasses(context.filesDir), "${passenger.id}.${File(oldPath).extension}")
+                        if (BackupCodec.extractEntry(zip, BackupEntries.boardingPassEntry(passenger.id), target, encryptingExtract)) {
+                            pathRemap[oldPath] = target.absolutePath
+                            passenger.copy(boardingPassPath = target.absolutePath)
+                        } else {
+                            passenger
+                        }
+                    } else {
+                        passenger
+                    }
+                }
+
             // Flights (ADR-038): a winner with bundled boarding-pass bytes gets them
             // restored at filesDir/boarding_passes/<flightId>.<ext> — the very place the
             // importer stores them — and boardingPassPath re-pointed.
@@ -551,6 +593,33 @@ class DefaultBackupManager
                 }
             backupDao.upsertFlightJourneys(flights.map { it.toEntity() })
             summary += flightPlan.summary
+
+            // ADR-046: a backup from a pre-passenger build (no flight_passengers.json at
+            // all) knows nothing about passengers, yet its flights carry a seat/pass —
+            // backfill ONE passenger per such winning flight exactly like the 3→4 migration
+            // does (same derived id, the flight's own timestamp), merged through the same
+            // LWW rule so a device that already migrated — or already named that
+            // passenger — ends up with one row. A newer writer's empty list is the truth.
+            val localLiveByFlight = localPassengers.filter { it.deletedAt == null }.groupBy { it.flightId }
+            val backfilled =
+                flights
+                    .filter { flight ->
+                        snapshot.writtenBeforePassengers &&
+                            flight.deletedAt == null &&
+                            (flight.seat.isNotBlank() || flight.boardingPassPath != null) &&
+                            localLiveByFlight[flight.id].isNullOrEmpty()
+                    }.map { flight ->
+                        FlightPassenger(
+                            id = FlightPassengerIds.legacy(flight.id),
+                            flightId = flight.id,
+                            seat = flight.seat.trim(),
+                            boardingPassPath = flight.boardingPassPath,
+                            updatedAt = flight.updatedAt,
+                        )
+                    }
+            val backfillPlan = BackupMerger.merge(localPassengers, backfilled)
+            backupDao.upsertFlightPassengers((passengersRestored + backfillPlan.toWrite).map { it.toEntity() })
+            summary += passengerPlan.summary + backfillPlan.summary
 
             // Travel documents (ADR-027): same restore rule, into filesDir/documents/
             // keeping the original extension (the viewer keys PDF rendering off it).

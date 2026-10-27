@@ -365,11 +365,78 @@ class OfflineFlightRepositoryTest {
         runTest {
             val flight = flights.save(Fixtures.flightJourney())
             attachments.save(Fixtures.attachment(ownerType = AttachmentOwnerType.FLIGHT, ownerId = flight.id))
+            flights.savePassengers(flight.id, listOf(Fixtures.flightPassenger(flightId = flight.id)))
 
             flights.delete(flight.id)
 
             assertThat(flights.getFlight(flight.id)).isNull()
             assertThat(attachments.observeForOwner(AttachmentOwnerType.FLIGHT, flight.id).first()).isEmpty()
+            assertThat(flights.getPassengers(flight.id)).isEmpty()
+        }
+
+    @Test
+    fun `savePassengers stamps rows, re-points them at the flight and mirrors passenger 1 onto the flight row`() =
+        runTest {
+            val flight = flights.save(Fixtures.flightJourney(seat = "", boardingPassPath = null))
+            val second =
+                Fixtures.flightPassenger(
+                    flightId = "wrong",
+                    name = "B",
+                    seat = "12B",
+                    boardingPassPath = "/p/b.pdf",
+                    sortOrder = 1,
+                )
+            val first = Fixtures.flightPassenger(flightId = flight.id, name = "A", seat = "12A", sortOrder = 0)
+
+            val saved = flights.savePassengers(flight.id, listOf(second, first))
+
+            assertThat(saved.map { it.flightId }).containsExactly(flight.id, flight.id)
+            assertThat(saved.map { it.updatedAt }.toSet()).containsExactly(clock.instant())
+            assertThat(flights.getPassengers(flight.id).map { it.name }).containsExactly("A", "B").inOrder()
+            val mirrored = flights.getFlight(flight.id)!!
+            assertThat(mirrored.seat).isEqualTo("12A")
+            assertThat(mirrored.boardingPassPath).isEqualTo("/p/b.pdf")
+            assertThat(
+                flights
+                    .observeActiveWithPassengers()
+                    .first()
+                    .single()
+                    .passengers,
+            ).hasSize(2)
+        }
+
+    @Test
+    fun `replacePassengers tombstones dropped rows, renumbers the rest and re-syncs the mirror`() =
+        runTest {
+            val flight = flights.save(Fixtures.flightJourney(seat = "", boardingPassPath = null))
+            val a = Fixtures.flightPassenger(flightId = flight.id, name = "A", seat = "1A", boardingPassPath = "/p/a.pdf", sortOrder = 0)
+            val b = Fixtures.flightPassenger(flightId = flight.id, name = "B", seat = "1B", sortOrder = 1)
+            flights.savePassengers(flight.id, listOf(a, b))
+
+            flights.replacePassengers(flight.id, listOf(b, Fixtures.flightPassenger(flightId = flight.id, name = "C", seat = "1C")))
+
+            val live = flights.getPassengers(flight.id)
+            assertThat(live.map { it.name to it.sortOrder }).containsExactly("B" to 0, "C" to 1).inOrder()
+            assertThat(live.map { it.id }).contains(b.id)
+            val mirrored = flights.getFlight(flight.id)!!
+            assertThat(mirrored.seat).isEqualTo("1B")
+            assertThat(mirrored.boardingPassPath).isNull()
+        }
+
+    @Test
+    fun `deletePassenger hides the row and the mirror falls back to the next passenger`() =
+        runTest {
+            val flight = flights.save(Fixtures.flightJourney(seat = "", boardingPassPath = null))
+            val a = Fixtures.flightPassenger(flightId = flight.id, name = "A", seat = "1A", boardingPassPath = "/p/a.pdf", sortOrder = 0)
+            val b = Fixtures.flightPassenger(flightId = flight.id, name = "B", seat = "1B", boardingPassPath = "/p/b.pdf", sortOrder = 1)
+            flights.savePassengers(flight.id, listOf(a, b))
+
+            flights.deletePassenger(a.id)
+
+            assertThat(flights.getPassengers(flight.id).map { it.id }).containsExactly(b.id)
+            assertThat(flights.getFlight(flight.id)!!.seat).isEqualTo("1B")
+            assertThat(flights.getFlight(flight.id)!!.boardingPassPath).isEqualTo("/p/b.pdf")
+            assertThat(flights.observePassengers(flight.id).first().map { it.id }).containsExactly(b.id)
         }
 
     @Test

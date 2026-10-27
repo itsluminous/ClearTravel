@@ -100,7 +100,7 @@ class ShareLinkCodecTest {
     }
 
     @Test
-    fun `flight payload round-trips and carries no booking reference or seat`() {
+    fun `flight payload round-trips and carries no booking reference or mirror seat`() {
         val flight = Fixtures.flightJourney(pnrBookingRef = "SECRET", seat = "14A", depTerminal = "T2")
         val payload = SharePayloadMappers.toPayload(flight)
         val blob = ShareLinkCodec.encode(payload)
@@ -108,10 +108,42 @@ class ShareLinkCodecTest {
 
         assertThat(json).doesNotContain("SECRET")
         assertThat(json).doesNotContain("14A")
+        assertThat(json).doesNotContain("passengers")
         val decoded = (ShareLinkCodec.decode(ShareLink(ShareKind.FLIGHT, blob)) as ShareDecodeResult.Ok).payload
         assertThat(decoded).isEqualTo(payload)
         assertThat((decoded as FlightSharePayload).schedDep).isEqualTo(Fixtures.NOW.epochSecond)
+        assertThat(decoded.passengers).isEmpty()
         assertThat(SharePayloadMappers.toInstant(decoded.schedDep)).isEqualTo(Fixtures.NOW)
+    }
+
+    @Test
+    fun `flight payload carries passengers as name plus seat in order, and a pre-046 blob decodes without them`() {
+        val flight = Fixtures.flightJourney()
+        val payload =
+            SharePayloadMappers.toPayload(
+                flight,
+                listOf(
+                    Fixtures.flightPassenger(
+                        name = "B",
+                        seat = "12B",
+                        sortOrder = 1,
+                        boardingPassPath = "/secret/b.pdf",
+                        pnrBookingRef = "PNRB",
+                    ),
+                    Fixtures.flightPassenger(name = " A ", seat = "12A", sortOrder = 0),
+                    Fixtures.flightPassenger(name = "", seat = "", sortOrder = 2),
+                ),
+            )
+        assertThat(payload.passengers).containsExactly(SharedFlightPassenger("A", "12A"), SharedFlightPassenger("B", "12B")).inOrder()
+        val json = ShareLinkCodec.json.encodeToString(FlightSharePayload.serializer(), payload)
+        assertThat(json).doesNotContain("secret")
+        assertThat(json).doesNotContain("PNRB")
+        val decoded = ShareLinkCodec.decode(ShareLink(ShareKind.FLIGHT, ShareLinkCodec.encode(payload))) as ShareDecodeResult.Ok
+        assertThat(decoded.payload).isEqualTo(payload)
+
+        val legacy = encodeRawJson("""{"v":1,"airlineIata":"6E","flightNumber":"2345","date":"2026-09-20"}""")
+        val legacyDecoded = ShareLinkCodec.decode(ShareLink(ShareKind.FLIGHT, legacy)) as ShareDecodeResult.Ok
+        assertThat((legacyDecoded.payload as FlightSharePayload).passengers).isEmpty()
     }
 
     @Test

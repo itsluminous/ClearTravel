@@ -16,7 +16,7 @@ import java.util.zip.ZipOutputStream
  * Serializes a [BackupSnapshot] to the backup ZIP layout and back (ADR-015,
  * `docs/backup-format.md`): `manifest.json` + one JSON array per entity type under
  * `entities/` + bundled attachment/document bytes under `attachments/<id>` and
- * boarding-pass bytes under `boarding_passes/<flightId>` (ADR-038).
+ * boarding-pass bytes under `boarding_passes/<flightId | passengerId>` (ADR-038/046).
  *
  * Reading is lenient where safe (unknown JSON keys ignored, missing entity files =
  * empty lists — forward/backward tolerant) and strict where required: a missing or
@@ -58,6 +58,7 @@ internal object BackupCodec {
             zip.putTextEntry(BackupEntries.TRAIN_ROUTE_STOPS, json.encodeToString(snapshot.trainRouteStops))
             zip.putTextEntry(BackupEntries.TRAIN_COACHES, json.encodeToString(snapshot.trainCoaches))
             zip.putTextEntry(BackupEntries.FLIGHT_JOURNEYS, json.encodeToString(snapshot.flightJourneys))
+            zip.putTextEntry(BackupEntries.FLIGHT_PASSENGERS, json.encodeToString(snapshot.flightPassengers))
             zip.putTextEntry(BackupEntries.ATTACHMENTS, json.encodeToString(snapshot.attachments))
             zip.putTextEntry(BackupEntries.TRAVEL_DOCUMENTS, json.encodeToString(snapshot.travelDocuments))
             for ((entryName, file) in bundledEntries) {
@@ -102,8 +103,10 @@ internal object BackupCodec {
                 trainRouteStops = readList(zip, BackupEntries.TRAIN_ROUTE_STOPS),
                 trainCoaches = readList(zip, BackupEntries.TRAIN_COACHES),
                 flightJourneys = readList(zip, BackupEntries.FLIGHT_JOURNEYS),
+                flightPassengers = readList(zip, BackupEntries.FLIGHT_PASSENGERS),
                 attachments = readList(zip, BackupEntries.ATTACHMENTS),
                 travelDocuments = readList(zip, BackupEntries.TRAVEL_DOCUMENTS),
+                writtenBeforePassengers = zip.getEntry(BackupEntries.FLIGHT_PASSENGERS) == null,
             )
         } catch (e: SerializationException) {
             throw BackupException.CorruptedBackup(e)

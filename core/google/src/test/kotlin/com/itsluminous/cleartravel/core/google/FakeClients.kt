@@ -15,6 +15,8 @@ import com.itsluminous.cleartravel.core.google.calendar.SyncedEventRecord
 import com.itsluminous.cleartravel.core.model.Attachment
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
+import com.itsluminous.cleartravel.core.model.FlightWithPassengers
 import com.itsluminous.cleartravel.core.model.ItineraryItem
 import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
@@ -257,6 +259,41 @@ class FakeFlightRepository : FlightRepository {
     override suspend fun save(flight: FlightJourney): FlightJourney {
         flights.value = flights.value.filterNot { it.id == flight.id } + flight
         return flight
+    }
+
+    val passengers = MutableStateFlow<List<FlightPassenger>>(emptyList())
+
+    override fun observeActiveWithPassengers(): Flow<List<FlightWithPassengers>> =
+        observeActive().map { list -> list.map { FlightWithPassengers(it, passengers.value.filter { p -> p.flightId == it.id }) } }
+
+    override fun observeArchivedWithPassengers(): Flow<List<FlightWithPassengers>> =
+        observeArchived().map { list -> list.map { FlightWithPassengers(it, passengers.value.filter { p -> p.flightId == it.id }) } }
+
+    override fun observePassengers(flightId: String): Flow<List<FlightPassenger>> =
+        passengers.map { list -> list.filter { it.flightId == flightId && it.deletedAt == null } }
+
+    override suspend fun getPassengers(flightId: String): List<FlightPassenger> =
+        passengers.value.filter { it.flightId == flightId && it.deletedAt == null }
+
+    override suspend fun savePassengers(
+        flightId: String,
+        passengers: List<FlightPassenger>,
+    ): List<FlightPassenger> {
+        val stamped = passengers.map { it.copy(flightId = flightId) }
+        this.passengers.value = this.passengers.value.filterNot { p -> stamped.any { it.id == p.id } } + stamped
+        return stamped
+    }
+
+    override suspend fun replacePassengers(
+        flightId: String,
+        passengers: List<FlightPassenger>,
+    ): List<FlightPassenger> {
+        this.passengers.value = this.passengers.value.filterNot { it.flightId == flightId }
+        return savePassengers(flightId, passengers)
+    }
+
+    override suspend fun deletePassenger(id: String) {
+        passengers.value = passengers.value.filterNot { it.id == id }
     }
 
     override suspend fun applyStatusResult(

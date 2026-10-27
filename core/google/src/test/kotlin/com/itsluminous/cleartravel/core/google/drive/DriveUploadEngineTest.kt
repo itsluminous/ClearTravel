@@ -9,6 +9,7 @@ import com.itsluminous.cleartravel.core.google.auth.GoogleLinkSnapshot
 import com.itsluminous.cleartravel.core.model.Attachment
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
 import com.itsluminous.cleartravel.core.security.crypto.CryptoPrimitives
 import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
 import com.itsluminous.cleartravel.core.security.file.PortableCipher
@@ -310,6 +311,30 @@ class DriveUploadEngineTest {
             assertThat(rows).hasSize(1)
             assertThat(rows.single().driveFileId).isNotNull()
             assertThat(rows.single().mimeType).isEqualTo("application/pdf")
+        }
+
+    @Test
+    fun `every passenger's boarding pass registers once, the flight mirror of one of them not twice`() =
+        runTest {
+            val passA = localFile("pass-a.pdf")
+            val passB = localFile("pass-b.png")
+            val flight = FlightJourney(airlineIata = "6E", flightNumber = "1", boardingPassPath = passA.absolutePath)
+            flights.save(flight)
+            flights.savePassengers(
+                flight.id,
+                listOf(
+                    FlightPassenger(flightId = flight.id, name = "A", boardingPassPath = passA.absolutePath, sortOrder = 0),
+                    FlightPassenger(flightId = flight.id, name = "B", boardingPassPath = passB.absolutePath, sortOrder = 1),
+                ),
+            )
+
+            engine().processQueue()
+            engine().processQueue()
+
+            val rows = attachments.observeForOwner(AttachmentOwnerType.FLIGHT, flight.id).first()
+            assertThat(rows.map { it.localPath }).containsExactly(passA.absolutePath, passB.absolutePath)
+            assertThat(rows.map { it.mimeType }).containsExactly("application/pdf", "image/png")
+            assertThat(rows.all { it.driveFileId != null }).isTrue()
         }
 }
 

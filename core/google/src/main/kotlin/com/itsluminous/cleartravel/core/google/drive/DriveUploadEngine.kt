@@ -93,24 +93,28 @@ class DriveUploadEngine(
     }
 
     /**
-     * Boarding passes live as a file path on the flight row, not as attachment rows.
+     * Boarding passes live as file paths on the passenger rows (ADR-046) — and, for
+     * flights that predate passengers, on the flight row — not as attachment rows.
      * Register each one as a FLIGHT attachment exactly once (keyed by local path) so
      * the standard queue uploads it and stores its `driveFileId`.
      */
     private suspend fun registerBoardingPasses() {
-        val flights = flightRepository.observeActive().first() + flightRepository.observeArchived().first()
-        for (flight in flights) {
-            val path = flight.boardingPassPath ?: continue
-            val existing = attachmentRepository.observeForOwner(AttachmentOwnerType.FLIGHT, flight.id).first()
-            if (existing.any { it.localPath == path }) continue
-            attachmentRepository.save(
-                Attachment(
-                    ownerType = AttachmentOwnerType.FLIGHT,
-                    ownerId = flight.id,
-                    localPath = path,
-                    mimeType = guessMimeType(path),
-                ),
-            )
+        val flights = flightRepository.observeActiveWithPassengers().first() + flightRepository.observeArchivedWithPassengers().first()
+        for (entry in flights) {
+            val paths = entry.boardingPasses.map { it.path }.toSet()
+            if (paths.isEmpty()) continue
+            val existing = attachmentRepository.observeForOwner(AttachmentOwnerType.FLIGHT, entry.flight.id).first()
+            for (path in paths) {
+                if (existing.any { it.localPath == path }) continue
+                attachmentRepository.save(
+                    Attachment(
+                        ownerType = AttachmentOwnerType.FLIGHT,
+                        ownerId = entry.flight.id,
+                        localPath = path,
+                        mimeType = guessMimeType(path),
+                    ),
+                )
+            }
         }
     }
 

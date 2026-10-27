@@ -55,12 +55,14 @@ cleartravel-backup-YYYYMMDD-HHmm.zip
 │   ├── train_route_stops.json
 │   ├── train_coaches.json             # added ADR-022 — absent in older backups (read as empty)
 │   ├── flight_journeys.json
+│   ├── flight_passengers.json         # added ADR-046 — absent in older backups (importer backfills, see below)
 │   ├── attachments.json
 │   └── travel_documents.json          # added ADR-027 — absent in older backups (read as empty)
 ├── attachments/
 │   └── <attachmentId | documentId>    # raw file bytes, local-only attachments/documents only
 └── boarding_passes/
-    └── <flightId>                     # added ADR-038 — the flight row's boarding-pass bytes
+    ├── <passengerId>                  # added ADR-046 — each passenger's own boarding-pass bytes
+    └── <flightId>                     # added ADR-038 — the flight row's pass, only when no passenger bundles that file
 ```
 
 Every entity file is a **full dump including tombstoned rows** — deletions must
@@ -155,6 +157,35 @@ that did not exist. Now:
 No `schemaVersion` bump: the field defaults to `false` and the `boarding_passes/`
 directory is an unknown ZIP entry to pre-ADR-038 readers, which ignore it.
 
+### Flight passengers (ADR-046)
+
+`entities/flight_passengers.json` rows (`FlightPassengerDto`: `id`, `flightId`, `name`,
+`seat`, `pnrBookingRef`, `boardingPassPath`, `sequenceNumber`, `cabinClass`,
+`sortOrder`, `boardingPassBundled`, sync fields) are merged like every other table.
+Since ADR-046 the flight row's `seat` / `boardingPassPath` are MIRRORS of passenger
+#1 (kept so older readers still see a seat and a pass); the passengers are the truth.
+
+- Export: every live passenger whose file exists at `boardingPassPath` is bundled at
+  `boarding_passes/<passengerId>` with `"boardingPassBundled": true`. The flight row's
+  mirror path is bundled under `boarding_passes/<flightId>` ONLY when no passenger
+  already bundles that same file (no duplicate bytes); its DTO then says
+  `boardingPassBundled: false` and the mirror is re-pointed on import.
+- Import: a winning passenger with `boardingPassBundled: true` is extracted to
+  `filesDir/boarding_passes/<passengerId>.<ext>` and re-pointed; the path remap then
+  carries the flight row's mirror (and any ADR-016 mirror attachment row) to the same
+  restored file. Passengers are processed BEFORE flights for exactly this reason.
+- **Backups written before ADR-046** have no `flight_passengers.json` at all
+  (`BackupSnapshot.writtenBeforePassengers`). For every winning LIVE flight row that
+  carries a seat or a pass and has no live passenger locally, the importer backfills
+  ONE passenger exactly like the schema 3→4 migration: id =
+  `FlightPassengerIds.legacy(flightId)` (derived, so a migrated device and an old
+  backup converge on the same row), empty name, the flight's trimmed seat, the
+  flight's pass path, `updatedAt` = the flight's. The backfilled rows run through the
+  same LWW merge, so a locally renamed/edited passenger (newer `updatedAt`) survives.
+  A NEWER writer's empty list is left alone — it is the truth for that flight.
+
+No `schemaVersion` bump: additive entity file + additive byte entries.
+
 ## Merge semantics (import is a MERGE, never a wipe)
 
 Implemented once, generically, in `BackupMerger` and applied per entity type inside a
@@ -216,7 +247,7 @@ until pruned.
 - Additive DTO fields with defaults → **no** version bump (readers ignore unknowns,
   writers' new fields default on old readers).
 - Additive entity FILES (a new `entities/*.json`, e.g. `train_coaches.json` from
-  ADR-022) → **no** version bump either: readers treat a missing entity file as an
+  ADR-022, `flight_passengers.json` from ADR-046) → **no** version bump either: readers treat a missing entity file as an
   empty list, so a pre-ADR-022 backup imports with zero coaches and a newer backup
   imports into an older app minus the unknown file.
 - Additive BYTE directories (`boarding_passes/` from ADR-038) → **no** version bump:

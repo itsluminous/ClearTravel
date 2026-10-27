@@ -13,6 +13,8 @@ import com.itsluminous.cleartravel.core.database.ClearTravelDatabase
 import com.itsluminous.cleartravel.core.database.entity.toEntity
 import com.itsluminous.cleartravel.core.database.entity.toModel
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
+import com.itsluminous.cleartravel.core.model.FlightPassenger
+import com.itsluminous.cleartravel.core.model.FlightPassengerIds
 import com.itsluminous.cleartravel.core.model.TravelDocumentType
 import com.itsluminous.cleartravel.core.security.file.LocalFileCipher
 import com.itsluminous.cleartravel.core.security.file.PortableCipher
@@ -130,6 +132,7 @@ class DefaultBackupManagerTest {
         val stop = Fixtures.trainRouteStop(ticketId = ticket.id)
         val coach = Fixtures.trainCoach(ticketId = ticket.id, code = "EN")
         val flight = Fixtures.flightJourney(boardingPassPath = "/nonexistent/bp.pdf")
+        val flightPassenger = Fixtures.flightPassenger(flightId = flight.id, boardingPassPath = "/nonexistent/bp.pdf")
         val attachment = Fixtures.attachment(ownerId = ticket.id, localPath = "/nonexistent/file.pdf")
         val document = Fixtures.travelDocument(filePath = "/nonexistent/passport.jpg", expiryDate = Fixtures.TODAY.plusYears(9))
         dao.upsertTrips(listOf(trip.toEntity(), tombstonedTrip.toEntity()))
@@ -143,6 +146,7 @@ class DefaultBackupManagerTest {
         dao.upsertTrainRouteStops(listOf(stop.toEntity()))
         dao.upsertTrainCoaches(listOf(coach.toEntity()))
         dao.upsertFlightJourneys(listOf(flight.toEntity()))
+        dao.upsertFlightPassengers(listOf(flightPassenger.toEntity()))
         dao.upsertAttachments(listOf(attachment.toEntity()))
         dao.upsertTravelDocuments(listOf(document.toEntity()))
         return mapOf(
@@ -158,6 +162,7 @@ class DefaultBackupManagerTest {
             "stop" to stop,
             "coach" to coach,
             "flight" to flight,
+            "flightPassenger" to flightPassenger,
             "attachment" to attachment,
             "document" to document,
         )
@@ -169,14 +174,14 @@ class DefaultBackupManagerTest {
             val seeded = seedAllEntityTypes()
             val uri = exportFileUri()
             val export = manager.exportToUri(uri)
-            assertThat(export.totalRows).isEqualTo(14)
+            assertThat(export.totalRows).isEqualTo(15)
 
             // "Wipe": a brand-new empty database.
             val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
             val freshManager = managerFor(freshDb)
             val summary = freshManager.importApply(uri)
 
-            assertThat(summary).isEqualTo(MergeSummary(inserted = 14, updated = 0, skipped = 0))
+            assertThat(summary).isEqualTo(MergeSummary(inserted = 15, updated = 0, skipped = 0))
             val dao = freshDb.backupDao()
             assertThat(dao.dumpTrips().map { it.toModel() })
                 .containsExactly(seeded["trip"], seeded["tombstonedTrip"])
@@ -190,6 +195,7 @@ class DefaultBackupManagerTest {
             assertThat(dao.dumpTrainRouteStops().single().toModel()).isEqualTo(seeded["stop"])
             assertThat(dao.dumpTrainCoaches().single().toModel()).isEqualTo(seeded["coach"])
             assertThat(dao.dumpFlightJourneys().single().toModel()).isEqualTo(seeded["flight"])
+            assertThat(dao.dumpFlightPassengers().single().toModel()).isEqualTo(seeded["flightPassenger"])
             assertThat(dao.dumpAttachments().single().toModel()).isEqualTo(seeded["attachment"])
             assertThat(dao.dumpTravelDocuments().single().toModel()).isEqualTo(seeded["document"])
             freshDb.close()
@@ -206,8 +212,8 @@ class DefaultBackupManagerTest {
             val second = manager.importApply(uri)
 
             assertThat(first.inserted).isEqualTo(0)
-            assertThat(first.skipped).isEqualTo(14)
-            assertThat(second).isEqualTo(MergeSummary(inserted = 0, updated = 0, skipped = 14))
+            assertThat(first.skipped).isEqualTo(15)
+            assertThat(second).isEqualTo(MergeSummary(inserted = 0, updated = 0, skipped = 15))
         }
 
     @Test
@@ -573,6 +579,152 @@ class DefaultBackupManagerTest {
             freshDb.close()
         }
 
+    // ---- ADR-046: flight passengers ----
+
+    @Test
+    fun `passengers - each pass is bundled once under the passenger id and the flight mirror follows the restored copy`() =
+        runTest {
+            val fileA = File(context.cacheDir, "pass-a.pdf")
+            val fileB = File(context.cacheDir, "pass-b.png")
+            cipher.encryptTo(byteArrayOf(1, 1).inputStream(), fileA)
+            cipher.encryptTo(byteArrayOf(2, 2).inputStream(), fileB)
+            val flight = Fixtures.flightJourney(seat = "12A", boardingPassPath = fileA.absolutePath)
+            val a =
+                Fixtures.flightPassenger(
+                    flightId = flight.id,
+                    name = "A",
+                    seat = "12A",
+                    boardingPassPath = fileA.absolutePath,
+                    sortOrder = 0,
+                )
+            val b =
+                Fixtures.flightPassenger(
+                    flightId = flight.id,
+                    name = "B",
+                    seat = "12B",
+                    boardingPassPath = fileB.absolutePath,
+                    sortOrder = 1,
+                )
+            db.backupDao().upsertFlightJourneys(listOf(flight.toEntity()))
+            db.backupDao().upsertFlightPassengers(listOf(a.toEntity(), b.toEntity()))
+            val uri = exportFileUri()
+            manager.exportToUri(uri)
+
+            openExport(File(context.cacheDir, "export.zip")).use { zip ->
+                assertThat(zip.getInputStream(zip.getEntry(BackupEntries.boardingPassEntry(a.id))).readBytes()).isEqualTo(byteArrayOf(1, 1))
+                assertThat(zip.getInputStream(zip.getEntry(BackupEntries.boardingPassEntry(b.id))).readBytes()).isEqualTo(byteArrayOf(2, 2))
+                // The flight's mirror path IS passenger A's file: not bundled a second time.
+                assertThat(zip.getEntry(BackupEntries.boardingPassEntry(flight.id))).isNull()
+                val snapshot = BackupCodec.readSnapshot(zip)
+                assertThat(snapshot.flightJourneys.single().boardingPassBundled).isFalse()
+                assertThat(snapshot.flightPassengers.map { it.boardingPassBundled }).containsExactly(true, true)
+                assertThat(snapshot.writtenBeforePassengers).isFalse()
+                assertThat(snapshot.manifest.entityCounts[BackupEntries.KEY_FLIGHT_PASSENGERS]).isEqualTo(2)
+            }
+
+            assertThat(fileA.delete()).isTrue()
+            assertThat(fileB.delete()).isTrue()
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            managerFor(freshDb).importApply(uri)
+
+            val restored =
+                freshDb
+                    .backupDao()
+                    .dumpFlightPassengers()
+                    .map { it.toModel() }
+                    .sortedBy { it.sortOrder }
+            assertThat(restored.map { File(it.boardingPassPath!!).name }).containsExactly("${a.id}.pdf", "${b.id}.png").inOrder()
+            assertThat(plaintextOf(File(restored[0].boardingPassPath!!), cipher)).isEqualTo(byteArrayOf(1, 1))
+            assertThat(plaintextOf(File(restored[1].boardingPassPath!!), cipher)).isEqualTo(byteArrayOf(2, 2))
+            assertThat(
+                restored.map {
+                    it.copy(boardingPassPath = null)
+                },
+            ).containsExactly(a.copy(boardingPassPath = null), b.copy(boardingPassPath = null))
+            val restoredFlight =
+                freshDb
+                    .backupDao()
+                    .dumpFlightJourneys()
+                    .single()
+                    .toModel()
+            assertThat(restoredFlight.boardingPassPath).isEqualTo(restored[0].boardingPassPath)
+            assertThat(restoredFlight.copy(boardingPassPath = flight.boardingPassPath)).isEqualTo(flight)
+            freshDb.close()
+        }
+
+    @Test
+    fun `pre-ADR-046 backup - seated flights are backfilled with one legacy passenger, merged by derived id`() =
+        runTest {
+            val seated = Fixtures.flightJourney(id = "seated", seat = "12A", boardingPassPath = "/nonexistent/bp.pdf")
+            val bare = Fixtures.flightJourney(id = "bare", seat = "", boardingPassPath = null)
+            db.backupDao().upsertFlightJourneys(listOf(seated.toEntity(), bare.toEntity()))
+            val full = File(context.cacheDir, "full.zip")
+            manager.exportToUri(Uri.fromFile(full))
+            // A v3-build writer: the same ZIP minus the passengers entity file.
+            val legacy = File(context.cacheDir, "legacy.zip")
+            openExport(full).use { source ->
+                ZipOutputStream(legacy.outputStream()).use { zip ->
+                    for (entry in source.entries().asSequence()) {
+                        if (entry.name == BackupEntries.FLIGHT_PASSENGERS) continue
+                        zip.putNextEntry(ZipEntry(entry.name))
+                        source.getInputStream(entry).use { it.copyTo(zip) }
+                        zip.closeEntry()
+                    }
+                }
+            }
+
+            // Fresh install: both flights plus ONE backfilled passenger.
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            val summary = managerFor(freshDb).importApply(Uri.fromFile(legacy))
+            assertThat(summary.inserted).isEqualTo(3)
+            val backfilled =
+                freshDb
+                    .backupDao()
+                    .dumpFlightPassengers()
+                    .single()
+                    .toModel()
+            assertThat(backfilled).isEqualTo(
+                FlightPassenger(
+                    id = FlightPassengerIds.legacy(seated.id),
+                    flightId = seated.id,
+                    seat = "12A",
+                    boardingPassPath = "/nonexistent/bp.pdf",
+                    updatedAt = seated.updatedAt,
+                ),
+            )
+            // Importing again, or into a device that already migrated, adds nothing.
+            assertThat(managerFor(freshDb).importApply(Uri.fromFile(legacy)).inserted).isEqualTo(0)
+            assertThat(freshDb.backupDao().dumpFlightPassengers()).hasSize(1)
+            freshDb.close()
+
+            // A device where that passenger was already NAMED keeps its newer row.
+            val namedDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            val named = backfilled.copy(name = "PRAKASH KUMAR", updatedAt = seated.updatedAt.plusSeconds(10))
+            namedDb.backupDao().upsertFlightPassengers(listOf(named.toEntity()))
+            managerFor(namedDb).importApply(Uri.fromFile(legacy))
+            assertThat(
+                namedDb
+                    .backupDao()
+                    .dumpFlightPassengers()
+                    .single()
+                    .toModel(),
+            ).isEqualTo(named)
+            namedDb.close()
+        }
+
+    @Test
+    fun `passengers - a newer writer's empty passenger list is the truth, nothing is backfilled`() =
+        runTest {
+            db.backupDao().upsertFlightJourneys(listOf(Fixtures.flightJourney(seat = "12A").toEntity()))
+            val uri = exportFileUri()
+            manager.exportToUri(uri)
+
+            val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
+            assertThat(managerFor(freshDb).importApply(uri).inserted).isEqualTo(1)
+            assertThat(freshDb.backupDao().dumpFlightPassengers()).isEmpty()
+            freshDb.close()
+        }
+
     @Test
     fun `travel documents - local file is bundled and restored under filesDir documents keeping its extension`() =
         runTest {
@@ -661,7 +813,7 @@ class DefaultBackupManagerTest {
             val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
             val summary = managerFor(freshDb).importApply(Uri.fromFile(legacy))
 
-            assertThat(summary).isEqualTo(MergeSummary(inserted = 13, updated = 0, skipped = 0))
+            assertThat(summary).isEqualTo(MergeSummary(inserted = 14, updated = 0, skipped = 0))
             assertThat(freshDb.backupDao().dumpTravelDocuments()).isEmpty()
             assertThat(freshDb.backupDao().dumpTrainCoaches()).hasSize(1)
             freshDb.close()
@@ -759,7 +911,7 @@ class DefaultBackupManagerTest {
             val freshManager = managerFor(freshDb)
             val summary = freshManager.importApply(Uri.fromFile(legacy))
 
-            assertThat(summary).isEqualTo(MergeSummary(inserted = 13, updated = 0, skipped = 0))
+            assertThat(summary).isEqualTo(MergeSummary(inserted = 14, updated = 0, skipped = 0))
             assertThat(freshDb.backupDao().dumpTrainCoaches()).isEmpty()
             assertThat(freshDb.backupDao().dumpTrainRouteStops()).hasSize(1)
             freshDb.close()
@@ -827,7 +979,7 @@ class DefaultBackupManagerTest {
 
             assertThat(preview.schemaVersion).isEqualTo(BackupManifest.SCHEMA_VERSION)
             assertThat(preview.createdAt).isEqualTo(clock.instant())
-            assertThat(preview.totalRows).isEqualTo(14)
+            assertThat(preview.totalRows).isEqualTo(15)
             assertThat(preview.entityCounts[BackupEntries.KEY_TRIPS]).isEqualTo(2)
             assertThat(preview.entityCounts[BackupEntries.KEY_TRAIN_TICKETS]).isEqualTo(1)
             // Preview must not import anything.
@@ -908,10 +1060,10 @@ class DefaultBackupManagerTest {
                 runBlocking { foreign.importPreview(uri, "not-it".toCharArray()) }
             }
             val preview = foreign.importPreview(uri, VAULT_PASSWORD.toCharArray())
-            assertThat(preview.totalRows).isEqualTo(14)
+            assertThat(preview.totalRows).isEqualTo(15)
             // The derived key was adopted: apply needs no password.
             val summary = foreign.importApply(uri)
-            assertThat(summary.inserted).isEqualTo(14)
+            assertThat(summary.inserted).isEqualTo(15)
             freshDb.close()
         }
 
@@ -972,7 +1124,7 @@ class DefaultBackupManagerTest {
             val freshDb = inMemoryDatabase<ClearTravelDatabase>(context)
             val (foreign, _) = foreignManagerFor(freshDb, password = "whatever")
             assertThat(foreign.importPreview(Uri.fromFile(v1)).schemaVersion).isEqualTo(1)
-            assertThat(foreign.importApply(Uri.fromFile(v1)).inserted).isEqualTo(14)
+            assertThat(foreign.importApply(Uri.fromFile(v1)).inserted).isEqualTo(15)
             freshDb.close()
         }
 

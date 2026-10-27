@@ -4,6 +4,7 @@ import com.itsluminous.cleartravel.core.model.Checklist
 import com.itsluminous.cleartravel.core.model.ChecklistItem
 import com.itsluminous.cleartravel.core.model.CommuteMode
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
 import com.itsluminous.cleartravel.core.model.ItineraryItem
 import com.itsluminous.cleartravel.core.model.ItineraryItemType
 import com.itsluminous.cleartravel.core.model.PlaceCategory
@@ -69,7 +70,14 @@ object SharePayloadMappers {
                     .map { SharedChecklistItem(id = it.id, text = it.text, checked = it.checked, sortOrder = it.sortOrder) },
         )
 
-    fun toPayload(flight: FlightJourney): FlightSharePayload =
+    /**
+     * The flight's add data plus its [passengers] as name + seat (ADR-046); passengers
+     * with neither are left out, blank-named seat-only rows travel as seats.
+     */
+    fun toPayload(
+        flight: FlightJourney,
+        passengers: List<FlightPassenger> = emptyList(),
+    ): FlightSharePayload =
         FlightSharePayload(
             version = ShareLinkCodec.SUPPORTED_VERSION,
             airlineIata = flight.airlineIata,
@@ -81,6 +89,11 @@ object SharePayloadMappers {
             schedArr = flight.schedArr?.epochSecond,
             depTerminal = flight.depTerminal,
             arrTerminal = flight.arrTerminal,
+            passengers =
+                passengers
+                    .sortedBy { it.sortOrder }
+                    .filter { it.name.isNotBlank() || it.seat.isNotBlank() }
+                    .map { SharedFlightPassenger(name = it.name.trim(), seat = it.seat.trim()) },
         )
 
     /**

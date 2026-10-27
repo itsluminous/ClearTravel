@@ -207,6 +207,28 @@ data class FlightJourneyDto(
     val deletedAt: Long? = null,
 )
 
+/**
+ * Added in ADR-046 (additive — readers of older backups see an empty list and the
+ * importer backfills one passenger per seated flight instead). The passenger's own
+ * boarding pass follows the ADR-038 rule under `boarding_passes/<passengerId>`.
+ */
+@Serializable
+data class FlightPassengerDto(
+    val id: String,
+    val flightId: String,
+    val name: String = "",
+    val seat: String = "",
+    val pnrBookingRef: String = "",
+    val boardingPassPath: String? = null,
+    val sequenceNumber: String = "",
+    val cabinClass: String = "",
+    val sortOrder: Int = 0,
+    /** True when this passenger's pass bytes are bundled under `boarding_passes/<passengerId>`. */
+    val boardingPassBundled: Boolean = false,
+    val updatedAt: Long,
+    val deletedAt: Long? = null,
+)
+
 @Serializable
 data class AttachmentDto(
     val id: String,
@@ -262,8 +284,16 @@ data class BackupSnapshot(
     val trainRouteStops: List<TrainRouteStopDto> = emptyList(),
     val trainCoaches: List<TrainCoachDto> = emptyList(),
     val flightJourneys: List<FlightJourneyDto> = emptyList(),
+    /** ADR-046; absent (empty) in backups written before it. */
+    val flightPassengers: List<FlightPassengerDto> = emptyList(),
     val attachments: List<AttachmentDto> = emptyList(),
     val travelDocuments: List<TravelDocumentDto> = emptyList(),
+    /**
+     * True when the ZIP had NO `flight_passengers.json` at all — a pre-ADR-046 writer —
+     * so the importer backfills one passenger per seated flight (an empty list from a
+     * newer writer is the truth and is left alone).
+     */
+    val writtenBeforePassengers: Boolean = false,
 )
 
 /** ZIP entry names — the frozen file layout of a backup (ADR-015). */
@@ -280,16 +310,21 @@ object BackupEntries {
     const val TRAIN_ROUTE_STOPS = "entities/train_route_stops.json"
     const val TRAIN_COACHES = "entities/train_coaches.json"
     const val FLIGHT_JOURNEYS = "entities/flight_journeys.json"
+    const val FLIGHT_PASSENGERS = "entities/flight_passengers.json"
     const val ATTACHMENTS = "entities/attachments.json"
     const val TRAVEL_DOCUMENTS = "entities/travel_documents.json"
     const val ATTACHMENT_DIR = "attachments/"
 
-    /** ADR-038: bundled boarding-pass bytes, keyed by flight id (older readers ignore the directory). */
+    /**
+     * ADR-038: bundled boarding-pass bytes, keyed by flight id (older readers ignore the
+     * directory); since ADR-046 also by PASSENGER id — both are UUIDs, so one directory.
+     */
     const val BOARDING_PASS_DIR = "boarding_passes/"
 
     fun attachmentEntry(attachmentId: String): String = ATTACHMENT_DIR + attachmentId
 
-    fun boardingPassEntry(flightId: String): String = BOARDING_PASS_DIR + flightId
+    /** Entry of a flight row's (legacy mirror) pass, or — the same shape — a passenger's own pass. */
+    fun boardingPassEntry(ownerId: String): String = BOARDING_PASS_DIR + ownerId
 
     /** Manifest count keys, one per entity file. */
     const val KEY_TRIPS = "trips"
@@ -303,6 +338,7 @@ object BackupEntries {
     const val KEY_TRAIN_ROUTE_STOPS = "train_route_stops"
     const val KEY_TRAIN_COACHES = "train_coaches"
     const val KEY_FLIGHT_JOURNEYS = "flight_journeys"
+    const val KEY_FLIGHT_PASSENGERS = "flight_passengers"
     const val KEY_ATTACHMENTS = "attachments"
     const val KEY_TRAVEL_DOCUMENTS = "travel_documents"
 }

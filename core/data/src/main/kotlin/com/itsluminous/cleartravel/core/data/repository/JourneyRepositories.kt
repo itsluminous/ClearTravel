@@ -5,6 +5,8 @@ import com.itsluminous.cleartravel.core.data.provider.TrainStatusResult
 import com.itsluminous.cleartravel.core.model.Attachment
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
+import com.itsluminous.cleartravel.core.model.FlightWithPassengers
 import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
@@ -92,11 +94,16 @@ interface TrainRepository {
     suspend fun delete(id: String)
 }
 
-/** Flight journeys aggregate (ADR-004). */
+/** Flight journeys aggregate (ADR-004) + passengers (ADR-046). */
 interface FlightRepository {
     fun observeActive(): Flow<List<FlightJourney>>
 
     fun observeArchived(): Flow<List<FlightJourney>>
+
+    /** Active journeys with their live passengers in `sortOrder` (ADR-046). */
+    fun observeActiveWithPassengers(): Flow<List<FlightWithPassengers>>
+
+    fun observeArchivedWithPassengers(): Flow<List<FlightWithPassengers>>
 
     fun observeFlight(id: String): Flow<FlightJourney?>
 
@@ -107,7 +114,8 @@ interface FlightRepository {
      * [flightNumber] on [date], or null. Inputs are normalized per [FlightIdentity]
      * (airline trimmed + case-folded; flight number trimmed, case-folded, leading
      * zeros dropped so a BCBP-stripped "101" matches a hand-typed "0101"). Duplicate
-     * guard for every add path (ADR-025); a tombstoned journey frees its slot.
+     * guard for every add path (ADR-025); a tombstoned journey frees its slot. Since
+     * ADR-046 a match is where a NEW PASSENGER may be added — see [FlightPassengerMatching].
      */
     suspend fun findByFlight(
         airlineIata: String,
@@ -117,6 +125,33 @@ interface FlightRepository {
 
     /** Upserts [flight] with a bumped `updatedAt`; returns the stored copy. */
     suspend fun save(flight: FlightJourney): FlightJourney
+
+    /** Live passengers of [flightId] ordered by `sortOrder` (ADR-046). */
+    fun observePassengers(flightId: String): Flow<List<FlightPassenger>>
+
+    suspend fun getPassengers(flightId: String): List<FlightPassenger>
+
+    /**
+     * Upserts [passengers] (all re-pointed at [flightId], same bumped `updatedAt`) and
+     * re-syncs the flight row's mirror columns from the resulting passenger list
+     * (ADR-046 decision 2). Returns the stored copies.
+     */
+    suspend fun savePassengers(
+        flightId: String,
+        passengers: List<FlightPassenger>,
+    ): List<FlightPassenger>
+
+    /**
+     * Replaces the passenger set: live rows absent from [passengers] (by id) are
+     * tombstoned, the rest upserted with `sortOrder` = list position; mirror re-synced.
+     */
+    suspend fun replacePassengers(
+        flightId: String,
+        passengers: List<FlightPassenger>,
+    ): List<FlightPassenger>
+
+    /** Soft-deletes one passenger and re-syncs its flight's mirror columns. */
+    suspend fun deletePassenger(id: String)
 
     /**
      * Writes a provider fetch (ADR-005) into Room: status always, times/gates/
@@ -133,8 +168,102 @@ interface FlightRepository {
         archived: Boolean,
     )
 
-    /** Soft-deletes the flight AND its attachments. */
+    /** Soft-deletes the flight AND its passengers and attachments. */
     suspend fun delete(id: String)
+}
+
+/**
+ * ADR-046: the PURE rule deciding whether an incoming passenger (from a boarding pass,
+ * a confirmation, a form row or a shared link) is already on a flight. Shared by the
+ * Room repository, every fake and the form ViewModel so all add paths agree.
+ */
+object FlightPassengerMatching {
+    private val HONORIFICS = setOf("MR", "MRS", "MS", "MISS", "MSTR", "MASTER", "DR", "PROF", "SHRI", "SMT")
+
+    /** A passenger worth adding: a name or a seat. Anything less is "no passenger info" → ADR-025 refusal. */
+    fun hasPassengerInfo(passenger: FlightPassenger): Boolean = passenger.name.isNotBlank() || passenger.seat.isNotBlank()
+
+    /**
+     * Upper-cased letter tokens, honorifics dropped, as a SORTED set — so the BCBP
+     * `SHARMA/RAHUL`, a ticket's `Rahul Sharma` and an OTA's `MR RAHUL SHARMA` are one
+     * person. Empty when the name carries no letters.
+     */
+    fun normalizeName(raw: String): Set<String> =
+        raw
+            .uppercase()
+            .split(Regex("[^A-Z]+"))
+            .filter { it.isNotBlank() && it !in HONORIFICS }
+            .toSortedSet()
+
+    /** Upper-cased seat without leading zeros (`010A` → `10A`), empty when blank. */
+    fun normalizeSeat(raw: String): String = raw.trim().uppercase().trimStart('0')
+
+    /**
+     * The existing passenger [incoming] denotes, or null when they are a new person:
+     * names decide when both sides have one (a different name is never a match, even on
+     * the same seat); otherwise the seat; otherwise the sequence number, then the
+     * passenger PNR.
+     */
+    fun findMatch(
+        existing: List<FlightPassenger>,
+        incoming: FlightPassenger,
+    ): FlightPassenger? {
+        val incomingName = normalizeName(incoming.name)
+        val incomingSeat = normalizeSeat(incoming.seat)
+        val incomingSequence = incoming.sequenceNumber.trim().trimStart('0')
+        val incomingPnr = incoming.pnrBookingRef.trim().uppercase()
+        // Names first: the most specific signal when both sides carry one.
+        if (incomingName.isNotEmpty()) {
+            val named = existing.filter { normalizeName(it.name).isNotEmpty() }
+            named.firstOrNull { normalizeName(it.name) == incomingName }?.let { return it }
+            // A named passenger that matches NO existing name is only "the same" as a
+            // nameless row with the same seat (a legacy backfill waiting for its name).
+            val nameless = existing.filter { normalizeName(it.name).isEmpty() }
+            return nameless.firstOrNull { incomingSeat.isNotEmpty() && normalizeSeat(it.seat) == incomingSeat }
+        }
+        if (incomingSeat.isNotEmpty()) {
+            existing.firstOrNull { normalizeSeat(it.seat) == incomingSeat }?.let { return it }
+            return null
+        }
+        if (incomingSequence.isNotEmpty()) {
+            existing.firstOrNull { it.sequenceNumber.trim().trimStart('0') == incomingSequence }?.let { return it }
+        }
+        if (incomingPnr.isNotEmpty()) {
+            existing.firstOrNull { it.pnrBookingRef.trim().uppercase() == incomingPnr }?.let { return it }
+        }
+        return null
+    }
+
+    /** [existing] with every blank field filled from [incoming] (name, seat, PNR, sequence, cabin — never the pass). */
+    fun fillBlanks(
+        existing: FlightPassenger,
+        incoming: FlightPassenger,
+    ): FlightPassenger =
+        existing.copy(
+            name = existing.name.ifBlank { incoming.name },
+            seat = existing.seat.ifBlank { incoming.seat },
+            pnrBookingRef = existing.pnrBookingRef.ifBlank { incoming.pnrBookingRef },
+            sequenceNumber = existing.sequenceNumber.ifBlank { incoming.sequenceNumber },
+            cabinClass = existing.cabinClass.ifBlank { incoming.cabinClass },
+        )
+
+    /**
+     * The flight row's mirror columns for [passengers] (live, in `sortOrder`): seat of
+     * passenger #1, path of the first pass found. Empty / null when there is none.
+     */
+    fun mirror(
+        flight: FlightJourney,
+        passengers: List<FlightPassenger>,
+    ): FlightJourney =
+        flight.copy(
+            seat =
+                passengers
+                    .firstOrNull()
+                    ?.seat
+                    ?.trim()
+                    .orEmpty(),
+            boardingPassPath = passengers.firstNotNullOfOrNull { it.boardingPassPath },
+        )
 }
 
 /** File attachments aggregate — polymorphic owner (ADR-004). */

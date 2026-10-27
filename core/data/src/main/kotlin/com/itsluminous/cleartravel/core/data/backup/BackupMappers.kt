@@ -8,6 +8,7 @@ import com.itsluminous.cleartravel.core.model.ChecklistPreset
 import com.itsluminous.cleartravel.core.model.ChecklistPresetItem
 import com.itsluminous.cleartravel.core.model.CommuteMode
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
 import com.itsluminous.cleartravel.core.model.FlightStatus
 import com.itsluminous.cleartravel.core.model.ItineraryItem
 import com.itsluminous.cleartravel.core.model.ItineraryItemType
@@ -370,6 +371,39 @@ fun FlightJourneyDto.toModel(): FlightJourney =
         boardingPassPath = boardingPassPath,
         checkInUrl = checkInUrl,
         googleEventId = googleEventId,
+        updatedAt = updatedAt.toInstant(),
+        deletedAt = deletedAt?.toInstant(),
+    )
+
+// ---- Flight passengers (ADR-046) ----
+
+fun FlightPassenger.toDto(boardingPassBundled: Boolean = false): FlightPassengerDto =
+    FlightPassengerDto(
+        id = id,
+        flightId = flightId,
+        name = name,
+        seat = seat,
+        pnrBookingRef = pnrBookingRef,
+        boardingPassPath = boardingPassPath,
+        sequenceNumber = sequenceNumber,
+        cabinClass = cabinClass,
+        sortOrder = sortOrder,
+        boardingPassBundled = boardingPassBundled,
+        updatedAt = updatedAt.toEpochMilli(),
+        deletedAt = deletedAt?.toEpochMilli(),
+    )
+
+fun FlightPassengerDto.toModel(): FlightPassenger =
+    FlightPassenger(
+        id = id,
+        flightId = flightId,
+        name = name,
+        seat = seat,
+        pnrBookingRef = pnrBookingRef,
+        boardingPassPath = boardingPassPath,
+        sequenceNumber = sequenceNumber,
+        cabinClass = cabinClass,
+        sortOrder = sortOrder,
         updatedAt = updatedAt.toInstant(),
         deletedAt = deletedAt?.toInstant(),
     )

@@ -11,7 +11,8 @@ import java.io.File
  * - `files/documents/<id>.<ext>` — travel documents (ADR-027)
  * - `files/attachments/<id>[.<ext>]` — attachment rows: booking confirmations,
  *   Drive-restored files (ADR-015/016/017)
- * - `files/boarding_passes/<flightId>.<ext>` — the flight row's boarding-pass path
+ * - `files/boarding_passes/<passengerId>.<ext>` — each passenger's boarding pass (ADR-046);
+ *   pre-046 files are `<flightId>.<ext>` and stay referenced as-is
  * - `files/backups/` — the newest local backup ZIPs (portable envelopes since v2)
  *
  * Everything under `cacheDir` (share copies, Drive downloads, temp files) is

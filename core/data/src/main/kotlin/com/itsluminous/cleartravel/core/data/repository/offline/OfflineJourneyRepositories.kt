@@ -4,6 +4,7 @@ import com.itsluminous.cleartravel.core.data.provider.FlightStatusResult
 import com.itsluminous.cleartravel.core.data.provider.TrainStatusResult
 import com.itsluminous.cleartravel.core.data.repository.AttachmentRepository
 import com.itsluminous.cleartravel.core.data.repository.FlightIdentity
+import com.itsluminous.cleartravel.core.data.repository.FlightPassengerMatching
 import com.itsluminous.cleartravel.core.data.repository.FlightRepository
 import com.itsluminous.cleartravel.core.data.repository.TrainRepository
 import com.itsluminous.cleartravel.core.database.dao.AttachmentDao
@@ -14,6 +15,8 @@ import com.itsluminous.cleartravel.core.database.entity.toModel
 import com.itsluminous.cleartravel.core.model.Attachment
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
+import com.itsluminous.cleartravel.core.model.FlightWithPassengers
 import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
@@ -21,6 +24,7 @@ import com.itsluminous.cleartravel.core.model.TrainTicket
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -166,7 +170,11 @@ class OfflineTrainRepository
         }
     }
 
-/** Room-backed [FlightRepository]. Every write bumps `updatedAt` (ADR-002). */
+/**
+ * Room-backed [FlightRepository]. Every write bumps `updatedAt` (ADR-002). Passenger
+ * writes end with [syncMirror] so the flight row's `seat` / `boardingPassPath` keep
+ * reading as passenger #1's (ADR-046 decision 2).
+ */
 @Singleton
 class OfflineFlightRepository
     @Inject
@@ -178,6 +186,12 @@ class OfflineFlightRepository
         override fun observeActive(): Flow<List<FlightJourney>> = flightDao.observeActive().map { rows -> rows.map { it.toModel() } }
 
         override fun observeArchived(): Flow<List<FlightJourney>> = flightDao.observeArchived().map { rows -> rows.map { it.toModel() } }
+
+        override fun observeActiveWithPassengers(): Flow<List<FlightWithPassengers>> =
+            flightDao.observeActiveWithPassengers().map { rows -> rows.map { it.toModel() } }
+
+        override fun observeArchivedWithPassengers(): Flow<List<FlightWithPassengers>> =
+            flightDao.observeArchivedWithPassengers().map { rows -> rows.map { it.toModel() } }
 
         override fun observeFlight(id: String): Flow<FlightJourney?> = flightDao.observeById(id).map { it?.toModel() }
 
@@ -198,6 +212,57 @@ class OfflineFlightRepository
             val stamped = flight.copy(updatedAt = clock.instant())
             flightDao.upsert(stamped.toEntity())
             return stamped
+        }
+
+        override fun observePassengers(flightId: String): Flow<List<FlightPassenger>> =
+            flightDao.observePassengers(flightId).map { rows -> rows.map { it.toModel() } }
+
+        override suspend fun getPassengers(flightId: String): List<FlightPassenger> = flightDao.getPassengers(flightId).map { it.toModel() }
+
+        override suspend fun savePassengers(
+            flightId: String,
+            passengers: List<FlightPassenger>,
+        ): List<FlightPassenger> {
+            val now = clock.instant()
+            val stamped = passengers.map { it.copy(flightId = flightId, updatedAt = now) }
+            if (stamped.isNotEmpty()) flightDao.upsertPassengers(stamped.map { it.toEntity() })
+            syncMirror(flightId, now)
+            return stamped
+        }
+
+        override suspend fun replacePassengers(
+            flightId: String,
+            passengers: List<FlightPassenger>,
+        ): List<FlightPassenger> {
+            val now = clock.instant()
+            val keep = passengers.map { it.id }.toSet()
+            flightDao
+                .getPassengers(flightId)
+                .filter { it.id !in keep }
+                .forEach { flightDao.softDeletePassenger(it.id, now) }
+            val stamped = passengers.mapIndexed { index, p -> p.copy(flightId = flightId, sortOrder = index, updatedAt = now) }
+            if (stamped.isNotEmpty()) flightDao.upsertPassengers(stamped.map { it.toEntity() })
+            syncMirror(flightId, now)
+            return stamped
+        }
+
+        override suspend fun deletePassenger(id: String) {
+            val passenger = flightDao.getPassenger(id) ?: return
+            val now = clock.instant()
+            flightDao.softDeletePassenger(id, now)
+            syncMirror(passenger.flightId, now)
+        }
+
+        /** Re-derives the flight row's mirror columns from its live passengers; a no-op when nothing changed. */
+        private suspend fun syncMirror(
+            flightId: String,
+            now: Instant,
+        ) {
+            val current = flightDao.getById(flightId)?.toModel() ?: return
+            val mirrored = FlightPassengerMatching.mirror(current, flightDao.getPassengers(flightId).map { it.toModel() })
+            if (mirrored.seat != current.seat || mirrored.boardingPassPath != current.boardingPassPath) {
+                flightDao.upsert(mirrored.copy(updatedAt = now).toEntity())
+            }
         }
 
         override suspend fun applyStatusResult(
@@ -234,6 +299,7 @@ class OfflineFlightRepository
 
         override suspend fun delete(id: String) {
             val now = clock.instant()
+            flightDao.softDeletePassengersFor(id, now)
             attachmentDao.softDeleteForOwner(AttachmentOwnerType.FLIGHT, id, now)
             flightDao.softDelete(id, now)
         }
