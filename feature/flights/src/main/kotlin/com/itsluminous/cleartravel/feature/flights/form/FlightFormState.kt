@@ -9,6 +9,8 @@ import com.itsluminous.cleartravel.core.ocr.model.BoardingPassExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassSource
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationSource
+import com.itsluminous.cleartravel.core.ocr.model.ExtractedField
+import com.itsluminous.cleartravel.core.ocr.model.ExtractedFlight
 import com.itsluminous.cleartravel.feature.flights.text.FlightTextExtraction
 import java.time.Instant
 import java.time.LocalDate
@@ -144,90 +146,93 @@ data class FlightFormState(
             )
         }
 
-        /** Prefill from a boarding-pass extraction — confidence markers per field. */
-        fun fromExtraction(
-            extraction: BoardingPassExtraction,
-            passUri: String,
-        ): FlightFormState {
-            fun conf(field: com.itsluminous.cleartravel.core.ocr.model.ExtractedField) = field.confidence
+        /**
+         * Prefill from ONE extracted flight segment (ADR-045) — confidence markers per
+         * field; times arrive as `HH:mm` and are re-formatted the way the form shows
+         * them; terminals are not form fields (the status check owns them) but travel on
+         * the state so they reach the journey and the banner; the passenger name is
+         * dropped (the form has no such field).
+         */
+        fun fromFlight(flight: ExtractedFlight): FlightFormState {
+            fun conf(field: ExtractedField) = field.confidence
+
+            fun timeText(field: ExtractedField): String =
+                field.value
+                    ?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
+                    ?.format(TIME_FORMAT)
+                    .orEmpty()
 
             return FlightFormState(
                 airlineIata =
-                    extraction.carrier.value
+                    flight.carrier.value
                         .orEmpty()
                         .uppercase(),
-                flightNumber = extraction.flightNumber.value.orEmpty(),
-                dateText = extraction.flightDate.value.orEmpty(),
-                pnr = extraction.pnr.value.orEmpty(),
-                seat = extraction.seat.value.orEmpty(),
+                flightNumber = flight.flightNumber.value.orEmpty(),
+                dateText = flight.flightDate.value.orEmpty(),
+                pnr = flight.pnr.value.orEmpty(),
+                seat = flight.seat.value.orEmpty(),
+                cabinClass = flight.cabinClass.value.orEmpty(),
                 depAirport =
-                    extraction.fromAirport.value
+                    flight.fromAirport.value
                         .orEmpty()
                         .uppercase(),
                 arrAirport =
-                    extraction.toAirport.value
+                    flight.toAirport.value
                         .orEmpty()
                         .uppercase(),
+                depTimeText = timeText(flight.depTime),
+                arrTimeText = timeText(flight.arrTime),
+                depTerminal = flight.depTerminal.value.orEmpty(),
+                arrTerminal = flight.arrTerminal.value.orEmpty(),
                 confidences =
                     mapOf(
-                        FlightField.AIRLINE to conf(extraction.carrier),
-                        FlightField.FLIGHT_NUMBER to conf(extraction.flightNumber),
-                        FlightField.DATE to conf(extraction.flightDate),
-                        FlightField.PNR to conf(extraction.pnr),
-                        FlightField.SEAT to conf(extraction.seat),
-                        FlightField.DEP_AIRPORT to conf(extraction.fromAirport),
-                        FlightField.ARR_AIRPORT to conf(extraction.toAirport),
+                        FlightField.AIRLINE to conf(flight.carrier),
+                        FlightField.FLIGHT_NUMBER to conf(flight.flightNumber),
+                        FlightField.DATE to conf(flight.flightDate),
+                        FlightField.PNR to conf(flight.pnr),
+                        FlightField.SEAT to conf(flight.seat),
+                        FlightField.CABIN to conf(flight.cabinClass),
+                        FlightField.DEP_AIRPORT to conf(flight.fromAirport),
+                        FlightField.ARR_AIRPORT to conf(flight.toAirport),
                     ).filterValues { it != ExtractionConfidence.NONE },
-                prefillSource = extraction.source,
-                pendingPassUri = passUri,
             )
         }
 
         /**
-         * Prefill from a booking-confirmation extraction — confidence markers per
-         * field, first flight only; [FlightFormState.returnLegHint] surfaces further
-         * detected segments so the UI can suggest adding the return leg separately.
+         * Prefill from a boarding-pass extraction's FIRST segment (the single-pass path;
+         * multi-pass files go through the ADR-045 review step first) with the source
+         * indicator and the picked file pending storage.
+         */
+        fun fromExtraction(
+            extraction: BoardingPassExtraction,
+            passUri: String,
+        ): FlightFormState = fromBoardingPassFlight(extraction.first, extraction.source, passUri)
+
+        /** One reviewed boarding-pass segment → form, file pending storage (ADR-045). */
+        fun fromBoardingPassFlight(
+            flight: ExtractedFlight,
+            source: BoardingPassSource,
+            passUri: String,
+        ): FlightFormState = fromFlight(flight).copy(prefillSource = source, pendingPassUri = passUri)
+
+        /**
+         * Prefill from a booking-confirmation extraction's FIRST segment (the one-way
+         * path; multi-flight confirmations go through the ADR-045 review step first).
+         * The return-leg hint stays for callers that bypass the review.
          */
         fun fromBookingExtraction(
             extraction: BookingConfirmationExtraction,
             bookingUri: String,
-        ): FlightFormState {
-            fun conf(field: com.itsluminous.cleartravel.core.ocr.model.ExtractedField) = field.confidence
+        ): FlightFormState =
+            fromBookingFlight(extraction.first, extraction.source, bookingUri)
+                .copy(returnLegHint = extraction.additionalFlights > 0)
 
-            return FlightFormState(
-                airlineIata =
-                    extraction.carrier.value
-                        .orEmpty()
-                        .uppercase(),
-                flightNumber = extraction.flightNumber.value.orEmpty(),
-                dateText = extraction.flightDate.value.orEmpty(),
-                pnr = extraction.pnr.value.orEmpty(),
-                seat = extraction.seat.value.orEmpty(),
-                cabinClass = extraction.cabinClass.value.orEmpty(),
-                depAirport =
-                    extraction.fromAirport.value
-                        .orEmpty()
-                        .uppercase(),
-                arrAirport =
-                    extraction.toAirport.value
-                        .orEmpty()
-                        .uppercase(),
-                confidences =
-                    mapOf(
-                        FlightField.AIRLINE to conf(extraction.carrier),
-                        FlightField.FLIGHT_NUMBER to conf(extraction.flightNumber),
-                        FlightField.DATE to conf(extraction.flightDate),
-                        FlightField.PNR to conf(extraction.pnr),
-                        FlightField.SEAT to conf(extraction.seat),
-                        FlightField.CABIN to conf(extraction.cabinClass),
-                        FlightField.DEP_AIRPORT to conf(extraction.fromAirport),
-                        FlightField.ARR_AIRPORT to conf(extraction.toAirport),
-                    ).filterValues { it != ExtractionConfidence.NONE },
-                bookingSource = extraction.source,
-                pendingBookingUri = bookingUri,
-                returnLegHint = extraction.additionalFlights > 0,
-            )
-        }
+        /** One reviewed booking-confirmation segment → form, file pending attachment (ADR-045). */
+        fun fromBookingFlight(
+            flight: ExtractedFlight,
+            source: BookingConfirmationSource,
+            bookingUri: String,
+        ): FlightFormState = fromFlight(flight).copy(bookingSource = source, pendingBookingUri = bookingUri)
 
         /**
          * Prefill from pasted/shared SMS or email text (ADR-042) — confidence markers per
@@ -235,9 +240,9 @@ data class FlightFormState(
          * them; the passenger name is dropped (the form has no such field).
          */
         fun fromTextExtraction(extraction: FlightTextExtraction): FlightFormState {
-            fun conf(field: com.itsluminous.cleartravel.core.ocr.model.ExtractedField) = field.confidence
+            fun conf(field: ExtractedField) = field.confidence
 
-            fun timeText(field: com.itsluminous.cleartravel.core.ocr.model.ExtractedField): String =
+            fun timeText(field: ExtractedField): String =
                 field.value
                     ?.let { runCatching { LocalTime.parse(it) }.getOrNull() }
                     ?.format(TIME_FORMAT)

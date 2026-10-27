@@ -1,13 +1,25 @@
 {
-  "passengerName": { "value": "ARJUN NAIR", "confidence": "HIGH" },
-  "pnr": { "value": "T5K2M9", "confidence": "HIGH" },
-  "carrier": { "value": "AI", "confidence": "MEDIUM" },
-  "flightNumber": { "value": "503", "confidence": "MEDIUM" },
-  "fromAirport": { "value": "COK", "confidence": "MEDIUM" },
-  "toAirport": { "value": "DEL", "confidence": "MEDIUM" },
-  "flightDate": { "value": "2026-09-26", "confidence": "HIGH" },
-  "cabinClass": { "value": "BUSINESS", "confidence": "HIGH" },
-  "seat": { "value": null, "confidence": "NONE" },
-  "additionalFlights": 1,
+  "flights": [
+    {
+      "passengerName": { "value": "ARJUN NAIR", "confidence": "HIGH" },
+      "pnr": { "value": "T5K2M9", "confidence": "HIGH" },
+      "carrier": { "value": "AI", "confidence": "MEDIUM" },
+      "flightNumber": { "value": "503", "confidence": "MEDIUM" },
+      "fromAirport": { "value": "COK", "confidence": "MEDIUM" },
+      "toAirport": { "value": "DEL", "confidence": "MEDIUM" },
+      "flightDate": { "value": "2026-09-26", "confidence": "HIGH" },
+      "cabinClass": { "value": "BUSINESS", "confidence": "HIGH" }
+    },
+    {
+      "passengerName": { "value": "ARJUN NAIR", "confidence": "HIGH" },
+      "pnr": { "value": "T5K2M9", "confidence": "HIGH" },
+      "carrier": { "value": "AI", "confidence": "MEDIUM" },
+      "flightNumber": { "value": "504", "confidence": "MEDIUM" },
+      "fromAirport": { "value": "DEL", "confidence": "MEDIUM" },
+      "toAirport": { "value": "COK", "confidence": "MEDIUM" },
+      "flightDate": { "value": "2026-10-03", "confidence": "HIGH" },
+      "cabinClass": { "value": "BUSINESS", "confidence": "HIGH" }
+    }
+  ],
   "source": "OCR_TEXT"
 }

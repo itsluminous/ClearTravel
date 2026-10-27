@@ -5,6 +5,7 @@ import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassSource
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedField
+import com.itsluminous.cleartravel.core.ocr.model.ExtractedFlight
 import com.itsluminous.cleartravel.core.testing.MainDispatcherRule
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -31,7 +32,7 @@ class SharedFileIntakeViewModelTest {
         SharedDocProbeResult(
             boardingPass =
                 BoardingPassExtraction(
-                    pnr = ExtractedField.of("ABC123", ExtractionConfidence.HIGH),
+                    flights = listOf(ExtractedFlight(pnr = ExtractedField.of("ABC123", ExtractionConfidence.HIGH))),
                     source = BoardingPassSource.BARCODE,
                 ),
         )

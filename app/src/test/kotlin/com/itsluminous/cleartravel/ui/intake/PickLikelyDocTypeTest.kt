@@ -7,6 +7,7 @@ import com.itsluminous.cleartravel.core.ocr.model.BoardingPassSource
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationSource
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedField
+import com.itsluminous.cleartravel.core.ocr.model.ExtractedFlight
 import com.itsluminous.cleartravel.core.ocr.model.TrainTicketExtraction
 import org.junit.Test
 
@@ -30,7 +31,11 @@ class PickLikelyDocTypeTest {
         val probe =
             SharedDocProbeResult(
                 trainTicket = richTrain,
-                boardingPass = BoardingPassExtraction(pnr = high("ABC123"), source = BoardingPassSource.BARCODE),
+                boardingPass =
+                    BoardingPassExtraction(
+                        flights = listOf(ExtractedFlight(pnr = high("ABC123"))),
+                        source = BoardingPassSource.BARCODE,
+                    ),
             )
 
         assertThat(pickLikelyDocType(probe)).isEqualTo(SharedDocType.BOARDING_PASS)
@@ -41,8 +46,16 @@ class PickLikelyDocTypeTest {
         val probe =
             SharedDocProbeResult(
                 trainTicket = richTrain,
-                boardingPass = BoardingPassExtraction(pnr = low("8524317690"), source = BoardingPassSource.OCR_TEXT),
-                bookingConfirmation = BookingConfirmationExtraction(pnr = medium("MMT123456"), source = BookingConfirmationSource.OCR_TEXT),
+                boardingPass =
+                    BoardingPassExtraction(
+                        flights = listOf(ExtractedFlight(pnr = low("8524317690"))),
+                        source = BoardingPassSource.OCR_TEXT,
+                    ),
+                bookingConfirmation =
+                    BookingConfirmationExtraction(
+                        flights = listOf(ExtractedFlight(pnr = medium("MMT123456"))),
+                        source = BookingConfirmationSource.OCR_TEXT,
+                    ),
             )
 
         assertThat(pickLikelyDocType(probe)).isEqualTo(SharedDocType.TRAIN_TICKET)
@@ -54,13 +67,22 @@ class PickLikelyDocTypeTest {
             SharedDocProbeResult(
                 bookingConfirmation =
                     BookingConfirmationExtraction(
-                        pnr = high("X7Y8Z9"),
-                        carrier = high("AI"),
-                        flightNumber = high("0865"),
-                        flightDate = medium("2026-10-01"),
+                        flights =
+                            listOf(
+                                ExtractedFlight(
+                                    pnr = high("X7Y8Z9"),
+                                    carrier = high("AI"),
+                                    flightNumber = high("0865"),
+                                    flightDate = medium("2026-10-01"),
+                                ),
+                            ),
                         source = BookingConfirmationSource.OCR_TEXT,
                     ),
-                boardingPass = BoardingPassExtraction(carrier = medium("AI"), source = BoardingPassSource.OCR_TEXT),
+                boardingPass =
+                    BoardingPassExtraction(
+                        flights = listOf(ExtractedFlight(carrier = medium("AI"))),
+                        source = BoardingPassSource.OCR_TEXT,
+                    ),
             )
 
         assertThat(pickLikelyDocType(probe)).isEqualTo(SharedDocType.BOOKING_CONFIRMATION)
@@ -71,7 +93,11 @@ class PickLikelyDocTypeTest {
         val probe =
             SharedDocProbeResult(
                 trainTicket = TrainTicketExtraction(pnr = low("1234567890"), trainNumber = low("12345")),
-                boardingPass = BoardingPassExtraction(pnr = medium("ABC123"), source = BoardingPassSource.OCR_TEXT),
+                boardingPass =
+                    BoardingPassExtraction(
+                        flights = listOf(ExtractedFlight(pnr = medium("ABC123"))),
+                        source = BoardingPassSource.OCR_TEXT,
+                    ),
             )
 
         assertThat(pickLikelyDocType(probe)).isEqualTo(SharedDocType.BOARDING_PASS)
@@ -87,7 +113,11 @@ class PickLikelyDocTypeTest {
         val probe =
             SharedDocProbeResult(
                 trainTicket = TrainTicketExtraction(pnr = high("1234567890")),
-                bookingConfirmation = BookingConfirmationExtraction(pnr = high("ABC123"), source = BookingConfirmationSource.OCR_TEXT),
+                bookingConfirmation =
+                    BookingConfirmationExtraction(
+                        flights = listOf(ExtractedFlight(pnr = high("ABC123"))),
+                        source = BookingConfirmationSource.OCR_TEXT,
+                    ),
             )
 
         assertThat(pickLikelyDocType(probe)).isNull()

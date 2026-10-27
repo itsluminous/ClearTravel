@@ -1,0 +1,31 @@
+{
+  "flights": [
+    {
+      "passengerName": { "value": "RAHUL SHARMA", "confidence": "HIGH" },
+      "pnr": { "value": "X8B2Q4", "confidence": "HIGH" },
+      "carrier": { "value": "6E", "confidence": "HIGH" },
+      "flightNumber": { "value": "2345", "confidence": "HIGH" },
+      "fromAirport": { "value": "DEL", "confidence": "HIGH" },
+      "toAirport": { "value": "BOM", "confidence": "HIGH" },
+      "flightDate": { "value": "2025-09-20", "confidence": "HIGH" },
+      "depTime": { "value": "16:25", "confidence": "HIGH" },
+      "depTerminal": { "value": "1", "confidence": "MEDIUM" },
+      "seat": { "value": "12A", "confidence": "HIGH" },
+      "sequenceNumber": { "value": "25", "confidence": "HIGH" }
+    },
+    {
+      "passengerName": { "value": "RAHUL SHARMA", "confidence": "HIGH" },
+      "pnr": { "value": "X8B2Q4", "confidence": "HIGH" },
+      "carrier": { "value": "6E", "confidence": "HIGH" },
+      "flightNumber": { "value": "777", "confidence": "HIGH" },
+      "fromAirport": { "value": "BOM", "confidence": "HIGH" },
+      "toAirport": { "value": "GOI", "confidence": "HIGH" },
+      "flightDate": { "value": "2025-09-21", "confidence": "HIGH" },
+      "depTime": { "value": "08:55", "confidence": "HIGH" },
+      "depTerminal": { "value": "2", "confidence": "MEDIUM" },
+      "seat": { "value": "3C", "confidence": "HIGH" },
+      "sequenceNumber": { "value": "102", "confidence": "HIGH" }
+    }
+  ],
+  "source": "OCR_TEXT"
+}

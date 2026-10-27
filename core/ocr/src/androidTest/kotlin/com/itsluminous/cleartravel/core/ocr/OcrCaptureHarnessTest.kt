@@ -1,5 +1,7 @@
 package com.itsluminous.cleartravel.core.ocr
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -7,6 +9,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import com.itsluminous.cleartravel.core.ocr.extract.BookingConfirmationExtractor
 import com.itsluminous.cleartravel.core.ocr.extract.IrctcTicketExtractor
 import com.itsluminous.cleartravel.core.ocr.pipeline.BitmapPreprocessor
 import com.itsluminous.cleartravel.core.ocr.pipeline.OcrTextRecognizer
@@ -21,10 +24,10 @@ import java.io.File
 
 /**
  * DEVICE-ONLY capture harness, not a regression test (hence @Ignore): runs a real
- * ticket file through the SAME pipeline as `OcrPrefillService.prefillTrainTicket`
- * (rasterize -> preprocess -> ML Kit) and logs the RAW recognized text plus the
- * extraction under [TAG], so a new extractor fixture can be recorded from what
- * ML Kit actually sees (the PDF text layer is NOT what the extractor gets).
+ * ticket file through the SAME pipeline as `OcrPrefillService` (rasterize ->
+ * preprocess -> ML Kit) and logs the RAW recognized text plus the extraction under
+ * [TAG], so a new extractor fixture can be recorded from what ML Kit actually sees
+ * (the PDF text layer is NOT what the extractor gets).
  *
  * Usage:
  * ```
@@ -34,7 +37,9 @@ import java.io.File
  *   -Pandroid.testInstrumentationRunnerArguments.notIgnored=true   # or drop @Ignore locally
  * adb logcat -d -s OcrCapture
  * ```
- * Anonymize names before committing the captured text as a fixture.
+ * `captureFlightDocumentOcr` reads `capture.pdf` (EVERY page) or `capture.png` /
+ * `capture.jpg` (ADR-045 multi-flight fixtures). Anonymize names before committing
+ * the captured text as a fixture.
  */
 @Ignore("Manual capture harness — remove @Ignore locally to record OCR text from a device.")
 @RunWith(AndroidJUnit4::class)
@@ -63,6 +68,42 @@ class OcrCaptureHarnessTest {
         text.lines().forEachIndexed { index, line -> Log.i(TAG, "L%03d|%s".format(index, line)) }
         Log.i(TAG, "===== RAW OCR TEXT END =====")
         Log.i(TAG, "EXTRACTION: ${IrctcTicketExtractor().extract(text)}")
+    }
+
+    /**
+     * Flight documents (ADR-045): every page of `capture.pdf`, or the single image
+     * `capture.png`/`capture.jpg`, through the production pipeline; the per-page row
+     * text is logged with `P<page>|L<line>|` prefixes and the booking-confirmation
+     * extraction over the concatenated text follows.
+     */
+    @Test
+    fun captureFlightDocumentOcr() {
+        val context = InstrumentationRegistry.getInstrumentation().context
+        val dir = context.getExternalFilesDir(null)
+        val pdf = File(dir, CAPTURE_FILE)
+        val image = listOf("capture.png", "capture.jpg").map { File(dir, it) }.firstOrNull { it.exists() }
+        assumeTrue("No capture.pdf/png/jpg under ${dir?.absolutePath}", pdf.exists() || image != null)
+
+        val client = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+        val recognizer = OcrTextRecognizer(client)
+        val preprocessor = BitmapPreprocessor()
+        val pages: List<Bitmap> =
+            if (pdf.exists()) {
+                context.contentResolver.openFileDescriptor(Uri.fromFile(pdf), "r")!!.use {
+                    PdfPageRasterizer().rasterizeAll(it)
+                }
+            } else {
+                listOf(BitmapFactory.decodeFile(image!!.absolutePath))
+            }
+        val texts =
+            pages.mapIndexed { index, bitmap ->
+                val text = runBlocking { recognizer.recognize(preprocessor.preprocess(bitmap)) }
+                Log.i(TAG, "===== PAGE ${index + 1} RAW OCR TEXT BEGIN (${text.length} chars) =====")
+                text.lines().forEachIndexed { l, line -> Log.i(TAG, "P%d|L%03d|%s".format(index + 1, l, line)) }
+                Log.i(TAG, "===== PAGE ${index + 1} RAW OCR TEXT END =====")
+                text
+            }
+        Log.i(TAG, "BOOKING EXTRACTION: ${BookingConfirmationExtractor().extract(texts.joinToString("\n\n"))}")
     }
 
     private companion object {

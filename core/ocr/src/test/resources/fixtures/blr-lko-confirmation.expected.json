@@ -1,0 +1,35 @@
+{
+  "flights": [
+    {
+      "passengerName": { "value": "PRAKASH KUMAR", "confidence": "MEDIUM" },
+      "pnr": { "value": "R87T5G", "confidence": "HIGH" },
+      "carrier": { "value": "IX", "confidence": "MEDIUM" },
+      "flightNumber": { "value": "2019", "confidence": "MEDIUM" },
+      "fromAirport": { "value": "BLR", "confidence": "MEDIUM" },
+      "toAirport": { "value": "LKO", "confidence": "MEDIUM" },
+      "flightDate": { "value": "2026-10-29", "confidence": "MEDIUM" },
+      "depTime": { "value": "10:30", "confidence": "MEDIUM" },
+      "arrTime": { "value": "13:05", "confidence": "MEDIUM" },
+      "depTerminal": { "value": "2", "confidence": "MEDIUM" },
+      "arrTerminal": { "value": "3", "confidence": "MEDIUM" },
+      "cabinClass": { "value": "ECONOMY", "confidence": "LOW" },
+      "seat": { "value": "12A", "confidence": "MEDIUM" }
+    },
+    {
+      "passengerName": { "value": "PRAKASH KUMAR", "confidence": "MEDIUM" },
+      "pnr": { "value": "D2FE9V", "confidence": "HIGH" },
+      "carrier": { "value": "IX", "confidence": "MEDIUM" },
+      "flightNumber": { "value": "1542", "confidence": "MEDIUM" },
+      "fromAirport": { "value": "LKO", "confidence": "MEDIUM" },
+      "toAirport": { "value": "BLR", "confidence": "MEDIUM" },
+      "flightDate": { "value": "2026-10-31", "confidence": "MEDIUM" },
+      "depTime": { "value": "20:30", "confidence": "MEDIUM" },
+      "arrTime": { "value": "23:00", "confidence": "MEDIUM" },
+      "depTerminal": { "value": "3", "confidence": "MEDIUM" },
+      "arrTerminal": { "value": "2", "confidence": "MEDIUM" },
+      "cabinClass": { "value": "ECONOMY", "confidence": "LOW" },
+      "seat": { "value": "10A", "confidence": "MEDIUM" }
+    }
+  ],
+  "source": "OCR_TEXT"
+}

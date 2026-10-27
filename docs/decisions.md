@@ -30,7 +30,7 @@ how the code works; **amended** = active, but a later ADR changed part of it (na
 | 014 | App-shell integration — theme, deep links, share sheet, `RuleRegistry` hoist, hermetic e2e | active — notification-permission timing amended by 036 |
 | 015 | Backup, export & import — versioned ZIP, generic LWW merge, `BackupManager` seam | active — container superseded by 031 (v2 envelope); entity files added by 022, 027 |
 | 016 | Google integration — REST clients, state-store reconciliation, menu-hosted hooks | active — sealed uploads per 031 |
-| 017 | Booking-confirmation import — third add-flight path, attachment-row storage | active |
+| 017 | Booking-confirmation import — third add-flight path, attachment-row storage | active — first-leg + `additionalFlights` hint superseded by 045 |
 | 018 | Train route fetch — erail.in rule, hands-free auto-flow, pure `RouteMapper` | **amended** — erail demoted to fallback by 019 |
 | 019 | Train-route redesign — ixigo primary + erail fallback, offline route page, card actions | active — chained landing amended by 033 |
 | 020 | Train card redesign, ticket sharing, share-sheet file intake | active |
@@ -58,6 +58,7 @@ how the code works; **amended** = active, but a later ADR changed part of it (na
 | 042 | Flight from SMS/email text + train-or-flight intake for shared text | active |
 | 043 | Background sync while locked — nag fix (once-per-process, imminent-flight-only nudge; silent deferral + status) and the OPT-IN background key | active — relaxes 031 §7 only when the user opts in; nudge rule + worker table extended by 044 |
 | 044 | Train journey reminder — lead-time setting, periodic worker over hashed plaintext hints, PNR link opens the status check | active — extends 043 (second nudging job, shared latch) |
+| 045 | Multi-flight documents — segmented extraction (`List<ExtractedFlight>`), review step, per-segment save with the file on every flight | active — amends 017 (first-leg + hint multi-flight handling superseded) |
 
 ---
 
@@ -3115,3 +3116,109 @@ marks it; second run posts nothing; Settings lead selector). Device validation i
 `docs/validation-report.md`. Follow-ups: a per-ticket "remind me" override on the card
 if users ask; the flight poller could share the train's `TrainReminderPolicy` shape if a
 third nudging job ever appears (none planned).
+
+## ADR-045 — Multi-flight documents: segmented extraction, review step, per-segment save (2026-10-27)
+
+**Context.** Flight imports (ADR-017) read ONE flight per file: the boarding-pass and
+booking-confirmation extractors returned a single flat record, a return trip surfaced
+only as a "return leg detected — add it separately" hint (`additionalFlights`), a
+multi-leg BCBP barcode (`M2…`) dropped its second leg, and a multi-page PDF was never
+read past page 1. Real documents are not like that: an OTA itinerary describes every
+leg of a trip (plus a hotel and a fare table), an e-ticket PDF repeats each flight in
+baggage/fare tables on later pages, and a "boarding pass" PDF can hold one pass per
+page or two passes stacked on one page. User requirement (2026-10-27): handle such
+cases when parsing. Reference documents: a real OTA itinerary image (Bengaluru →
+Lucknow and back on Air India Express, two PNRs, a hotel, a seat-fare table) and a
+real 3-page MakeMyTrip e-ticket for the same route.
+
+**Decisions.**
+
+1. **`core:ocr` returns a LIST of segments.** New `model/ExtractedFlight` — one flight
+   segment with every field the form can take (`passengerName, pnr, carrier,
+   flightNumber, fromAirport, toAirport, flightDate, depTime, arrTime, depTerminal,
+   arrTerminal, cabinClass, seat, sequenceNumber`, each an `ExtractedField`;
+   `hasMinimumFields` = airline + number + date + both airports; `fillBlanksFrom`).
+   `BoardingPassExtraction` and `BookingConfirmationExtraction` become
+   `(flights: List<ExtractedFlight>, source)` — the flat first-flight fields are gone
+   (`first` and `additionalFlights` are derived accessors), `EMPTY` is "no segments".
+   `BcbpData.toExtractedFlights()` maps EVERY leg (an `M2` barcode = two segments
+   sharing the passenger). `OcrPrefillService.prefillBoardingPass/BookingConfirmation`
+   read PDFs page by page (`PdfPageRasterizer.rasterizeAll`, capped at 8 pages): each
+   page tries the barcode lane first and falls back to OCR; barcode legs plus the OCR
+   text of all pages (joined, so a header PNR applies everywhere) merge into one list
+   deduped by the ADR-025 identity. `source` is `BARCODE` when any page decoded one.
+2. **Segmentation is shared and rule-driven.** `extract/FlightTokens` finds flight
+   mentions in three forms — labeled (`Flight 6E 2345`, HIGH), **airline alias**
+   (`Air India Express 2019` → `IX 2019`, MEDIUM; the alias wins over a printed code
+   it disagrees with, so OCR's `lX-1542` still reads `IX`) and bare (`AI 0503`,
+   MEDIUM) — guarded against durations (`2h 35m`), weights (`15 Kgs`), OCR'd
+   currency amounts (`Z14723.00`), aircraft types (`A320`, `B737`) and stop-words.
+   The alias/stop-word tables live in the new data file
+   `core/ocr/src/main/resources/flight-document-rules.json` (ADR-003; a test keeps its
+   airline table identical to `feature:flights`' `airline-sms-rules.json`, the two
+   modules cannot depend on each other). `extract/FlightSegmenter` walks the row text:
+   lines before the first segment are the **preamble** (shared name / PNR / booking
+   id); a segment OPENS at a *strong* boundary — a flight token different from the
+   current segment's, a labeled PNR different from the current one (an airline PNR is
+   per segment), a *repeated* header kind (a second `ONWARD/RETURN` label, `BOARDING
+   PASS`, route block), or any header/token for the first segment — while a header
+   kind the segment has not seen yet merely extends it (`Bengaluru → Lucknow` /
+   `BLR 10:30 … 13:05 LKO` / the airline line arrive in any order); **stop headers**
+   (`Hotel`, `Itinerary Details`, `Seat Fare`, `Meal`, `Grand Total`, `Price`,
+   `Payment Summary`, `Important Information`, `Baggage Information`, hotel-stay rows
+   like `Stay Period` / `2 Nights` / `Check-Out`) close the segment and send what
+   follows to the **tail**, which is scanned only for seat-table rows; a header inside
+   the tail opens a *tentative* segment that is kept only if a flight token follows
+   (the return leg after a hotel block) and otherwise returns to the tail (fare rows);
+   flightless segments merge back into the previous one. `FlightDocumentExtractor`
+   then runs the per-field heuristics INSIDE each segment, inherits passenger / PNR /
+   cabin from the preamble, attaches `Seat Fare` rows to the segment flying that route
+   (`BLR-LKO 12A` → the BLR→LKO segment; the row's name fills a blank passenger),
+   dedupes by carrier + number + date (an undated later mention folds into the dated
+   one; the same number on two dates stays two segments; in a multi-flight document a
+   segment with nothing but a carrier + number is a stray token and dropped), and — for
+   a document with exactly ONE segment — fills blank fields from the whole document
+   minus the tail, which keeps every pre-ADR-045 single-flight fixture at its recorded
+   values. New per-segment fields: times from the itinerary block (`BLR 10:30 … 13:05
+   LKO`, MEDIUM) or labels (`Departure 08:30 PM`, HIGH, AM/PM normalised); terminals
+   by context (`Departure … Terminal 3`, the arrival code before the mention) and
+   otherwise by **row geometry** — a mention in the first cell of its row sits under
+   the departure column, a later cell under the arrival column (`Terminal - T2, …
+   Terminal - T3, …` on one row; `Economy (L)  Terminal:3` / `Terminal: 2` on stacked
+   rows — the real image prints them that way); an unlabeled date on a weekday-prefixed
+   or route-header line is MEDIUM instead of LOW. The boarding-pass extractor is the
+   same engine with a `BOARDING_PASS` profile (bare `12A` seats LOW, sequence numbers,
+   optional label separators, `BOARDING PASS` as a header kind).
+3. **Fixtures (ADR-003).** Expected JSON is now a field table PER SEGMENT
+   (`{ "flights": [ {…}, {…} ], "source": … }`). Real: `blr-lko-confirmation.txt` (ML
+   Kit text of the itinerary PNG captured on the emulator through the production
+   pipeline — two segments, IX 2019 BLR→LKO 29 Oct 10:30/13:05 T2→T3 PNR R87T5G seat
+   12A Economy; IX 1542 LKO→BLR 31 Oct 20:30/23:00 T3→T2 PNR D2FE9V seat 10A; the
+   hotel block contributes nothing) and `blr-lko-confirmation-pdf.txt` (ML Kit text of
+   all 3 pages of the e-ticket, pages joined by a blank line as the pipeline does — two
+   segments with their own PNRs and seats; the baggage page's undated repeats fold in;
+   the payment page's OCR'd currency signs produce no flights); the PDF and PNG
+   themselves are stored next to the text (92 KB / 363 KB) for device captures.
+   Synthetic: `booking-oneway-hotel-1` (one flight + a hotel + a seat-fare row →
+   exactly ONE segment, hotel dates ignored, seat attached), `boarding-pass-two-stacked`
+   (two passes on one page → two segments), the `M2` BCBP in `BcbpMappersTest`. The
+   three legacy confirmations and two legacy passes keep their values as segment 0 (plus
+   the new time/terminal/cabin fields where the text has them). The capture harness
+   (`OcrCaptureHarnessTest.captureFlightDocumentOcr`) records images and every PDF page.
+4. **`feature:flights` prefill.** `FlightFormState.fromFlight(ExtractedFlight)` is the
+   single mapping (times → `H:mm` fields, terminals → the banner-only `depTerminal /
+   arrTerminal`, name dropped); `fromExtraction` / `fromBookingExtraction` map the FIRST
+   segment (the single-flight path), `fromBoardingPassFlight` / `fromBookingFlight` one
+   reviewed segment. The review step and per-segment save are decision 5.
+5. **Review step and per-segment save** — see the addendum below (landed in the
+   following commits of the same change).
+
+**Contract touches (additive unless noted).** `core:ocr`: `model/ExtractedFlight`;
+`BoardingPassExtraction` / `BookingConfirmationExtraction` **reshaped** to
+`(flights, source)` (the flat fields were only read by `feature:flights` prefill and the
+app intake score, both updated); `BcbpLeg.toExtractedFlight`, `BcbpData.toExtractedFlights`;
+`extract/FlightSegments.dedupe/flightKey`, `FlightDocumentRules` + resource
+`flight-document-rules.json`; `PdfPageRasterizer.rasterizeAll` + `DEFAULT_MAX_PAGES`.
+`feature:flights`: `FlightFormState.fromFlight / fromBoardingPassFlight / fromBookingFlight`.
+`app`: `pickLikelyDocType` scores a document by its best segment. No schema, repository
+or backup-format change.

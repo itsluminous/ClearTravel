@@ -1,0 +1,23 @@
+Cleartrip
+YOUR TRIP IS CONFIRMED
+Trip ID: 26092698765
+Traveller: MR DEV PATEL
+Airline PNR: K9L2M4
+Mumbai → Goa Fri 14 Nov 2026
+BOM 07:15  To  GOI 08:30
+Air India AI 0661  Economy
+Terminal: 2
+Hotel
+Taj Fort Aguada Resort & Spa
+Check-In: Fri 14 Nov 2026  Check-Out: Mon 17 Nov 2026
+Stay Period  3 Nights
+Rooms Selection
+Deluxe Room - 1 Bedroom - 1 King Bed  01
+Itinerary Details
+Mumbai(BOM) to Goa(GOI) - Air India AI
+Adult(x 1)  INR 5,210  INR 820  INR 6,030
+Taj Fort Aguada Resort & Spa
+Room1 (2 Adults)  INR 24,000  INR 4,320  INR 28,320
+Seat Fare
+Dev Patel  BOM-GOI  14C  INR 350
+Grand Total :  INR 34,700

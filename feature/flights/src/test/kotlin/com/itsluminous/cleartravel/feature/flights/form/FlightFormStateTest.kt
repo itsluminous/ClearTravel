@@ -7,6 +7,7 @@ import com.itsluminous.cleartravel.core.ocr.model.BoardingPassSource
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationSource
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedField
+import com.itsluminous.cleartravel.core.ocr.model.ExtractedFlight
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.feature.flights.text.FlightTextExtraction
 import org.junit.Test
@@ -139,14 +140,21 @@ class FlightFormStateTest {
     fun `fromExtraction maps values and keeps per-field confidence markers`() {
         val extraction =
             BoardingPassExtraction(
-                passengerName = ExtractedField.of("DOE/JOHN", ExtractionConfidence.HIGH),
-                pnr = ExtractedField.of("AB1CD2", ExtractionConfidence.HIGH),
-                carrier = ExtractedField.of("ai", ExtractionConfidence.HIGH),
-                flightNumber = ExtractedField.of("0101", ExtractionConfidence.HIGH),
-                fromAirport = ExtractedField.of("del", ExtractionConfidence.MEDIUM),
-                toAirport = ExtractedField.of("fco", ExtractionConfidence.MEDIUM),
-                flightDate = ExtractedField.of("2026-09-20", ExtractionConfidence.LOW),
-                seat = ExtractedField.EMPTY,
+                flights =
+                    listOf(
+                        ExtractedFlight(
+                            passengerName = ExtractedField.of("DOE/JOHN", ExtractionConfidence.HIGH),
+                            pnr = ExtractedField.of("AB1CD2", ExtractionConfidence.HIGH),
+                            carrier = ExtractedField.of("ai", ExtractionConfidence.HIGH),
+                            flightNumber = ExtractedField.of("0101", ExtractionConfidence.HIGH),
+                            fromAirport = ExtractedField.of("del", ExtractionConfidence.MEDIUM),
+                            toAirport = ExtractedField.of("fco", ExtractionConfidence.MEDIUM),
+                            flightDate = ExtractedField.of("2026-09-20", ExtractionConfidence.LOW),
+                            depTime = ExtractedField.of("16:25", ExtractionConfidence.HIGH),
+                            depTerminal = ExtractedField.of("1", ExtractionConfidence.MEDIUM),
+                            seat = ExtractedField.EMPTY,
+                        ),
+                    ),
                 source = BoardingPassSource.BARCODE,
             )
 
@@ -159,14 +167,17 @@ class FlightFormStateTest {
         assertThat(state.pendingPassUri).isEqualTo("content://pass/1")
         assertThat(state.confidences[FlightField.AIRLINE]).isEqualTo(ExtractionConfidence.HIGH)
         assertThat(state.confidences[FlightField.DATE]).isEqualTo(ExtractionConfidence.LOW)
+        // ADR-045: times and terminals travel too (terminals are banner-only, not fields).
+        assertThat(state.depTimeText).isEqualTo("16:25")
+        assertThat(state.depTerminal).isEqualTo("1")
         // NONE-confidence fields carry no marker.
         assertThat(state.confidences).doesNotContainKey(FlightField.SEAT)
     }
 
     @Test
     fun `fromBookingExtraction maps values, cabin confidence and the return-leg hint`() {
-        val extraction =
-            BookingConfirmationExtraction(
+        val onward =
+            ExtractedFlight(
                 passengerName = ExtractedField.of("ARJUN NAIR", ExtractionConfidence.HIGH),
                 pnr = ExtractedField.of("T5K2M9", ExtractionConfidence.HIGH),
                 carrier = ExtractedField.of("ai", ExtractionConfidence.MEDIUM),
@@ -176,7 +187,10 @@ class FlightFormStateTest {
                 flightDate = ExtractedField.of("2026-09-26", ExtractionConfidence.HIGH),
                 cabinClass = ExtractedField.of("BUSINESS", ExtractionConfidence.HIGH),
                 seat = ExtractedField.EMPTY,
-                additionalFlights = 1,
+            )
+        val extraction =
+            BookingConfirmationExtraction(
+                flights = listOf(onward, onward.copy(flightNumber = ExtractedField.of("504", ExtractionConfidence.MEDIUM))),
                 source = BookingConfirmationSource.OCR_TEXT,
             )
 
@@ -202,10 +216,14 @@ class FlightFormStateTest {
     fun `fromBookingExtraction of a single-flight confirmation carries no return hint`() {
         val extraction =
             BookingConfirmationExtraction(
-                carrier = ExtractedField.of("6E", ExtractionConfidence.MEDIUM),
-                flightNumber = ExtractedField.of("6114", ExtractionConfidence.MEDIUM),
-                flightDate = ExtractedField.of("2026-11-05", ExtractionConfidence.HIGH),
-                additionalFlights = 0,
+                flights =
+                    listOf(
+                        ExtractedFlight(
+                            carrier = ExtractedField.of("6E", ExtractionConfidence.MEDIUM),
+                            flightNumber = ExtractedField.of("6114", ExtractionConfidence.MEDIUM),
+                            flightDate = ExtractedField.of("2026-11-05", ExtractionConfidence.HIGH),
+                        ),
+                    ),
                 source = BookingConfirmationSource.OCR_TEXT,
             )
 

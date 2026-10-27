@@ -17,24 +17,22 @@ enum class BoardingPassSource {
 
 /**
  * Structured result of a boarding-pass import: BCBP barcode decode first, OCR-text
- * heuristics as fallback. Always succeeds structurally — garbage input yields
- * [BoardingPassExtraction.EMPTY], never an exception. Dates are normalized to
- * ISO-8601 `yyyy-MM-dd` when resolvable.
+ * heuristics as fallback. ADR-045: a document may hold SEVERAL passes — a multi-leg
+ * BCBP (`M2…`), one pass per PDF page, or two passes printed on one page — so the
+ * result is a LIST of [ExtractedFlight] segments in document order, deduped by the
+ * ADR-025 flight identity (carrier + number + date). A single pass yields exactly one
+ * segment. Always succeeds structurally — garbage input yields [EMPTY] (no segments,
+ * source NONE), never an exception.
  */
 @Serializable
 data class BoardingPassExtraction(
-    val passengerName: ExtractedField = ExtractedField.EMPTY,
-    val pnr: ExtractedField = ExtractedField.EMPTY,
-    val carrier: ExtractedField = ExtractedField.EMPTY,
-    val flightNumber: ExtractedField = ExtractedField.EMPTY,
-    val fromAirport: ExtractedField = ExtractedField.EMPTY,
-    val toAirport: ExtractedField = ExtractedField.EMPTY,
-    val flightDate: ExtractedField = ExtractedField.EMPTY,
-    val seat: ExtractedField = ExtractedField.EMPTY,
-    val sequenceNumber: ExtractedField = ExtractedField.EMPTY,
+    val flights: List<ExtractedFlight> = emptyList(),
     val source: BoardingPassSource = BoardingPassSource.NONE,
 ) {
     val isEmpty: Boolean get() = this == EMPTY
+
+    /** The first (usually only) segment, or [ExtractedFlight.EMPTY] when nothing was read. */
+    val first: ExtractedFlight get() = flights.firstOrNull() ?: ExtractedFlight.EMPTY
 
     companion object {
         val EMPTY = BoardingPassExtraction()

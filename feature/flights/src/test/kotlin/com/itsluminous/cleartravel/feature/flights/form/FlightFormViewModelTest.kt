@@ -10,6 +10,7 @@ import com.itsluminous.cleartravel.core.ocr.model.BoardingPassSource
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationSource
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedField
+import com.itsluminous.cleartravel.core.ocr.model.ExtractedFlight
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.core.testing.MainDispatcherRule
 import com.itsluminous.cleartravel.feature.flights.FakeBoardingPassImporter
@@ -152,12 +153,17 @@ class FlightFormViewModelTest {
         runTest {
             importer.extraction =
                 BoardingPassExtraction(
-                    pnr = ExtractedField.of("AB1CD2", ExtractionConfidence.HIGH),
-                    carrier = ExtractedField.of("AI", ExtractionConfidence.HIGH),
-                    flightNumber = ExtractedField.of("101", ExtractionConfidence.HIGH),
-                    fromAirport = ExtractedField.of("DEL", ExtractionConfidence.HIGH),
-                    toAirport = ExtractedField.of("FCO", ExtractionConfidence.HIGH),
-                    flightDate = ExtractedField.of("2026-09-20", ExtractionConfidence.HIGH),
+                    flights =
+                        listOf(
+                            ExtractedFlight(
+                                pnr = ExtractedField.of("AB1CD2", ExtractionConfidence.HIGH),
+                                carrier = ExtractedField.of("AI", ExtractionConfidence.HIGH),
+                                flightNumber = ExtractedField.of("101", ExtractionConfidence.HIGH),
+                                fromAirport = ExtractedField.of("DEL", ExtractionConfidence.HIGH),
+                                toAirport = ExtractedField.of("FCO", ExtractionConfidence.HIGH),
+                                flightDate = ExtractedField.of("2026-09-20", ExtractionConfidence.HIGH),
+                            ),
+                        ),
                     source = BoardingPassSource.BARCODE,
                 )
 
@@ -188,9 +194,14 @@ class FlightFormViewModelTest {
         runTest {
             importer.extraction =
                 BoardingPassExtraction(
-                    carrier = ExtractedField.of("AI", ExtractionConfidence.HIGH),
-                    flightNumber = ExtractedField.of("101", ExtractionConfidence.HIGH),
-                    flightDate = ExtractedField.of("2026-09-20", ExtractionConfidence.HIGH),
+                    flights =
+                        listOf(
+                            ExtractedFlight(
+                                carrier = ExtractedField.of("AI", ExtractionConfidence.HIGH),
+                                flightNumber = ExtractedField.of("101", ExtractionConfidence.HIGH),
+                                flightDate = ExtractedField.of("2026-09-20", ExtractionConfidence.HIGH),
+                            ),
+                        ),
                     source = BoardingPassSource.BARCODE,
                 )
             importer.storedPath = "/data/passes/stored.pdf"
@@ -235,14 +246,22 @@ class FlightFormViewModelTest {
         runTest {
             bookingImporter.extraction =
                 BookingConfirmationExtraction(
-                    pnr = ExtractedField.of("HJK92L", ExtractionConfidence.HIGH),
-                    carrier = ExtractedField.of("AI", ExtractionConfidence.HIGH),
-                    flightNumber = ExtractedField.of("503", ExtractionConfidence.MEDIUM),
-                    fromAirport = ExtractedField.of("COK", ExtractionConfidence.MEDIUM),
-                    toAirport = ExtractedField.of("DEL", ExtractionConfidence.MEDIUM),
-                    flightDate = ExtractedField.of("2026-09-26", ExtractionConfidence.HIGH),
-                    cabinClass = ExtractedField.of("BUSINESS", ExtractionConfidence.HIGH),
-                    additionalFlights = 1,
+                    flights =
+                        listOf(
+                            ExtractedFlight(
+                                pnr = ExtractedField.of("HJK92L", ExtractionConfidence.HIGH),
+                                carrier = ExtractedField.of("AI", ExtractionConfidence.HIGH),
+                                flightNumber = ExtractedField.of("503", ExtractionConfidence.MEDIUM),
+                                fromAirport = ExtractedField.of("COK", ExtractionConfidence.MEDIUM),
+                                toAirport = ExtractedField.of("DEL", ExtractionConfidence.MEDIUM),
+                                flightDate = ExtractedField.of("2026-09-26", ExtractionConfidence.HIGH),
+                                cabinClass = ExtractedField.of("BUSINESS", ExtractionConfidence.HIGH),
+                            ),
+                            ExtractedFlight(
+                                carrier = ExtractedField.of("AI", ExtractionConfidence.MEDIUM),
+                                flightNumber = ExtractedField.of("504", ExtractionConfidence.MEDIUM),
+                            ),
+                        ),
                     source = BookingConfirmationSource.OCR_TEXT,
                 )
 
@@ -280,9 +299,14 @@ class FlightFormViewModelTest {
         runTest {
             bookingImporter.extraction =
                 BookingConfirmationExtraction(
-                    carrier = ExtractedField.of("AI", ExtractionConfidence.HIGH),
-                    flightNumber = ExtractedField.of("503", ExtractionConfidence.HIGH),
-                    flightDate = ExtractedField.of("2026-09-26", ExtractionConfidence.HIGH),
+                    flights =
+                        listOf(
+                            ExtractedFlight(
+                                carrier = ExtractedField.of("AI", ExtractionConfidence.HIGH),
+                                flightNumber = ExtractedField.of("503", ExtractionConfidence.HIGH),
+                                flightDate = ExtractedField.of("2026-09-26", ExtractionConfidence.HIGH),
+                            ),
+                        ),
                     source = BookingConfirmationSource.OCR_TEXT,
                 )
             viewModel.startFromBookingConfirmation("content://picked/booking")
@@ -307,9 +331,14 @@ class FlightFormViewModelTest {
         runTest {
             bookingImporter.extraction =
                 BookingConfirmationExtraction(
-                    carrier = ExtractedField.of("6E", ExtractionConfidence.HIGH),
-                    flightNumber = ExtractedField.of("6114", ExtractionConfidence.HIGH),
-                    flightDate = ExtractedField.of("2026-11-05", ExtractionConfidence.HIGH),
+                    flights =
+                        listOf(
+                            ExtractedFlight(
+                                carrier = ExtractedField.of("6E", ExtractionConfidence.HIGH),
+                                flightNumber = ExtractedField.of("6114", ExtractionConfidence.HIGH),
+                                flightDate = ExtractedField.of("2026-11-05", ExtractionConfidence.HIGH),
+                            ),
+                        ),
                     source = BookingConfirmationSource.OCR_TEXT,
                 )
             bookingImporter.attachSucceeds = false
@@ -394,9 +423,14 @@ class FlightFormViewModelTest {
             repository.seed(existing)
             importer.extraction =
                 BoardingPassExtraction(
-                    carrier = ExtractedField.of("AI", ExtractionConfidence.HIGH),
-                    flightNumber = ExtractedField.of("101", ExtractionConfidence.HIGH),
-                    flightDate = ExtractedField.of(flightDate.toString(), ExtractionConfidence.HIGH),
+                    flights =
+                        listOf(
+                            ExtractedFlight(
+                                carrier = ExtractedField.of("AI", ExtractionConfidence.HIGH),
+                                flightNumber = ExtractedField.of("101", ExtractionConfidence.HIGH),
+                                flightDate = ExtractedField.of(flightDate.toString(), ExtractionConfidence.HIGH),
+                            ),
+                        ),
                     source = BoardingPassSource.BARCODE,
                 )
             viewModel.startFromBoardingPass("content://picked/pass")

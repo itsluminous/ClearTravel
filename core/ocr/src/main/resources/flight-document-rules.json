@@ -1,0 +1,234 @@
+{
+  "version": 1,
+  "notes": "ADR-045 flight-document rules for core:ocr: airline aliases -> IATA code (confirmations print 'Air India Express 2019' without the code; longest alias wins, matched case-insensitively on OCR text; a printed code next to an alias is overridden by the alias when they disagree, e.g. OCR 'lX-1542'), plus the stop-word lists that keep look-alikes from passing as codes. The airline table is kept identical to feature:flights assets/airline-sms-rules.json by FlightDocumentRulesTest.",
+  "airlines": {
+    "QP": {
+      "name": "Akasa Air",
+      "aliases": [
+        "Akasa Air",
+        "Akasa"
+      ]
+    },
+    "6E": {
+      "name": "IndiGo",
+      "aliases": [
+        "IndiGo",
+        "Indigo"
+      ]
+    },
+    "AI": {
+      "name": "Air India",
+      "aliases": [
+        "Air India"
+      ]
+    },
+    "IX": {
+      "name": "Air India Express",
+      "aliases": [
+        "Air India Express",
+        "AIX"
+      ]
+    },
+    "UK": {
+      "name": "Vistara",
+      "aliases": [
+        "Vistara"
+      ]
+    },
+    "SG": {
+      "name": "SpiceJet",
+      "aliases": [
+        "SpiceJet",
+        "Spicejet",
+        "Spice Jet"
+      ]
+    },
+    "I5": {
+      "name": "AIX Connect",
+      "aliases": [
+        "AIX Connect",
+        "AirAsia India"
+      ]
+    },
+    "9I": {
+      "name": "Alliance Air",
+      "aliases": [
+        "Alliance Air"
+      ]
+    },
+    "S5": {
+      "name": "Star Air",
+      "aliases": [
+        "Star Air"
+      ]
+    },
+    "EK": {
+      "name": "Emirates",
+      "aliases": [
+        "Emirates"
+      ]
+    },
+    "QR": {
+      "name": "Qatar Airways",
+      "aliases": [
+        "Qatar Airways"
+      ]
+    },
+    "SQ": {
+      "name": "Singapore Airlines",
+      "aliases": [
+        "Singapore Airlines"
+      ]
+    },
+    "EY": {
+      "name": "Etihad Airways",
+      "aliases": [
+        "Etihad Airways",
+        "Etihad"
+      ]
+    },
+    "FZ": {
+      "name": "flydubai",
+      "aliases": [
+        "flydubai",
+        "fly dubai"
+      ]
+    },
+    "LH": {
+      "name": "Lufthansa",
+      "aliases": [
+        "Lufthansa"
+      ]
+    },
+    "BA": {
+      "name": "British Airways",
+      "aliases": [
+        "British Airways"
+      ]
+    },
+    "CX": {
+      "name": "Cathay Pacific",
+      "aliases": [
+        "Cathay Pacific"
+      ]
+    },
+    "TG": {
+      "name": "Thai Airways",
+      "aliases": [
+        "Thai Airways"
+      ]
+    },
+    "MH": {
+      "name": "Malaysia Airlines",
+      "aliases": [
+        "Malaysia Airlines"
+      ]
+    },
+    "UL": {
+      "name": "SriLankan Airlines",
+      "aliases": [
+        "SriLankan Airlines",
+        "SriLankan"
+      ]
+    },
+    "DL": {
+      "name": "Delta Air Lines",
+      "aliases": [
+        "Delta Air Lines",
+        "Delta"
+      ]
+    },
+    "AA": {
+      "name": "American Airlines",
+      "aliases": [
+        "American Airlines"
+      ]
+    },
+    "UA": {
+      "name": "United Airlines",
+      "aliases": [
+        "United Airlines"
+      ]
+    }
+  },
+  "flightCodeStopwords": [
+    "ON",
+    "AT",
+    "TO",
+    "IN",
+    "BY",
+    "OF",
+    "NO",
+    "IS",
+    "OR",
+    "RS",
+    "PM",
+    "AM",
+    "GO",
+    "UP",
+    "US",
+    "IT",
+    "AS",
+    "BE",
+    "DO",
+    "IF",
+    "WE",
+    "AN",
+    "MY",
+    "SO",
+    "ID",
+    "HR",
+    "KM",
+    "PP",
+    "TT",
+    "ST",
+    "ND",
+    "RD",
+    "TH",
+    "OK"
+  ],
+  "iataStopwords": [
+    "PNR",
+    "SMS",
+    "AIR",
+    "INR",
+    "USD",
+    "GST",
+    "ETA",
+    "ETD",
+    "DEP",
+    "ARR",
+    "STD",
+    "STA",
+    "TBA",
+    "AND",
+    "THE",
+    "FOR",
+    "VIA",
+    "PIN",
+    "OTP",
+    "URL",
+    "APP",
+    "PDF",
+    "SEQ",
+    "NOT",
+    "ALL",
+    "ANY",
+    "NEW",
+    "OUR",
+    "YOU",
+    "FLT",
+    "HRS",
+    "MIN",
+    "GMT",
+    "IST",
+    "UTC",
+    "REF",
+    "ADD",
+    "SEE",
+    "USE",
+    "NOW",
+    "ONE",
+    "TWO"
+  ]
+}

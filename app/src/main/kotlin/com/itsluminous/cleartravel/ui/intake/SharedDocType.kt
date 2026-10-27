@@ -5,6 +5,7 @@ import com.itsluminous.cleartravel.core.ocr.model.BoardingPassExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassSource
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedField
+import com.itsluminous.cleartravel.core.ocr.model.ExtractedFlight
 import com.itsluminous.cleartravel.core.ocr.model.TrainTicketExtraction
 
 /** What a shared PDF/image can be imported as (the intake dialog's options). */
@@ -55,10 +56,11 @@ private fun TrainTicketExtraction.confidentFieldCount(): Int =
     listOf(pnr, trainNumber, trainName, journeyDate, fromStation, toStation, travelClass, quota).confidentCount() +
         passengers.sumOf { listOf(it.name, it.coach, it.berth, it.bookingStatus).confidentCount() }
 
-private fun BoardingPassExtraction.confidentFieldCount(): Int =
-    listOf(passengerName, pnr, carrier, flightNumber, fromAirport, toAirport, flightDate, seat, sequenceNumber)
+/** ADR-045: a document's score is its best segment's (the first is usually the richest). */
+private fun ExtractedFlight.confidentFieldCount(): Int =
+    listOf(passengerName, pnr, carrier, flightNumber, fromAirport, toAirport, flightDate, cabinClass, seat, sequenceNumber)
         .confidentCount()
 
-private fun BookingConfirmationExtraction.confidentFieldCount(): Int =
-    listOf(passengerName, pnr, carrier, flightNumber, fromAirport, toAirport, flightDate, cabinClass, seat)
-        .confidentCount()
+private fun BoardingPassExtraction.confidentFieldCount(): Int = flights.maxOfOrNull { it.confidentFieldCount() } ?: 0
+
+private fun BookingConfirmationExtraction.confidentFieldCount(): Int = flights.maxOfOrNull { it.confidentFieldCount() } ?: 0

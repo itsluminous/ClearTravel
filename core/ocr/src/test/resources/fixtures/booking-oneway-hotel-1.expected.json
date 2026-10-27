@@ -1,0 +1,19 @@
+{
+  "flights": [
+    {
+      "passengerName": { "value": "DEV PATEL", "confidence": "HIGH" },
+      "pnr": { "value": "K9L2M4", "confidence": "HIGH" },
+      "carrier": { "value": "AI", "confidence": "MEDIUM" },
+      "flightNumber": { "value": "661", "confidence": "MEDIUM" },
+      "fromAirport": { "value": "BOM", "confidence": "MEDIUM" },
+      "toAirport": { "value": "GOI", "confidence": "MEDIUM" },
+      "flightDate": { "value": "2026-11-14", "confidence": "MEDIUM" },
+      "depTime": { "value": "07:15", "confidence": "MEDIUM" },
+      "arrTime": { "value": "08:30", "confidence": "MEDIUM" },
+      "depTerminal": { "value": "2", "confidence": "MEDIUM" },
+      "cabinClass": { "value": "ECONOMY", "confidence": "LOW" },
+      "seat": { "value": "14C", "confidence": "MEDIUM" }
+    }
+  ],
+  "source": "OCR_TEXT"
+}
