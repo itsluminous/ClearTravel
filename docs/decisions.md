@@ -17,7 +17,7 @@ how the code works; **amended** = active, but a later ADR changed part of it (na
 | 001 | Module layout (incl. `core:scrape` / `core:ocr` as dedicated modules) | active — amended by 027 (`feature:documents`), 031 (`core:security`, `feature:applock`) |
 | 002 | UUID id + `updated_at` + tombstone on every entity | active |
 | 003 | Behavior-as-data (scrape rules, presets, check-in windows, OCR patterns) | active |
-| 004 | Entity catalog and relations (schema v1) | active — amended by 022 (schema v2), 027 (schema v3) |
+| 004 | Entity catalog and relations (schema v1) | active — amended by 022 (schema v2), 027 (schema v3), 046 (schema v4) |
 | 005 | Provider result contracts (`TrainStatusResult` / `FlightStatusResult`) | active — passenger merge amended by 023 |
 | 006 | Checklist preset append semantics | active |
 | 007 | User-entered API keys in EncryptedSharedPreferences | active |
@@ -28,7 +28,7 @@ how the code works; **amended** = active, but a later ADR changed part of it (na
 | 012 | Itinerary — nested NavHost, pure map/day logic, map degradation, maps-compose pin | active — pin moved to 6.7.0 (see its update note; 035) |
 | 013 | Flights — interactive-only scrape, data-driven check-in windows, EntryPoint worker | active — `RuleRegistry` provisioning superseded by 014 (hoist) |
 | 014 | App-shell integration — theme, deep links, share sheet, `RuleRegistry` hoist, hermetic e2e | active — notification-permission timing amended by 036 |
-| 015 | Backup, export & import — versioned ZIP, generic LWW merge, `BackupManager` seam | active — container superseded by 031 (v2 envelope); entity files added by 022, 027 |
+| 015 | Backup, export & import — versioned ZIP, generic LWW merge, `BackupManager` seam | active — container superseded by 031 (v2 envelope); entity files added by 022, 027, 046 |
 | 016 | Google integration — REST clients, state-store reconciliation, menu-hosted hooks | active — sealed uploads per 031 |
 | 017 | Booking-confirmation import — third add-flight path, attachment-row storage | active — first-leg + `additionalFlights` hint superseded by 045 |
 | 018 | Train route fetch — erail.in rule, hands-free auto-flow, pure `RouteMapper` | **amended** — erail demoted to fallback by 019 |
@@ -38,7 +38,7 @@ how the code works; **amended** = active, but a later ADR changed part of it (na
 | 022 | Train seat map — `train_coaches` (schema v2), scrape `extraRows`, seat layouts as data | active (incl. v4 addendum) |
 | 023 | `applyStatusResult` inserts scraped train passengers | active |
 | 024 | PNR de-duplication, intake landing, OCR reading order, touch-scroll hardening | active |
-| 025 | Flight de-duplication | active |
+| 025 | Flight de-duplication | active — a second PASSENGER on an existing flight is added instead of refused since 046 |
 | 026 | Google flight-status panel as the airline-agnostic fallback (+ v2 live addendum) | active |
 | 027 | Documents tab — `travel_documents` (schema v3), local-only files, shared viewer | active — viewer upgraded by 030/034 |
 | 028 | Cross-tab integration — journey-add bus, "Part of" lookup, Trips landing hook | active |
@@ -51,14 +51,15 @@ how the code works; **amended** = active, but a later ADR changed part of it (na
 | 035 | Itinerary place search (Nominatim), view-in-map, flights date picker, maps-compose 6.7.0 | active |
 | 036 | Cleanup pass — shared UI components, deferred follow-ups closed | active |
 | 037 | Scheduled automatic backup (local always, Drive when enabled) | active |
-| 038 | Drive folder identity + convergence, backup listing across folders, boarding passes in local backups | active |
-| 039 | Self-contained share links (trips, checklists, flights) with ID-stable upsert; flight card quick actions | active |
+| 038 | Drive folder identity + convergence, backup listing across folders, boarding passes in local backups | active — passes bundled per passenger since 046 |
+| 039 | Self-contained share links (trips, checklists, flights) with ID-stable upsert; flight card quick actions | active — flight payload carries passengers since 046 |
 | 040 | Deterministic built-in preset item ids; restore collapses pre-040 seeded duplicates | active — amends 006 seeding |
 | 041 | UX fixes — tappable boarding-pass marker, app-wide IME insets at the shell, input dialogs ignore outside taps | active |
 | 042 | Flight from SMS/email text + train-or-flight intake for shared text | active |
 | 043 | Background sync while locked — nag fix (once-per-process, imminent-flight-only nudge; silent deferral + status) and the OPT-IN background key | active — relaxes 031 §7 only when the user opts in; nudge rule + worker table extended by 044 |
 | 044 | Train journey reminder — lead-time setting, periodic worker over hashed plaintext hints, PNR link opens the status check | active — extends 043 (second nudging job, shared latch) |
-| 045 | Multi-flight documents — segmented extraction (`List<ExtractedFlight>`), review step, per-segment save with the file on every flight | active — amends 017 (first-leg + hint multi-flight handling superseded) |
+| 045 | Multi-flight documents — segmented extraction (`List<ExtractedFlight>`), review step, per-segment save with the file on every flight | active — amends 017 (first-leg + hint multi-flight handling superseded); per-segment save amended by 046 (passenger merge, file per passenger) |
+| 046 | Multi-passenger flights — `flight_passengers` (schema v4), passenger merge on an existing flight, pass per passenger, mirror columns | active — amends 004 (schema v4), 015 (entity file), 025 (passenger merge), 038 (bundle per passenger), 039 (payload passengers), 045 (per-segment save) |
 
 ---
 
@@ -3289,3 +3290,147 @@ SMS/email text parser (ADR-042) still reads the FIRST flight + a hint — the sa
 step could take `List<ExtractedFlight>` from it; `feature:flights` could read airline
 aliases from the `core:ocr` rules file instead of its own copy once the sync test has
 earned trust; a single OCR pass for the intake probe (it still runs three).
+
+## ADR-046 — Multi-passenger flights: `flight_passengers` (schema v4), passenger merge, pass per passenger (2026-10-27)
+
+**Context.** User report (2026-10-27): "I tried adding both tickets (two boarding
+passes for two passengers on the same flight), and the app allows adding one only. If
+the same flight is already added but the seat is different, it should add the second
+passenger's info in that same trip." Root cause: `FlightJourney` / `flight_journeys`
+carried ONE `seat`, ONE `boardingPassPath` and no passenger at all, and the ADR-025
+guard (`findByFlight` = carrier + number + date) refused the second pass as a duplicate
+flight — ADR-045 §5 even folded two passes for the same flight into one segment on
+purpose. Trains already model people (`train_passengers`, ADR-004/023); flights now do
+the same.
+
+**Decisions.**
+
+1. **`core:model`: `FlightPassenger`** (`id, flightId, name, seat, pnrBookingRef,
+   boardingPassPath, sequenceNumber, cabinClass, sortOrder, updatedAt, deletedAt`) —
+   a `SyncableEntity` (ADR-002). `FlightWithPassengers(flight, passengers)` is the
+   read shape for lists/detail, with `seats` (non-blank seats in order) and
+   `boardingPasses` (`FlightBoardingPass(path, passenger?)` — the passengers' own
+   passes, else the flight row's legacy mirror path, so a flight that only ever had a
+   flight-level pass still shows it). `FlightPassengerIds.legacy(flightId)` is the
+   derived (`UUID.nameUUIDFromBytes`) id of the ONE passenger row created on behalf of
+   pre-046 data, shared by the migration and the backup importer so the two paths
+   converge on the same row.
+2. **`FlightJourney` keeps `seat` and `boardingPassPath` as MIRROR columns** of the
+   primary passenger (`seat` = passenger #1 by `sortOrder`; `boardingPassPath` = the
+   first passenger pass found), re-synced by the repository after every passenger
+   write. `pnrBookingRef` stays the BOOKING-level record locator (a pass's own locator,
+   when it differs, sits on the passenger); `cabinClass` stays booking-level too (the
+   passenger field is filled only by imports that print one). *Why mirror instead of
+   dropping the columns?* Schema columns are frozen (ADR-004), older backups/readers,
+   the Drive upload engine, the calendar mapper and every e2e seed read them; mirroring
+   costs one extra `UPDATE` and keeps every old reader correct without a flag day.
+   New code reads the passengers; the mirror is write-only outside the repository.
+3. **`core:database` schema v4**: `flight_passengers` (`flight_id` index), `FlightDao`
+   passenger queries (`observePassengers / getPassengers / getPassenger /
+   upsertPassengers / softDeletePassenger / softDeletePassengersFor`) and the
+   `@Relation` reads `observeActiveWithPassengers / observeArchivedWithPassengers`
+   (`FlightWithPassengersEntity`; tombstones filtered and `sort_order` applied in the
+   mapper, since `@Relation` cannot). `MIGRATION_3_4` creates the table AND backfills
+   one passenger per LIVE flight whose `seat` is non-blank or `boarding_pass_path` is
+   set — `id = legacy(flightId)`, name empty, seat trimmed, path copied, `updated_at` =
+   the flight's — so an upgraded install shows every old seat/pass as passenger #1 at
+   once. `schemas/4.json` committed; `MigrationTest` opens a real v3 file with four
+   flights (seated + pass, pass only, bare, tombstoned) and asserts exactly two backfills.
+   `BackupDao` dumps/upserts the table.
+4. **`core:data` repository.** `FlightRepository` gains `observePassengers /
+   getPassengers / observeActiveWithPassengers / observeArchivedWithPassengers /
+   savePassengers(flightId, rows) / replacePassengers(flightId, rows) /
+   deletePassenger(id)`; `delete(flightId)` cascades to passengers. Every passenger
+   write stamps `updatedAt` and then calls `syncMirror(flightId)` (decision 2).
+   `FlightPassengerMatching` is the PURE merge rule (shared with every fake):
+   - `hasPassengerInfo(p)` = name or seat non-blank;
+   - `findMatch(existing, incoming)`: when both carry a name → match iff the names are
+     the same person (`normalizeName`: upper-case, letters only, the token SET — so
+     `SHARMA/RAHUL` (BCBP) = `Rahul Sharma` = `MR RAHUL SHARMA` once honorifics are
+     dropped), and a DIFFERENT name is never a match even on the same seat (the real
+     e-ticket: Bandana in 10A on the return leg, Prakash in 10A on the image — two
+     people); when either side has no name → match by seat (upper-case, leading zeros
+     dropped: `010A` = `10A`); when seats are missing too → by sequence number, then by
+     passenger PNR when both are present.
+5. **ADR-025 guard rewrite (every add path).** Saving/importing a flight whose
+   identity matches a live journey now asks *who is on it*:
+   - the incoming passenger has info (name and/or seat) and is NOT on the flight →
+     **added as a new passenger** of the existing journey (their own boarding-pass copy
+     under `boarding_passes/<passengerId>.<ext>`), reported as
+     `FlightFormEvent.PassengerAdded(flightId, passengerName)` → "Added Bandana Kumari to
+     IX 2019" with **View**; blank fields of a matched passenger are filled in (a
+     migrated seat-only row gains its name and pass when the real pass arrives);
+   - the passenger IS already on it → **"Already saved"** (`DuplicateFlight`, as today);
+   - no passenger info at all (manual form without rows, bare confirmation) → the
+     current duplicate refusal.
+   The ADR-045 direct batch save and walk-through apply the same rule per segment:
+   `FlightBatchOutcome` gains `passengerAddedIds` and the notice reads "Added 1 flight,
+   added 1 passenger, skipped 1 already saved". The ADR-045 §5 extractor dedupe by
+   carrier + number + date is unchanged for ONE file (two passes for the same flight in
+   one file still fold — the second passenger arrives from their own file).
+6. **Files per passenger (`BoardingPassFileStore`).** The encrypted copy is keyed by
+   PASSENGER id (`boarding_passes/<passengerId>.<ext>`, same directory, so
+   `AppFileLayout` and the encryption migration are untouched). Legacy
+   `boarding_passes/<flightId>.<ext>` files are referenced as-is by the backfilled
+   passenger and stay readable; nothing is renamed. The Drive upload engine registers
+   EVERY passenger pass (plus the legacy mirror) as a FLIGHT attachment row keyed by
+   local path, exactly as it did for the single path.
+7. **Backup (ADR-015/038, additive — no `schemaVersion` bump).** New entity file
+   `entities/flight_passengers.json` (`FlightPassengerDto`, merged by id + `updatedAt`
+   like every table). Each live passenger pass is bundled at
+   `boarding_passes/<passengerId>` with `boardingPassBundled: true`; the flight row's
+   mirror path is bundled under `boarding_passes/<flightId>` ONLY when no passenger
+   bundles the same file (no duplicate bytes), and on import the flight's mirror is
+   re-pointed through the path remap to the restored passenger copy. A backup from a
+   pre-046 build (no passengers file) is **backfilled on import** exactly like the
+   migration: every winning flight row with a seat or pass and no passenger row (in the
+   backup or locally) gets `legacy(flightId)` with the flight's `updatedAt`, merged
+   through the same LWW rule — so migrated device + old backup = one passenger.
+   Documented in `docs/backup-format.md`.
+8. **Share link (ADR-039, additive).** `FlightSharePayload.passengers:
+   List<SharedFlightPassenger(name, seat)>` (default empty; v=1 blobs without it still
+   decode). The sharer's passengers prefill the recipient's passenger rows — a flight
+   shared to a fellow traveller carries the group's seats; the recipient deletes the
+   rows that are not theirs before saving. This narrows ADR-039's "no personal fields"
+   stance deliberately: the share IMAGE already showed the seat, and the use case is
+   sharing with people on the same booking.
+9. **UI (`feature:flights`).** Form: a **Passengers** section like the train form (rows
+   of name + seat, add/remove; the old Seat field is row 1; Cabin stays booking-level);
+   edit loads the live rows, save `replacePassengers` (removed rows tombstoned, kept
+   rows keep their ids and passes). The pending boarding pass of a single-pass import
+   belongs to row 1. Detail sheet: a Passengers list (`Name · Seat 12A`, a per-passenger
+   "View boarding pass" trailing control when they have one), the Documents list shows
+   one boarding-pass row per passenger (`Boarding pass · Name`); the standalone "View
+   boarding pass" button is gone. Card: seats joined (`12A, 12B`, `AutoShrinkText`),
+   the pass marker shows when ANY passenger has a pass — a tap opens the single pass,
+   or a small chooser listing passengers when several. Share image: a passengers line.
+   Review sheet (ADR-045): the segment card names the passenger. Status check, polling
+   and notifications are untouched.
+
+**Contract touches.** `core:model`: `FlightPassenger`, `FlightWithPassengers`,
+`FlightBoardingPass`, `FlightPassengerIds`; `FlightJourney.seat/boardingPassPath`
+re-documented as mirrors. `core:database`: schema v4 (`flight_passengers`),
+`FlightPassengerEntity`, `FlightWithPassengersEntity`, `FlightDao` passenger queries +
+relation reads, `MIGRATION_3_4`, `BackupDao.dumpFlightPassengers/upsertFlightPassengers`.
+`core:data`: `FlightRepository` passenger ops (above), `FlightPassengerMatching`,
+`FlightPassengerDto` + `BackupEntries.FLIGHT_PASSENGERS/KEY_FLIGHT_PASSENGERS`,
+`BackupSnapshot.flightPassengers`, `FlightSharePayload.passengers` +
+`SharedFlightPassenger`, `SharePayloadMappers.toPassengerRows`. `core:google`:
+`DriveUploadEngine.registerBoardingPasses` iterates passengers. `feature:flights`:
+`PassengerFormRow`, `FlightFormState.passengers`, `FlightFormEvent.PassengerAdded`,
+`FlightBatchOutcome.passengerAddedIds`, `FlightListUiState.flights:
+List<FlightWithPassengers>`, `FlightDetailSheet(passengers)`, `FlightDocument.passengerName`,
+`BoardingPassImporter.store(uri, passengerId)` (the key is a passenger id now), strings
+`flights_passenger*`. `core:testing`: `Fixtures.flightPassenger`.
+
+**Consequences.** Every flight add path can now grow a journey by a passenger instead
+of refusing; the data model finally matches the train side. Costs: one more table and
+one more backup file; `seat`/`boardingPassPath` on the flight row are derived and must
+never be edited directly (repository-only). Tests: `core:database` +4 (passenger DAO,
+relation, cascade, 3→4 backfill), `core:data` repository merge rules / mirror / backup
+round-trip + v3-build backfill / share codec, `feature:flights` form rows, passenger
+match on import, two passes same flight → one flight two passengers, chooser; e2e
+`FlightPassengersE2eTest`. Device validation in `docs/validation-report.md`.
+Follow-ups: deleting a passenger does not delete their pass file (the flight delete
+never did either — a storage sweep would cover both); the SMS/email text parser maps its
+one passenger name to row 1 only.

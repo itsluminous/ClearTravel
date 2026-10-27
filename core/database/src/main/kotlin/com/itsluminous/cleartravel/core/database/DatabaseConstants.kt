@@ -7,7 +7,8 @@ object DatabaseConstants {
 
     /**
      * Current Room schema version. History: 1 = ADR-004 catalog (11 tables);
-     * 2 = `train_coaches` added (ADR-022); 3 = `travel_documents` added (ADR-027).
+     * 2 = `train_coaches` added (ADR-022); 3 = `travel_documents` added (ADR-027);
+     * 4 = `flight_passengers` added + one row backfilled per flight (ADR-046).
      */
-    const val SCHEMA_VERSION = 3
+    const val SCHEMA_VERSION = 4
 }

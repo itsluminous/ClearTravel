@@ -2,13 +2,16 @@ package com.itsluminous.cleartravel.core.database.dao
 
 import androidx.room.Dao
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Upsert
 import com.itsluminous.cleartravel.core.database.entity.FlightJourneyEntity
+import com.itsluminous.cleartravel.core.database.entity.FlightPassengerEntity
+import com.itsluminous.cleartravel.core.database.entity.FlightWithPassengersEntity
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 import java.time.LocalDate
 
-/** Flight journeys. All read queries exclude tombstoned rows (ADR-002). */
+/** Flight journeys + passengers (ADR-046). All read queries exclude tombstoned rows (ADR-002). */
 @Dao
 interface FlightDao {
     @Query("SELECT * FROM flight_journeys WHERE deleted_at IS NULL AND archived = 0 ORDER BY date IS NULL, date, sched_dep")
@@ -16,6 +19,15 @@ interface FlightDao {
 
     @Query("SELECT * FROM flight_journeys WHERE deleted_at IS NULL AND archived = 1 ORDER BY date DESC")
     fun observeArchived(): Flow<List<FlightJourneyEntity>>
+
+    /** Active journeys with their passenger rows (tombstoned passengers included — filtered in the mapper). */
+    @Transaction
+    @Query("SELECT * FROM flight_journeys WHERE deleted_at IS NULL AND archived = 0 ORDER BY date IS NULL, date, sched_dep")
+    fun observeActiveWithPassengers(): Flow<List<FlightWithPassengersEntity>>
+
+    @Transaction
+    @Query("SELECT * FROM flight_journeys WHERE deleted_at IS NULL AND archived = 1 ORDER BY date DESC")
+    fun observeArchivedWithPassengers(): Flow<List<FlightWithPassengersEntity>>
 
     @Query("SELECT * FROM flight_journeys WHERE id = :id AND deleted_at IS NULL")
     fun observeById(id: String): Flow<FlightJourneyEntity?>
@@ -49,6 +61,33 @@ interface FlightDao {
     @Query("UPDATE flight_journeys SET deleted_at = :at, updated_at = :at WHERE id = :id")
     suspend fun softDelete(
         id: String,
+        at: Instant,
+    )
+
+    // ---- Passengers (ADR-046) ----
+
+    @Query("SELECT * FROM flight_passengers WHERE flight_id = :flightId AND deleted_at IS NULL ORDER BY sort_order")
+    fun observePassengers(flightId: String): Flow<List<FlightPassengerEntity>>
+
+    @Query("SELECT * FROM flight_passengers WHERE flight_id = :flightId AND deleted_at IS NULL ORDER BY sort_order")
+    suspend fun getPassengers(flightId: String): List<FlightPassengerEntity>
+
+    @Query("SELECT * FROM flight_passengers WHERE id = :id AND deleted_at IS NULL")
+    suspend fun getPassenger(id: String): FlightPassengerEntity?
+
+    @Upsert
+    suspend fun upsertPassengers(passengers: List<FlightPassengerEntity>)
+
+    @Query("UPDATE flight_passengers SET deleted_at = :at, updated_at = :at WHERE id = :id")
+    suspend fun softDeletePassenger(
+        id: String,
+        at: Instant,
+    )
+
+    /** Soft-deletes every live passenger of a flight (used when the flight is deleted). */
+    @Query("UPDATE flight_passengers SET deleted_at = :at, updated_at = :at WHERE flight_id = :flightId AND deleted_at IS NULL")
+    suspend fun softDeletePassengersFor(
+        flightId: String,
         at: Instant,
     )
 }

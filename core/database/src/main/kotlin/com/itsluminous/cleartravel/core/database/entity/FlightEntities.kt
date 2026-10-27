@@ -1,13 +1,17 @@
 package com.itsluminous.cleartravel.core.database.entity
 
 import androidx.room.ColumnInfo
+import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import androidx.room.Relation
 import com.itsluminous.cleartravel.core.model.Attachment
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
 import com.itsluminous.cleartravel.core.model.FlightStatus
+import com.itsluminous.cleartravel.core.model.FlightWithPassengers
 import java.time.Instant
 import java.time.LocalDate
 
@@ -41,6 +45,35 @@ data class FlightJourneyEntity(
     @ColumnInfo(name = "google_event_id") val googleEventId: String?,
     @ColumnInfo(name = "updated_at") val updatedAt: Instant,
     @ColumnInfo(name = "deleted_at") val deletedAt: Instant?,
+)
+
+/** Room row for [FlightPassenger] (ADR-046, schema v4). */
+@Entity(
+    tableName = "flight_passengers",
+    indices = [Index("flight_id")],
+)
+data class FlightPassengerEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "flight_id") val flightId: String,
+    val name: String,
+    val seat: String,
+    @ColumnInfo(name = "pnr_booking_ref") val pnrBookingRef: String,
+    @ColumnInfo(name = "boarding_pass_path") val boardingPassPath: String?,
+    @ColumnInfo(name = "sequence_number") val sequenceNumber: String,
+    @ColumnInfo(name = "cabin_class") val cabinClass: String,
+    @ColumnInfo(name = "sort_order") val sortOrder: Int,
+    @ColumnInfo(name = "updated_at") val updatedAt: Instant,
+    @ColumnInfo(name = "deleted_at") val deletedAt: Instant?,
+)
+
+/**
+ * A flight row with EVERY passenger row Room finds for it (tombstones included —
+ * `@Relation` cannot filter); [toModel] drops tombstones and orders by `sort_order`.
+ */
+data class FlightWithPassengersEntity(
+    @Embedded val flight: FlightJourneyEntity,
+    @Relation(parentColumn = "id", entityColumn = "flight_id")
+    val passengers: List<FlightPassengerEntity>,
 )
 
 /** Room row for [Attachment] (ADR-004). Polymorphic owner: (`owner_type`, `owner_id`). */
@@ -119,6 +152,43 @@ fun FlightJourneyEntity.toModel(): FlightJourney =
         googleEventId = googleEventId,
         updatedAt = updatedAt,
         deletedAt = deletedAt,
+    )
+
+fun FlightPassenger.toEntity(): FlightPassengerEntity =
+    FlightPassengerEntity(
+        id = id,
+        flightId = flightId,
+        name = name,
+        seat = seat,
+        pnrBookingRef = pnrBookingRef,
+        boardingPassPath = boardingPassPath,
+        sequenceNumber = sequenceNumber,
+        cabinClass = cabinClass,
+        sortOrder = sortOrder,
+        updatedAt = updatedAt,
+        deletedAt = deletedAt,
+    )
+
+fun FlightPassengerEntity.toModel(): FlightPassenger =
+    FlightPassenger(
+        id = id,
+        flightId = flightId,
+        name = name,
+        seat = seat,
+        pnrBookingRef = pnrBookingRef,
+        boardingPassPath = boardingPassPath,
+        sequenceNumber = sequenceNumber,
+        cabinClass = cabinClass,
+        sortOrder = sortOrder,
+        updatedAt = updatedAt,
+        deletedAt = deletedAt,
+    )
+
+/** Live passengers only, in `sortOrder` (ADR-002 tombstones are never shown). */
+fun FlightWithPassengersEntity.toModel(): FlightWithPassengers =
+    FlightWithPassengers(
+        flight = flight.toModel(),
+        passengers = passengers.filter { it.deletedAt == null }.sortedBy { it.sortOrder }.map { it.toModel() },
     )
 
 fun Attachment.toEntity(): AttachmentEntity =

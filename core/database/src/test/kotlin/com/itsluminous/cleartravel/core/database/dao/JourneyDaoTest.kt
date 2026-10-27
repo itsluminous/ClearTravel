@@ -4,6 +4,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.database.ClearTravelDatabase
 import com.itsluminous.cleartravel.core.database.entity.toEntity
+import com.itsluminous.cleartravel.core.database.entity.toModel
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.core.testing.inMemoryDatabase
@@ -191,6 +192,62 @@ class FlightDaoTest {
             val columns = db.syncColumns("flight_journeys", Fixtures.FIXED_ID)
             assertThat(columns?.deletedAtEpochMillis).isEqualTo(deleteAt.toEpochMilli())
             assertThat(columns?.updatedAtEpochMillis).isEqualTo(deleteAt.toEpochMilli())
+        }
+
+    @Test
+    fun `passengers round-trip ordered by sort order and hide tombstones`() =
+        runTest {
+            val flight = Fixtures.flightJourney(id = Fixtures.FIXED_ID)
+            dao.upsert(flight.toEntity())
+            val second = Fixtures.flightPassenger(flightId = flight.id, name = "BANDANA KUMARI", seat = "12B", sortOrder = 1)
+            val first = Fixtures.flightPassenger(flightId = flight.id, name = "PRAKASH KUMAR", seat = "12A", sortOrder = 0)
+            val gone = Fixtures.flightPassenger(flightId = flight.id, sortOrder = 2, deletedAt = Fixtures.NOW)
+            val otherFlight = Fixtures.flightPassenger(flightId = "other", sortOrder = 0)
+            dao.upsertPassengers(listOf(second, first, gone, otherFlight).map { it.toEntity() })
+
+            assertThat(dao.observePassengers(flight.id).first()).containsExactly(first.toEntity(), second.toEntity()).inOrder()
+            assertThat(dao.getPassengers(flight.id)).containsExactly(first.toEntity(), second.toEntity()).inOrder()
+            assertThat(dao.getPassenger(first.id)).isEqualTo(first.toEntity())
+            assertThat(dao.getPassenger(gone.id)).isNull()
+        }
+
+    @Test
+    fun `flight with passengers relation drops tombstones and keeps sort order`() =
+        runTest {
+            val flight = Fixtures.flightJourney(id = Fixtures.FIXED_ID)
+            val bare = Fixtures.flightJourney(id = "bare")
+            dao.upsert(flight.toEntity())
+            dao.upsert(bare.toEntity())
+            val second = Fixtures.flightPassenger(flightId = flight.id, name = "B", sortOrder = 1)
+            val first = Fixtures.flightPassenger(flightId = flight.id, name = "A", sortOrder = 0)
+            val gone = Fixtures.flightPassenger(flightId = flight.id, sortOrder = 2, deletedAt = Fixtures.NOW)
+            dao.upsertPassengers(listOf(second, first, gone).map { it.toEntity() })
+
+            val rows = dao.observeActiveWithPassengers().first().map { it.toModel() }
+
+            assertThat(rows.map { it.flight.id }).containsExactly(flight.id, bare.id)
+            assertThat(rows.single { it.flight.id == flight.id }.passengers).containsExactly(first, second).inOrder()
+            assertThat(rows.single { it.flight.id == bare.id }.passengers).isEmpty()
+        }
+
+    @Test
+    fun `soft deleting a passenger or all of a flight's passengers bumps updated_at`() =
+        runTest {
+            val p1 = Fixtures.flightPassenger(id = Fixtures.FIXED_ID, flightId = "f1", sortOrder = 0)
+            val p2 = Fixtures.flightPassenger(flightId = "f1", sortOrder = 1)
+            val other = Fixtures.flightPassenger(flightId = "f2")
+            dao.upsertPassengers(listOf(p1, p2, other).map { it.toEntity() })
+            val deleteAt = Fixtures.NOW.plusSeconds(60)
+
+            dao.softDeletePassenger(p1.id, deleteAt)
+            assertThat(dao.getPassengers("f1")).containsExactly(p2.toEntity())
+            val columns = db.syncColumns("flight_passengers", p1.id)
+            assertThat(columns?.deletedAtEpochMillis).isEqualTo(deleteAt.toEpochMilli())
+            assertThat(columns?.updatedAtEpochMillis).isEqualTo(deleteAt.toEpochMilli())
+
+            dao.softDeletePassengersFor("f1", deleteAt)
+            assertThat(dao.getPassengers("f1")).isEmpty()
+            assertThat(dao.getPassengers("f2")).containsExactly(other.toEntity())
         }
 }
 

@@ -7,6 +7,9 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.database.entity.toEntity
+import com.itsluminous.cleartravel.core.database.entity.toModel
+import com.itsluminous.cleartravel.core.model.FlightPassenger
+import com.itsluminous.cleartravel.core.model.FlightPassengerIds
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -21,7 +24,8 @@ import org.robolectric.annotation.Config
  * schema history (ADR-022): a real v1 database file — populated with a ticket, a
  * passenger and a route stop — opens at the current version with the data intact,
  * and the freshly created `train_coaches` (v2) and `travel_documents` (v3) tables are
- * usable; a real v2 file with a coach row migrates to v3 likewise. `MigrationTestHelper`
+ * usable; a real v2 file with a coach row migrates to v3 likewise; a real v3 file with
+ * seated flights migrates to v4 with one backfilled passenger each (ADR-046). `MigrationTestHelper`
  * validates the migrated schema against `schemas/<version>.json` exactly, so a
  * migration whose SQL drifts from the entity definition fails here, not on a
  * user's phone.
@@ -155,6 +159,81 @@ class MigrationTest {
                 db.travelDocumentDao().upsert(document.toEntity())
                 assertThat(db.travelDocumentDao().getById(document.id)).isEqualTo(document.toEntity())
                 assertThat(db.travelDocumentDao().getPendingDriveUploads()).containsExactly(document.toEntity())
+            } finally {
+                db.close()
+            }
+        }
+
+    @Test
+    fun `v3 database migrates to v4 backfilling one passenger per flight with a seat or pass`() =
+        runTest {
+            val seated = Fixtures.flightJourney(id = "seated", seat = " 12A ", boardingPassPath = "/data/passes/seated.pdf")
+            val passOnly = Fixtures.flightJourney(id = "pass-only", seat = "", boardingPassPath = "/data/passes/pass-only.png")
+            val bare = Fixtures.flightJourney(id = "bare", seat = "", boardingPassPath = null)
+            val deleted = Fixtures.flightJourney(id = "deleted", seat = "1A", deletedAt = Fixtures.NOW)
+            helper.createDatabase(DB_NAME, 3).use { v3 ->
+                for (flight in listOf(seated, passOnly, bare, deleted)) {
+                    v3.execSQL(
+                        "INSERT INTO flight_journeys (id, airline_iata, flight_number, date, pnr_booking_ref, seat, cabin_class, " +
+                            "dep_airport, arr_airport, sched_dep, sched_arr, est_dep, est_arr, status, dep_terminal, dep_gate, " +
+                            "arr_terminal, arr_gate, baggage_belt, aircraft_type, archived, last_fetched_at, boarding_pass_path, " +
+                            "check_in_url, google_event_id, updated_at, deleted_at) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL, 'scheduled', '', '', '', '', '', '', 0, NULL, ?, " +
+                            "NULL, NULL, ?, ?)",
+                        arrayOf<Any?>(
+                            flight.id,
+                            flight.airlineIata,
+                            flight.flightNumber,
+                            flight.date.toString(),
+                            flight.pnrBookingRef,
+                            flight.seat,
+                            flight.cabinClass,
+                            flight.depAirport,
+                            flight.arrAirport,
+                            flight.boardingPassPath,
+                            Fixtures.NOW.toEpochMilli(),
+                            flight.deletedAt?.toEpochMilli(),
+                        ),
+                    )
+                }
+            }
+
+            helper.runMigrationsAndValidate(DB_NAME, DatabaseConstants.SCHEMA_VERSION, true, *DatabaseMigrations.ALL).close()
+
+            val db =
+                Room
+                    .databaseBuilder(
+                        ApplicationProvider.getApplicationContext(),
+                        ClearTravelDatabase::class.java,
+                        DB_NAME,
+                    ).addMigrations(*DatabaseMigrations.ALL)
+                    .allowMainThreadQueries()
+                    .build()
+            try {
+                val dao = db.flightDao()
+                assertThat(dao.getPassengers(seated.id)).containsExactly(
+                    FlightPassenger(
+                        id = FlightPassengerIds.legacy(seated.id),
+                        flightId = seated.id,
+                        seat = "12A",
+                        boardingPassPath = seated.boardingPassPath,
+                        updatedAt = Fixtures.NOW,
+                    ).toEntity(),
+                )
+                assertThat(dao.getPassengers(passOnly.id).single().boardingPassPath).isEqualTo(passOnly.boardingPassPath)
+                assertThat(dao.getPassengers(passOnly.id).single().seat).isEmpty()
+                assertThat(dao.getPassengers(bare.id)).isEmpty()
+                assertThat(dao.getPassengers(deleted.id)).isEmpty()
+                // The flight rows themselves are untouched (mirror columns still read as before).
+                assertThat(dao.getById(seated.id)?.seat).isEqualTo(" 12A ")
+                assertThat(
+                    dao
+                        .observeActiveWithPassengers()
+                        .first()
+                        .map { it.toModel() }
+                        .single { it.flight.id == seated.id }
+                        .seats,
+                ).containsExactly("12A")
             } finally {
                 db.close()
             }

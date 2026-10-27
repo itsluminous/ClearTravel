@@ -19,6 +19,7 @@ import com.itsluminous.cleartravel.core.database.entity.ChecklistItemEntity
 import com.itsluminous.cleartravel.core.database.entity.ChecklistPresetEntity
 import com.itsluminous.cleartravel.core.database.entity.ChecklistPresetItemEntity
 import com.itsluminous.cleartravel.core.database.entity.FlightJourneyEntity
+import com.itsluminous.cleartravel.core.database.entity.FlightPassengerEntity
 import com.itsluminous.cleartravel.core.database.entity.ItineraryItemEntity
 import com.itsluminous.cleartravel.core.database.entity.TrainCoachEntity
 import com.itsluminous.cleartravel.core.database.entity.TrainPassengerEntity
@@ -32,7 +33,7 @@ import com.itsluminous.cleartravel.core.database.entity.TripEntity
  * feature (ADR-004). Schema history is exported to `core/database/schemas/` and
  * committed; bump [DatabaseConstants.SCHEMA_VERSION] and add a [DatabaseMigrations]
  * entry on every version bump (v2: `train_coaches`, ADR-022; v3: `travel_documents`,
- * ADR-027).
+ * ADR-027; v4: `flight_passengers`, ADR-046).
  */
 @Database(
     entities = [
@@ -47,6 +48,7 @@ import com.itsluminous.cleartravel.core.database.entity.TripEntity
         TrainRouteStopEntity::class,
         TrainCoachEntity::class,
         FlightJourneyEntity::class,
+        FlightPassengerEntity::class,
         AttachmentEntity::class,
         TravelDocumentEntity::class,
     ],

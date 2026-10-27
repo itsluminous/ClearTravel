@@ -9,6 +9,7 @@ import com.itsluminous.cleartravel.core.model.ChecklistPresetItem
 import com.itsluminous.cleartravel.core.model.CommuteMode
 import com.itsluminous.cleartravel.core.model.EntityIds
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
 import com.itsluminous.cleartravel.core.model.FlightStatus
 import com.itsluminous.cleartravel.core.model.ItineraryItem
 import com.itsluminous.cleartravel.core.model.ItineraryItemType
@@ -201,6 +202,33 @@ object Fixtures {
         updatedAt: Instant = NOW,
         deletedAt: Instant? = null,
     ): TrainCoach = TrainCoach(id, ticketId, code, sortOrder, updatedAt, deletedAt)
+
+    fun flightPassenger(
+        id: String = EntityIds.newId(),
+        flightId: String = FIXED_ID,
+        name: String = "RAHUL SHARMA",
+        seat: String = "14A",
+        pnrBookingRef: String = "",
+        boardingPassPath: String? = null,
+        sequenceNumber: String = "",
+        cabinClass: String = "",
+        sortOrder: Int = 0,
+        updatedAt: Instant = NOW,
+        deletedAt: Instant? = null,
+    ): FlightPassenger =
+        FlightPassenger(
+            id,
+            flightId,
+            name,
+            seat,
+            pnrBookingRef,
+            boardingPassPath,
+            sequenceNumber,
+            cabinClass,
+            sortOrder,
+            updatedAt,
+            deletedAt,
+        )
 
     fun flightJourney(
         id: String = EntityIds.newId(),
