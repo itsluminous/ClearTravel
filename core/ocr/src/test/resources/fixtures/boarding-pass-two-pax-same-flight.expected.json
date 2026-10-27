@@ -1,0 +1,30 @@
+{
+  "flights": [
+    {
+      "passengerName": { "value": "RAHUL SHARMA", "confidence": "HIGH" },
+      "pnr": { "value": "X8B2Q4", "confidence": "HIGH" },
+      "carrier": { "value": "6E", "confidence": "HIGH" },
+      "flightNumber": { "value": "2345", "confidence": "HIGH" },
+      "fromAirport": { "value": "DEL", "confidence": "HIGH" },
+      "toAirport": { "value": "BOM", "confidence": "HIGH" },
+      "flightDate": { "value": "2025-09-20", "confidence": "HIGH" },
+      "depTime": { "value": "16:25", "confidence": "HIGH" },
+      "depTerminal": { "value": "1", "confidence": "MEDIUM" },
+      "seat": { "value": "12A", "confidence": "HIGH" },
+      "sequenceNumber": { "value": "25", "confidence": "HIGH" },
+      "passengers": [
+        {
+          "name": { "value": "RAHUL SHARMA", "confidence": "HIGH" },
+          "seat": { "value": "12A", "confidence": "HIGH" },
+          "sequenceNumber": { "value": "25", "confidence": "HIGH" }
+        },
+        {
+          "name": { "value": "PRIYA SHARMA", "confidence": "HIGH" },
+          "seat": { "value": "12B", "confidence": "HIGH" },
+          "sequenceNumber": { "value": "26", "confidence": "HIGH" }
+        }
+      ]
+    }
+  ],
+  "source": "OCR_TEXT"
+}

@@ -37,6 +37,8 @@ android {
 }
 
 dependencies {
+    // ADR-047: the passenger identity rule shared with core:data lives in core:model.
+    implementation(project(":core:model"))
     implementation(libs.kotlinx.coroutines.core)
     // Bridges ML Kit's Task API into suspend functions (Task.await()).
     implementation(libs.kotlinx.coroutines.play.services)

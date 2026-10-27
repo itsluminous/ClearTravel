@@ -7,6 +7,7 @@ import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.core.model.FlightPassenger
 import com.itsluminous.cleartravel.core.model.FlightWithPassengers
+import com.itsluminous.cleartravel.core.model.PassengerIdentity
 import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
@@ -175,64 +176,33 @@ interface FlightRepository {
 /**
  * ADR-046: the PURE rule deciding whether an incoming passenger (from a boarding pass,
  * a confirmation, a form row or a shared link) is already on a flight. Shared by the
- * Room repository, every fake and the form ViewModel so all add paths agree.
+ * Room repository, every fake and the form ViewModel so all add paths agree. The rule
+ * itself lives in `core:model`'s [PassengerIdentity] (ADR-047) so the OCR extractor
+ * merges passengers of one document by the very same comparison; this object only
+ * projects [FlightPassenger] onto it.
  */
 object FlightPassengerMatching {
-    private val HONORIFICS = setOf("MR", "MRS", "MS", "MISS", "MSTR", "MASTER", "DR", "PROF", "SHRI", "SMT")
-
     /** A passenger worth adding: a name or a seat. Anything less is "no passenger info" → ADR-025 refusal. */
     fun hasPassengerInfo(passenger: FlightPassenger): Boolean = passenger.name.isNotBlank() || passenger.seat.isNotBlank()
 
-    /**
-     * Upper-cased letter tokens, honorifics dropped, as a SORTED set — so the BCBP
-     * `SHARMA/RAHUL`, a ticket's `Rahul Sharma` and an OTA's `MR RAHUL SHARMA` are one
-     * person. Empty when the name carries no letters.
-     */
-    fun normalizeName(raw: String): Set<String> =
-        raw
-            .uppercase()
-            .split(Regex("[^A-Z]+"))
-            .filter { it.isNotBlank() && it !in HONORIFICS }
-            .toSortedSet()
+    /** See [PassengerIdentity.normalizeName]. */
+    fun normalizeName(raw: String): Set<String> = PassengerIdentity.normalizeName(raw)
 
-    /** Upper-cased seat without leading zeros (`010A` → `10A`), empty when blank. */
-    fun normalizeSeat(raw: String): String = raw.trim().uppercase().trimStart('0')
+    /** See [PassengerIdentity.normalizeSeat]. */
+    fun normalizeSeat(raw: String): String = PassengerIdentity.normalizeSeat(raw)
+
+    /** The identifying strings [PassengerIdentity] compares. */
+    fun FlightPassenger.identityKeys(): PassengerIdentity.Keys =
+        PassengerIdentity.Keys(name = name, seat = seat, sequenceNumber = sequenceNumber, pnr = pnrBookingRef)
 
     /**
-     * The existing passenger [incoming] denotes, or null when they are a new person:
-     * names decide when both sides have one (a different name is never a match, even on
-     * the same seat); otherwise the seat; otherwise the sequence number, then the
-     * passenger PNR.
+     * The existing passenger [incoming] denotes, or null when they are a new person —
+     * [PassengerIdentity.indexOfMatch] over the passengers' keys.
      */
     fun findMatch(
         existing: List<FlightPassenger>,
         incoming: FlightPassenger,
-    ): FlightPassenger? {
-        val incomingName = normalizeName(incoming.name)
-        val incomingSeat = normalizeSeat(incoming.seat)
-        val incomingSequence = incoming.sequenceNumber.trim().trimStart('0')
-        val incomingPnr = incoming.pnrBookingRef.trim().uppercase()
-        // Names first: the most specific signal when both sides carry one.
-        if (incomingName.isNotEmpty()) {
-            val named = existing.filter { normalizeName(it.name).isNotEmpty() }
-            named.firstOrNull { normalizeName(it.name) == incomingName }?.let { return it }
-            // A named passenger that matches NO existing name is only "the same" as a
-            // nameless row with the same seat (a legacy backfill waiting for its name).
-            val nameless = existing.filter { normalizeName(it.name).isEmpty() }
-            return nameless.firstOrNull { incomingSeat.isNotEmpty() && normalizeSeat(it.seat) == incomingSeat }
-        }
-        if (incomingSeat.isNotEmpty()) {
-            existing.firstOrNull { normalizeSeat(it.seat) == incomingSeat }?.let { return it }
-            return null
-        }
-        if (incomingSequence.isNotEmpty()) {
-            existing.firstOrNull { it.sequenceNumber.trim().trimStart('0') == incomingSequence }?.let { return it }
-        }
-        if (incomingPnr.isNotEmpty()) {
-            existing.firstOrNull { it.pnrBookingRef.trim().uppercase() == incomingPnr }?.let { return it }
-        }
-        return null
-    }
+    ): FlightPassenger? = existing.getOrNull(PassengerIdentity.indexOfMatch(existing.map { it.identityKeys() }, incoming.identityKeys()))
 
     /** [existing] with every blank field filled from [incoming] (name, seat, PNR, sequence, cabin — never the pass). */
     fun fillBlanks(

@@ -11,7 +11,9 @@ import org.junit.runners.Parameterized
 /**
  * Fixture harness for the boarding-pass OCR-text fallback: every recorded fixture is
  * extracted and compared against its expected-output JSON — one field table per pass
- * (ADR-003 discipline; ADR-045 `boarding-pass-two-stacked` holds two passes on one page).
+ * (ADR-003 discipline; ADR-045 `boarding-pass-two-stacked` holds two passes on one page;
+ * ADR-047 `boarding-pass-two-pax-same-flight` two passes for the SAME flight → one
+ * segment with two passengers).
  */
 @RunWith(Parameterized::class)
 class BoardingPassTextExtractorFixturesTest(
@@ -33,7 +35,7 @@ class BoardingPassTextExtractorFixturesTest(
     companion object {
         @JvmStatic
         @Parameterized.Parameters(name = "{0}")
-        fun fixtures() = listOf("boarding-pass-1", "boarding-pass-2", "boarding-pass-two-stacked")
+        fun fixtures() = listOf("boarding-pass-1", "boarding-pass-2", "boarding-pass-two-stacked", "boarding-pass-two-pax-same-flight")
     }
 }
 

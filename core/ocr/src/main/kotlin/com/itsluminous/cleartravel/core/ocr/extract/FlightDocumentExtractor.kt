@@ -3,6 +3,7 @@ package com.itsluminous.cleartravel.core.ocr.extract
 import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedField
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedFlight
+import com.itsluminous.cleartravel.core.ocr.model.ExtractedPassenger
 import com.itsluminous.cleartravel.core.ocr.pipeline.OcrLayout
 
 /**
@@ -15,6 +16,13 @@ import com.itsluminous.cleartravel.core.ocr.pipeline.OcrLayout
  * a baggage table, is folded into the dated segment). A document with exactly ONE
  * segment additionally falls back to whole-document extraction for its blank fields,
  * which keeps every pre-ADR-045 single-flight fixture at its recorded values.
+ *
+ * ADR-047: a segment carries a LIST of passengers. The segment's own text names at
+ * most one person per labeled match (a passenger TABLE under a `Name …` header names
+ * every row); EVERY seat-table row flying the segment's route attaches as a passenger
+ * (a row naming someone already there fills their seat); and the dedupe merges the
+ * passengers of a second mention — a stacked page with two passes for the same flight
+ * is one segment with two passengers.
  *
  * Confidence ladder (ADR-009): labeled → HIGH, structural → MEDIUM, weak → LOW.
  */
@@ -72,7 +80,11 @@ internal class FlightDocumentExtractor(
             if (attached.size == 1 && segmentation.segments.isNotEmpty()) {
                 // Legacy parity: a single-flight document reads blank fields from the
                 // whole document minus the tail (the tail never carries flight data).
-                val body = (segmentation.preamble + segmentation.segments.flatten()).joinToString("\n")
+                // Several mentions folded into one flight (ADR-047: a stacked page with a
+                // pass per traveller) read from the FIRST mention only — the repeats
+                // would otherwise pair one `TERMINAL T1` with its own echo.
+                val mentions = if (segmentation.segments.size == 1) segmentation.segments else segmentation.segments.take(1)
+                val body = (segmentation.preamble + mentions.flatten()).joinToString("\n")
                 listOf(attached.single().fillBlanksFrom(extractFields(body)))
             } else {
                 attached
@@ -109,7 +121,6 @@ internal class FlightDocumentExtractor(
         val times = extractTimes(text)
         val terminals = extractTerminals(lines, route)
         return ExtractedFlight(
-            passengerName = extractName(text, lines),
             pnr = extractPnr(text),
             carrier = token?.let { ExtractedField.of(it.carrier, it.confidence) } ?: ExtractedField.EMPTY,
             flightNumber = token?.let { ExtractedField.of(it.number, it.confidence) } ?: ExtractedField.EMPTY,
@@ -121,40 +132,93 @@ internal class FlightDocumentExtractor(
             depTerminal = terminals.first,
             arrTerminal = terminals.second,
             cabinClass = extractCabin(text),
-            seat = extractSeat(text),
-            sequenceNumber = if (profile == Profile.BOARDING_PASS) extractSequence(text) else ExtractedField.EMPTY,
+            passengers =
+                extractPassengers(
+                    names = extractNames(text, lines),
+                    seat = extractSeat(text),
+                    sequenceNumber = if (profile == Profile.BOARDING_PASS) extractSequence(text) else ExtractedField.EMPTY,
+                ),
         )
     }
 
-    private fun ExtractedFlight.inheritShared(shared: ExtractedFlight): ExtractedFlight =
-        copy(
-            passengerName = passengerName.orElse(shared.passengerName),
+    /**
+     * The passengers one text names (ADR-047): the seat and sequence number a text
+     * carries belong to the FIRST named person (a pass prints one of each); further
+     * names (a passenger table) are name-only until a seat row fills them. No name at
+     * all → a nameless passenger when there is at least a seat or a sequence.
+     */
+    private fun extractPassengers(
+        names: List<ExtractedField>,
+        seat: ExtractedField,
+        sequenceNumber: ExtractedField,
+    ): List<ExtractedPassenger> {
+        if (names.isEmpty()) return ExtractedPassenger.single(ExtractedField.EMPTY, seat, sequenceNumber)
+        return names.mapIndexed { index, name ->
+            if (index == 0) {
+                ExtractedPassenger(name = name, seat = seat, sequenceNumber = sequenceNumber)
+            } else {
+                ExtractedPassenger(name = name)
+            }
+        }
+    }
+
+    /**
+     * Preamble fields a segment lacks: locator, cabin and — for passengers — the
+     * preamble's NAMES (never its seat, which belongs to no particular leg): a segment
+     * naming nobody takes every preamble name; a segment with a seat but no name is
+     * the preamble's single traveller (pre-ADR-047 parity).
+     */
+    private fun ExtractedFlight.inheritShared(shared: ExtractedFlight): ExtractedFlight {
+        val sharedNames = shared.passengers.filter { it.name.isPresent }.map { ExtractedPassenger(name = it.name) }
+        val inherited =
+            when {
+                passengers.isEmpty() -> sharedNames
+                passengers.none { it.name.isPresent } && sharedNames.size == 1 ->
+                    passengers.mapIndexed { index, p -> if (index == 0) p.copy(name = sharedNames.single().name) else p }
+                else -> passengers
+            }
+        return copy(
             pnr = pnr.orElse(shared.pnr),
             cabinClass = cabinClass.orElse(shared.cabinClass),
+            passengers = inherited,
         )
+    }
 
-    private fun extractName(
+    /**
+     * The names a text prints, in order: a labeled passenger (`Traveller: …`) or a BCBP
+     * style `SHARMA/RAHUL` names ONE person; a `Name  Seat  Meal  Status` table header
+     * names every contiguous row below it whose first cell is a plain name (OTA
+     * passenger tables, ADR-047) — falling back to the first such row anywhere below
+     * when none follows directly.
+     */
+    private fun extractNames(
         text: String,
         lines: List<String>,
-    ): ExtractedField {
+    ): List<ExtractedField> {
         labeledName.find(text)?.let {
-            return ExtractedField.of(displayName(it.groupValues[1]), ExtractionConfidence.HIGH)
+            return listOf(ExtractedField.of(displayName(it.groupValues[1]), ExtractionConfidence.HIGH))
         }
         SLASH_NAME.find(text)?.let {
-            return ExtractedField.of(displayName(it.groupValues[1]), ExtractionConfidence.MEDIUM)
+            return listOf(ExtractedField.of(displayName(it.groupValues[1]), ExtractionConfidence.MEDIUM))
         }
-        // `Name  Seat  Meal  Status` table header → the first multi-cell row below whose
-        // first cell is a plain name (OTA passenger tables).
         val header = lines.indexOfFirst { it.startsWith("NAME") && it.cells().size >= 2 }
         if (header >= 0) {
-            lines
-                .drop(header + 1)
-                .firstNotNullOfOrNull { line ->
-                    val cells = line.cells()
-                    cells.firstOrNull()?.takeIf { cells.size >= 2 && PLAIN_NAME.matches(it) }
-                }?.let { return ExtractedField.of(it, ExtractionConfidence.MEDIUM) }
+            fun nameCell(line: String): String? {
+                val cells = line.cells()
+                return cells.firstOrNull()?.takeIf { cells.size >= 2 && PLAIN_NAME.matches(it) }
+            }
+            val below = lines.drop(header + 1)
+            val contiguous =
+                below
+                    .asSequence()
+                    .map(::nameCell)
+                    .takeWhile { it != null }
+                    .filterNotNull()
+                    .toList()
+            val names = contiguous.ifEmpty { listOfNotNull(below.firstNotNullOfOrNull(::nameCell)) }
+            return names.distinct().map { ExtractedField.of(it, ExtractionConfidence.MEDIUM) }
         }
-        return ExtractedField.EMPTY
+        return emptyList()
     }
 
     /** `MR ARJUN NAIR` -> `ARJUN NAIR`; `SHARMA/RAHUL MR` -> `RAHUL SHARMA`. */
@@ -380,7 +444,11 @@ internal class FlightDocumentExtractor(
 
     /**
      * Seat-table rows in the tail (`Prakash Kumar  BLR-LKO  12A  INR 0.00`) attach to the
-     * segment flying that route; the row's leading name fills a blank passenger too.
+     * segment flying that route — EVERY row (ADR-047), each a passenger: a row naming
+     * someone already on the segment fills their seat (the shared [ExtractedPassenger.merge]
+     * rule); a NAMELESS row fills the first seat-less passenger before it counts as a
+     * new person (a seat table lists one row per traveller); duplicate rows (the same
+     * name and seat printed twice) attach once. The segment's own passenger stays #1.
      */
     private fun attachSeatTable(
         segments: List<ExtractedFlight>,
@@ -388,26 +456,43 @@ internal class FlightDocumentExtractor(
     ): List<ExtractedFlight> {
         if (tail.isEmpty()) return segments
         val rows =
-            tail.mapNotNull { line ->
-                val m = SEAT_TABLE_ROW.find(line) ?: return@mapNotNull null
-                val name = line.cells().firstOrNull()?.takeIf { PLAIN_NAME.matches(it) }
-                Triple(m.groupValues[1] to m.groupValues[2], m.groupValues[3], name)
-            }
+            tail
+                .mapNotNull { line ->
+                    val m = SEAT_TABLE_ROW.find(line) ?: return@mapNotNull null
+                    val name = line.cells().firstOrNull()?.takeIf { PLAIN_NAME.matches(it) }
+                    SeatRow(from = m.groupValues[1], to = m.groupValues[2], seat = m.groupValues[3], name = name)
+                }.distinct()
         if (rows.isEmpty()) return segments
         return segments.map { segment ->
-            val row =
-                rows.firstOrNull { (route, _, _) ->
-                    route.first == segment.fromAirport.value && route.second == segment.toAirport.value
-                } ?: return@map segment
-            segment.copy(
-                seat = segment.seat.orElse(field(row.second, ExtractionConfidence.MEDIUM)),
-                passengerName =
-                    segment.passengerName.orElse(
-                        row.third?.let { field(it, ExtractionConfidence.MEDIUM) } ?: ExtractedField.EMPTY,
-                    ),
-            )
+            val matching = rows.filter { it.from == segment.fromAirport.value && it.to == segment.toAirport.value }
+            if (matching.isEmpty()) return@map segment
+            val passengers = segment.passengers.toMutableList()
+            for (row in matching) {
+                val incoming =
+                    ExtractedPassenger(
+                        name = row.name?.let { field(it, ExtractionConfidence.MEDIUM) } ?: ExtractedField.EMPTY,
+                        seat = field(row.seat, ExtractionConfidence.MEDIUM),
+                    )
+                val seatless = if (row.name == null) passengers.indexOfFirst { !it.seat.isPresent } else -1
+                when {
+                    seatless >= 0 -> passengers[seatless] = passengers[seatless].fillBlanksFrom(incoming)
+                    else -> {
+                        val merged = ExtractedPassenger.merge(passengers, listOf(incoming))
+                        passengers.clear()
+                        passengers += merged
+                    }
+                }
+            }
+            segment.copy(passengers = passengers)
         }
     }
+
+    private data class SeatRow(
+        val from: String,
+        val to: String,
+        val seat: String,
+        val name: String?,
+    )
 
     // ---- helpers -------------------------------------------------------------------
 

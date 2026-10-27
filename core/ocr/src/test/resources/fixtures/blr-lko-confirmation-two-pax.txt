@@ -1,0 +1,42 @@
+Booking ID:CD - 874068
+YOUR TRAVEL ITINERARY
+X Bengaluru → Lucknow Thu 29 -Oct- 2026  Confirmed PNR R87T5G
+Bengaluru  Luckow
+BLR 10:30  To  LKO 13:05
+29 -0ct- 2026  Duration : 02h 35m  29-0ct- 2026
+Air India Express 2019  Airline PNR: R87T5G
+Economy (L)  Terminal:3
+Terminal: 2
+X Lucknow Bengaluru Sat 31 -Oct- 2026  Confirmed PNR D2FE9V
+Lucknow  Bengaluru
+LKO 20:30  To  BLR 23:00
+31 -Oct- 2026  Duration: 02h 30m  31 -Oct- 2026
+Air India Express 1542  Terminal: 2
+Economy (G)
+Terminal: 3
+La Place Sarovar Portico  Confirmed Res 9K8BTV / csrwzbwra3borvu
+6 Shahnajaf Road
+Number of Rooms  1
+Number Of Guest  Check-In:  Check-Out:
+Stay Period  2 Nights  Thu,29 Oct 2026  Sat,31 Oct 2026
+Rooms Selection
+BOOK AND STAY BREAKFAST INCL SUPERIOR ROOM -1 BEDROOM -2 SINGLE BEDS 340SQFT-
+01
+BOOK AND STAY BREAKFAST INCL SUPERIOR ROOM -1 BEDROOM -2 SINGLE BEDS 340SQFT.
+Itinerary Details
+Unit  Base Price  Taxes & Fees  Total Price
+Bengaluru(BLR) to Lucknow(LKO) - Air India Express IX
+Adult(x 2)  INR 19,616  INR 5,768  INR 25,384
+Lucknow(LKO) to Bengaluru(BLR) - Air India Express IX
+Adult(x 2)  INR 8,764  INR 6,658  INR 15,422
+La Place Sarovar Portico
+Room1 (2 Adults)  INR 9,498.00  INR 475.00  INR 9,973
+Seat Fare
+Prakash Kumar  BLR-LKO  12A  INR O.00
+Bandana Kumari  BLR-LKO  12B  INR O.00
+Prakash Kumar  LKO-BLR  10A  INR O.O0
+Bandana Kumari  LKO-BLR  10C  INR O.O0
+Meal Charges
+Prakash Kumar  Paneer Makhani with Jeera Aloo  Paneer Makhani with Jeera Aloo
+Bandana Kumari  Vegetable Pulao  Vegetable Pulao
+Grand Total :  INR 50,779

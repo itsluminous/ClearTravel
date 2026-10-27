@@ -1,10 +1,16 @@
 package com.itsluminous.cleartravel.core.data.repository
 
 import com.google.common.truth.Truth.assertThat
+import com.itsluminous.cleartravel.core.data.repository.FlightPassengerMatching.identityKeys
+import com.itsluminous.cleartravel.core.model.PassengerIdentity
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import org.junit.Test
 
-/** ADR-046 decision 4: who is already on the flight. */
+/**
+ * ADR-046 decision 4: who is already on the flight. ADR-047 moved the rule itself to
+ * `core:model`'s [PassengerIdentity]; these cases pin the delegate's behaviour and
+ * [`delegates to PassengerIdentity`] its parity with the shared rule.
+ */
 class FlightPassengerMatchingTest {
     private val prakash = Fixtures.flightPassenger(name = "PRAKASH KUMAR", seat = "12A", sortOrder = 0)
     private val bandanaReturn = Fixtures.flightPassenger(name = "BANDANA KUMARI", seat = "10A", sortOrder = 1)
@@ -71,6 +77,26 @@ class FlightPassengerMatchingTest {
             FlightPassengerMatching.findMatch(listOf(byPnr), Fixtures.flightPassenger(name = "", seat = "", pnrBookingRef = "r87t5g")),
         ).isEqualTo(byPnr)
         assertThat(FlightPassengerMatching.findMatch(listOf(byPnr), Fixtures.flightPassenger(name = "", seat = ""))).isNull()
+    }
+
+    @Test
+    fun `delegates to PassengerIdentity (ADR-047 parity)`() {
+        val existing =
+            listOf(prakash, bandanaReturn, Fixtures.flightPassenger(name = "", seat = "", sequenceNumber = "7", pnrBookingRef = "Q1"))
+        val probes =
+            listOf(
+                Fixtures.flightPassenger(name = "Kumari/Bandana", seat = "3C"),
+                Fixtures.flightPassenger(name = "SOMEONE ELSE", seat = "12A"),
+                Fixtures.flightPassenger(name = "", seat = "10a"),
+                Fixtures.flightPassenger(name = "", seat = "", sequenceNumber = "007"),
+                Fixtures.flightPassenger(name = "", seat = "", pnrBookingRef = "q1"),
+                Fixtures.flightPassenger(name = "", seat = ""),
+            )
+        for (probe in probes) {
+            val viaModel = existing.getOrNull(PassengerIdentity.indexOfMatch(existing.map { it.identityKeys() }, probe.identityKeys()))
+            assertThat(FlightPassengerMatching.findMatch(existing, probe)).isEqualTo(viaModel)
+        }
+        assertThat(prakash.identityKeys()).isEqualTo(PassengerIdentity.Keys(name = "PRAKASH KUMAR", seat = "12A"))
     }
 
     @Test

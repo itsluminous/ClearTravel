@@ -10,7 +10,10 @@ object FlightSegments {
      * with a date on only one side → the undated mention is folded into the dated one
      * (fare/baggage tables repeat the flight without its date); the same flight number
      * on two DIFFERENT dates stays two segments. Segments without a flight identity are
-     * kept as they are.
+     * kept as they are. ADR-047: folding a segment MERGES its passengers into the kept
+     * one through [ExtractedFlight.mergeSegment] — a second boarding pass for the same
+     * flight (stacked on the page or on the next PDF page) becomes passenger #2, the
+     * same person mentioned twice stays one passenger.
      */
     fun dedupe(segments: List<ExtractedFlight>): List<ExtractedFlight> {
         val result = mutableListOf<ExtractedFlight>()
@@ -27,7 +30,7 @@ object FlightSegments {
                         )
                 }
             if (existing >= 0) {
-                result[existing] = result[existing].fillBlanksFrom(segment)
+                result[existing] = result[existing].mergeSegment(segment)
             } else {
                 result += segment
             }

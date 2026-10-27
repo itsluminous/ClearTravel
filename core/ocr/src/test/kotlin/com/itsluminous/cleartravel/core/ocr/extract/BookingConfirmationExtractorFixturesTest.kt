@@ -16,7 +16,9 @@ import org.junit.runners.Parameterized
  * PER SEGMENT (ADR-003 discipline; ADR-017, ADR-045). `blr-lko-confirmation` is the
  * ML Kit text of the real OTA itinerary image (two Air India Express legs + a hotel),
  * `blr-lko-confirmation-pdf` the ML Kit text of a real 3-page MakeMyTrip e-ticket
- * (both legs on page 1, baggage/fare pages repeating the flights without dates).
+ * (both legs on page 1, baggage/fare pages repeating the flights without dates),
+ * `blr-lko-confirmation-two-pax` the same OTA itinerary booked for TWO travellers —
+ * a second seat-fare / meal row per leg → every segment carries two passengers (ADR-047).
  */
 @RunWith(Parameterized::class)
 class BookingConfirmationExtractorFixturesTest(
@@ -46,6 +48,7 @@ class BookingConfirmationExtractorFixturesTest(
                 "booking-oneway-hotel-1",
                 "blr-lko-confirmation",
                 "blr-lko-confirmation-pdf",
+                "blr-lko-confirmation-two-pax",
             )
     }
 }
@@ -55,6 +58,8 @@ class BookingConfirmationExtractorBehaviorTest {
     private val extractor = BookingConfirmationExtractor()
 
     private fun flights(text: String): List<ExtractedFlight> = extractor.extract(text.trimIndent()).flights
+
+    private fun ExtractedFlight.nameSeat(): List<String> = passengers.map { "${it.name.value} ${it.seat.value}" }
 
     @Test
     fun `garbage fixture falls back to the empty result`() {
@@ -205,6 +210,87 @@ class BookingConfirmationExtractorBehaviorTest {
         assertThat(result.map { it.seat.value }).containsExactly("12A", "10A").inOrder()
         assertThat(result.map { it.seat.confidence }).containsExactly(ExtractionConfidence.MEDIUM, ExtractionConfidence.MEDIUM)
         assertThat(result.map { it.passengerName.value }).containsExactly("PRAKASH KUMAR", "PRAKASH KUMAR")
+    }
+
+    @Test
+    fun `every seat-table row of a route attaches as a passenger (ADR-047)`() {
+        val result =
+            flights(
+                """
+                Bengaluru → Lucknow Thu 29 Oct 2026
+                BLR 10:30  To  LKO 13:05
+                Air India Express 2019  Airline PNR: R87T5G
+                Lucknow → Bengaluru Sat 31 Oct 2026
+                LKO 20:30  To  BLR 23:00
+                Air India Express 1542  Airline PNR: D2FE9V
+                Seat Fare
+                Prakash Kumar  BLR-LKO  12A  INR 0.00
+                Bandana Kumari  BLR-LKO  12B  INR 0.00
+                Prakash Kumar  LKO-BLR  10A  INR 0.00
+                Bandana Kumari  LKO-BLR  10C  INR 0.00
+                Bandana Kumari  LKO-BLR  10C  INR 0.00
+                """,
+            )
+
+        assertThat(result).hasSize(2)
+        assertThat(result[0].nameSeat()).containsExactly("PRAKASH KUMAR 12A", "BANDANA KUMARI 12B").inOrder()
+        assertThat(result[1].nameSeat()).containsExactly("PRAKASH KUMAR 10A", "BANDANA KUMARI 10C").inOrder()
+        // Derived passenger #1 is unchanged from the single-traveller reading.
+        assertThat(result.map { it.seat.value }).containsExactly("12A", "10A").inOrder()
+    }
+
+    @Test
+    fun `a seat row naming the header passenger fills their seat instead of adding a person`() {
+        val result =
+            flights(
+                """
+                Traveller: MR PRAKASH KUMAR
+                Bengaluru → Lucknow Thu 29 Oct 2026
+                BLR 10:30  To  LKO 13:05
+                Air India Express 2019  Airline PNR: R87T5G
+                Seat Fare
+                Bandana Kumari  BLR-LKO  12B  INR 0.00
+                Kumar Prakash  BLR-LKO  12A  INR 0.00
+                """,
+            ).single()
+
+        assertThat(result.nameSeat()).containsExactly("PRAKASH KUMAR 12A", "BANDANA KUMARI 12B").inOrder()
+        assertThat(result.passengerName.confidence).isEqualTo(ExtractionConfidence.HIGH)
+    }
+
+    @Test
+    fun `a nameless seat row fills the first seat-less passenger before counting as a new one`() {
+        val result =
+            flights(
+                """
+                Traveller: MR PRAKASH KUMAR
+                Bengaluru → Lucknow Thu 29 Oct 2026
+                BLR 10:30  To  LKO 13:05
+                Air India Express 2019  Airline PNR: R87T5G
+                Seat Fare
+                BLR-LKO  12A  INR 0.00
+                BLR-LKO  12B  INR 0.00
+                """,
+            ).single()
+
+        assertThat(result.nameSeat()).containsExactly("PRAKASH KUMAR 12A", "null 12B").inOrder()
+    }
+
+    @Test
+    fun `a passenger table under a NAME header names every row`() {
+        val result =
+            flights(
+                """
+                Booking ID: NF712345678901
+                6E 6114 BLR - HYD Date: 05-11-2026
+                Name  Seat  Meal  Status
+                DEV PATEL  --  --  Confirmed
+                ANITA PATEL  --  --  Confirmed
+                Fare Summary
+                """,
+            ).single()
+
+        assertThat(result.passengers.map { it.name.value }).containsExactly("DEV PATEL", "ANITA PATEL").inOrder()
     }
 
     @Test
