@@ -110,7 +110,9 @@ object FlightPassengerIds {
      * so the two paths never produce two rows for the same legacy seat.
      */
     fun legacy(flightId: String): String =
-        java.util.UUID.nameUUIDFromBytes("cleartravel:flight-passenger:legacy:$flightId".toByteArray(Charsets.UTF_8)).toString()
+        java.util.UUID
+            .nameUUIDFromBytes("cleartravel:flight-passenger:legacy:$flightId".toByteArray(Charsets.UTF_8))
+            .toString()
 }
 
 /**

@@ -34,7 +34,7 @@ const val IMPORT_REVIEW_CONFIRM_TAG = "flights_import_review_confirm"
 
 /**
  * ADR-045 review step: "Found N flights in this file" — one card per segment (airline +
- * number, route, date, time, PNR, seat) with a checkbox, all kept by default, and an
+ * number, route, date, time, PNR, seat, passenger) with a checkbox, all kept by default, and an
  * "Add N flights" button. Segments missing the direct-save minimum say so; confirming
  * with one of those walks the kept segments through the form instead of saving blind.
  * Dismissing writes nothing. A pure choice sheet, so it keeps the default tap-outside
@@ -148,7 +148,7 @@ private fun reviewTitle(form: FlightFormState): String {
         .ifBlank { stringResource(R.string.flights_import_review_unknown_flight) }
 }
 
-/** `Thu, 29 Oct 2026 · 10:30 · PNR R87T5G · Seat 12A` — only the parts the segment has. */
+/** `Thu, 29 Oct 2026 · 10:30 · PNR R87T5G · Seat 12A · BANDANA KUMARI` — only the parts the segment has (ADR-046 names the passenger). */
 @Composable
 private fun reviewDetails(form: FlightFormState): String =
     listOfNotNull(
@@ -156,4 +156,5 @@ private fun reviewDetails(form: FlightFormState): String =
         form.depTimeText.takeIf { it.isNotBlank() },
         form.pnr.takeIf { it.isNotBlank() }?.let { stringResource(R.string.flights_import_review_pnr, it) },
         form.seat.takeIf { it.isNotBlank() }?.let { stringResource(R.string.flights_import_review_seat, it) },
+        form.passengerName.takeIf { it.isNotBlank() }?.let { stringResource(R.string.flights_import_review_passenger, it) },
     ).joinToString(stringResource(R.string.flights_import_review_separator))

@@ -1,6 +1,8 @@
 package com.itsluminous.cleartravel.feature.flights.form
 
 import com.google.common.truth.Truth.assertThat
+import com.itsluminous.cleartravel.core.data.share.FlightSharePayload
+import com.itsluminous.cleartravel.core.data.share.SharedFlightPassenger
 import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassSource
@@ -23,7 +25,7 @@ class FlightFormStateTest {
         )
 
     @Test
-    fun `fromTextExtraction maps fields, reformats times and drops the passenger name`() {
+    fun `fromTextExtraction maps fields, reformats times and seats the passenger in row 1`() {
         val extraction =
             FlightTextExtraction(
                 passengerName = ExtractedField.of("Rahul", ExtractionConfidence.MEDIUM),
@@ -51,6 +53,7 @@ class FlightFormStateTest {
         assertThat(state.depTerminal).isEqualTo("3")
         assertThat(state.arrTerminal).isEmpty()
         assertThat(state.seat).isEqualTo("14A")
+        assertThat(state.passengers.single().name).isEqualTo("Rahul")
         assertThat(state.cabinClass).isEqualTo("Economy")
         assertThat(state.fromText).isTrue()
         assertThat(state.returnLegHint).isTrue()
@@ -124,16 +127,53 @@ class FlightFormStateTest {
     }
 
     @Test
-    fun `fromJourney round-trips the editable fields`() {
-        val source = Fixtures.flightJourney(seat = "12F", cabinClass = "Business")
+    fun `fromJourney round-trips the editable fields - a flight without passenger rows edits its mirror seat as row 1`() {
+        val source = Fixtures.flightJourney(seat = "12F", cabinClass = "Business", boardingPassPath = "/p/legacy.pdf")
 
         val state = FlightFormState.fromJourney(source)
 
         assertThat(state.editingId).isEqualTo(source.id)
         assertThat(state.airlineIata).isEqualTo(source.airlineIata)
         assertThat(state.seat).isEqualTo("12F")
+        assertThat(state.passengers.single().existingPassPath).isEqualTo("/p/legacy.pdf")
         assertThat(state.dateText).isEqualTo(source.date.toString())
         assertThat(FlightFormState.validate(state)).isEmpty()
+        // The mirror columns are the repository's: toJourney leaves them blank.
+        assertThat(state.toJourney(checkInUrl = null).seat).isEmpty()
+        assertThat(state.toJourney(checkInUrl = null).boardingPassPath).isNull()
+    }
+
+    @Test
+    fun `fromJourney loads passenger rows in order with their ids and passes, and toPassengers drops empty rows`() {
+        val source = Fixtures.flightJourney()
+        val second = Fixtures.flightPassenger(flightId = source.id, name = "B", seat = "2B", boardingPassPath = "/p/b.pdf", sortOrder = 1)
+        val first = Fixtures.flightPassenger(flightId = source.id, name = "A", seat = "2A", sortOrder = 0)
+
+        val state = FlightFormState.fromJourney(source, listOf(second, first))
+
+        assertThat(state.passengers.map { it.rowKey }).containsExactly(first.id, second.id).inOrder()
+        assertThat(state.passengers[1].existingPassPath).isEqualTo("/p/b.pdf")
+        val rows = state.copy(passengers = state.passengers + PassengerFormRow()).toPassengers(source.id)
+        assertThat(rows.map { it.id to it.sortOrder }).containsExactly(first.id to 0, second.id to 1).inOrder()
+        assertThat(rows[1].boardingPassPath).isEqualTo("/p/b.pdf")
+    }
+
+    @Test
+    fun `fromSharePayload seats the shared passengers as rows and a bare payload gets one empty row`() {
+        val withPassengers =
+            FlightSharePayload(
+                version = 1,
+                airlineIata = "6E",
+                flightNumber = "2345",
+                date = "2026-09-25",
+                passengers = listOf(SharedFlightPassenger("A", "12a"), SharedFlightPassenger("", "12B")),
+            )
+        val state = FlightFormState.fromSharePayload(withPassengers)
+        assertThat(state.passengers.map { it.name to it.seat }).containsExactly("A" to "12A", "" to "12B").inOrder()
+        assertThat(state.fromSharedLink).isTrue()
+
+        val bare = FlightFormState.fromSharePayload(withPassengers.copy(passengers = emptyList()))
+        assertThat(bare.passengers.single().hasInfo).isFalse()
     }
 
     @Test

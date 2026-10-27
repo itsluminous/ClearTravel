@@ -63,6 +63,7 @@ import com.itsluminous.cleartravel.core.designsystem.component.FullWidthFilterCh
 import com.itsluminous.cleartravel.core.designsystem.component.FullWidthFilterRow
 import com.itsluminous.cleartravel.core.designsystem.component.PasteTextDialog
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightWithPassengers
 import com.itsluminous.cleartravel.feature.flights.R
 import com.itsluminous.cleartravel.feature.flights.checkin.CheckInGateDecision
 import com.itsluminous.cleartravel.feature.flights.detail.FlightDetailSheet
@@ -88,9 +89,11 @@ data class DuplicateFlightNotice(
 )
 
 /**
- * A finished multi-flight import (ADR-045) to explain over the list: "Added N, skipped M
- * already saved", with a "View" action opening the first added (else first existing)
- * journey's sheet. [nonce] makes consecutive imports distinct so the notice re-fires.
+ * A finished multi-flight import (ADR-045) — or a passenger added to an existing journey
+ * (ADR-046) — to explain over the list: "Added N, skipped M already saved" / "Added
+ * Bandana Kumari to IX 2019", with a "View" action opening the first added (else first
+ * grown, else first existing) journey's sheet. [nonce] makes consecutive imports
+ * distinct so the notice re-fires.
  */
 data class BatchImportNotice(
     val outcome: FlightBatchOutcome,
@@ -180,19 +183,43 @@ fun FlightListScreen(
         }
     }
 
-    // ADR-045: "Added 2 flights" / "Added 1 flight, skipped 1 already saved" / "Skipped 2 already saved".
+    // ADR-045/046: "Added 2 flights" / "Added 1 flight, added 1 passenger, skipped 1 already
+    // saved" / "Skipped 2 already saved" / "Added Bandana Kumari to IX 2019".
     val batchMessage =
         batchNotice?.outcome?.let { outcome ->
+            val single = outcome.addedPassengers.singleOrNull()?.takeIf { outcome.isSinglePassengerAdd }
+            if (single != null) {
+                val flight = uiState.flights.firstOrNull { it.flight.id == single.flightId }?.flight
+                val label = flight?.let { "${it.airlineIata} ${it.flightNumber}" } ?: single.flightId
+                return@let stringResource(R.string.flights_passenger_added, single.label, label)
+            }
             val added =
                 if (outcome.addedCount > 0) {
                     pluralStringResource(R.plurals.flights_import_batch_added, outcome.addedCount, outcome.addedCount)
                 } else {
                     null
                 }
+            val passengers =
+                if (outcome.passengerCount > 0) {
+                    pluralStringResource(R.plurals.flights_import_batch_passengers, outcome.passengerCount, outcome.passengerCount)
+                } else {
+                    null
+                }
+            val skipped =
+                if (outcome.skippedCount >
+                    0
+                ) {
+                    stringResource(R.string.flights_import_batch_skipped, outcome.skippedCount)
+                } else {
+                    null
+                }
             when {
-                added != null && outcome.skippedCount > 0 ->
-                    "$added, ${stringResource(R.string.flights_import_batch_skipped, outcome.skippedCount)}"
-                added != null -> added
+                added != null -> listOfNotNull(added, passengers, skipped).joinToString(", ")
+                passengers != null && skipped == null ->
+                    pluralStringResource(R.plurals.flights_import_batch_passengers_only, outcome.passengerCount, outcome.passengerCount)
+                passengers != null ->
+                    pluralStringResource(R.plurals.flights_import_batch_passengers_only, outcome.passengerCount, outcome.passengerCount) +
+                        ", $skipped"
                 else -> stringResource(R.string.flights_import_batch_skipped_only, outcome.skippedCount)
             }
         }
@@ -266,8 +293,8 @@ fun FlightListScreen(
         }
     }
 
-    fun onShare(flight: FlightJourney) {
-        val outcome = runCatching { sharer.share(flight) }.getOrDefault(FlightShareOutcome.FAILED)
+    fun onShare(entry: FlightWithPassengers) {
+        val outcome = runCatching { sharer.share(entry) }.getOrDefault(FlightShareOutcome.FAILED)
         when (outcome) {
             FlightShareOutcome.SHARED -> Unit
             FlightShareOutcome.SHARED_TEXT_ONLY -> scope.launch { snackbarHostState.showSnackbar(shareTextOnlySnackbar) }
@@ -316,13 +343,13 @@ fun FlightListScreen(
                     contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 88.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    items(uiState.flights, key = { it.id }) { flight ->
+                    items(uiState.flights, key = { it.flight.id }) { entry ->
                         FlightCard(
-                            flight = flight,
-                            onClick = { detailFlightId = flight.id },
-                            onCheckStatus = { onCheckStatus(flight.id) },
-                            onWebCheckIn = { onWebCheckIn(flight) },
-                            onShare = { onShare(flight) },
+                            entry = entry,
+                            onClick = { detailFlightId = entry.flight.id },
+                            onCheckStatus = { onCheckStatus(entry.flight.id) },
+                            onWebCheckIn = { onWebCheckIn(entry.flight) },
+                            onShare = { onShare(entry) },
                             onViewPass = onViewPass,
                         )
                     }
@@ -407,8 +434,9 @@ fun FlightListScreen(
         )
     }
 
-    val detailFlight = uiState.flights.firstOrNull { it.id == detailFlightId }
-    if (detailFlight != null) {
+    val detailEntry = uiState.flights.firstOrNull { it.flight.id == detailFlightId }
+    if (detailEntry != null) {
+        val detailFlight = detailEntry.flight
         val attachments by remember(detailFlight.id) {
             documentsViewModel.observeAttachments(detailFlight.id)
         }.collectAsStateWithLifecycle(initialValue = emptyList())
@@ -417,8 +445,9 @@ fun FlightListScreen(
         }.collectAsStateWithLifecycle(initialValue = emptyList())
         FlightDetailSheet(
             flight = detailFlight,
+            passengers = detailEntry.passengers,
             lastCheckOutcome = lastCheckOutcome?.takeIf { it.flightId == detailFlight.id },
-            documents = buildFlightDocuments(detailFlight, attachments),
+            documents = buildFlightDocuments(detailEntry, attachments),
             linkedTrips = linkedTrips,
             onOpenTrip = { tripId ->
                 detailFlightId = null
@@ -473,7 +502,7 @@ fun FlightListScreen(
  */
 @Composable
 private fun FlightCard(
-    flight: FlightJourney,
+    entry: FlightWithPassengers,
     onClick: () -> Unit,
     onCheckStatus: () -> Unit,
     onWebCheckIn: () -> Unit,
@@ -482,7 +511,7 @@ private fun FlightCard(
 ) {
     ClearTravelCard(modifier = Modifier.clickable(onClick = onClick)) {
         Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
-            FlightCardBody(flight = flight, modifier = Modifier.weight(1f), onViewPass = onViewPass)
+            FlightCardBody(entry = entry, modifier = Modifier.weight(1f), onViewPass = onViewPass)
             Column(
                 modifier = Modifier.padding(start = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,

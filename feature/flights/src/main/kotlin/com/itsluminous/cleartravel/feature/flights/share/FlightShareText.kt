@@ -4,6 +4,7 @@ import com.itsluminous.cleartravel.core.data.share.ShareLinkCodec
 import com.itsluminous.cleartravel.core.data.share.SharePayloadMappers
 import com.itsluminous.cleartravel.core.data.share.ShareUrlResult
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -33,8 +34,11 @@ object FlightShareText {
         return listOfNotNull(number, date, route).joinToString(" · ")
     }
 
-    /** The https share link for [flight] (never `TooLong` in practice — a flight payload is ~150 chars). */
-    fun shareUrl(flight: FlightJourney): ShareUrlResult = ShareLinkCodec.buildShareUrl(SharePayloadMappers.toPayload(flight))
+    /** The https share link for [flight] and its [passengers] (ADR-046; a payload stays well under the limit). */
+    fun shareUrl(
+        flight: FlightJourney,
+        passengers: List<FlightPassenger> = emptyList(),
+    ): ShareUrlResult = ShareLinkCodec.buildShareUrl(SharePayloadMappers.toPayload(flight, passengers))
 
     /**
      * Share-sheet caption. [template] is the localized `flights_share_text` resource

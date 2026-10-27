@@ -3,10 +3,13 @@ package com.itsluminous.cleartravel.feature.flights
 import com.itsluminous.cleartravel.core.data.provider.FlightStatusResult
 import com.itsluminous.cleartravel.core.data.repository.AttachmentRepository
 import com.itsluminous.cleartravel.core.data.repository.FlightIdentity
+import com.itsluminous.cleartravel.core.data.repository.FlightPassengerMatching
 import com.itsluminous.cleartravel.core.data.repository.FlightRepository
 import com.itsluminous.cleartravel.core.model.Attachment
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
+import com.itsluminous.cleartravel.core.model.FlightWithPassengers
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
 import com.itsluminous.cleartravel.feature.flights.checkin.CheckInRuleSource
@@ -18,13 +21,15 @@ import com.itsluminous.cleartravel.feature.flights.polling.FlightChange
 import com.itsluminous.cleartravel.feature.flights.status.FlightStatusAlerts
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.LocalDate
 
-/** In-memory [FlightRepository] mirroring the Room implementation's merge semantics. */
+/** In-memory [FlightRepository] mirroring the Room implementation's merge + mirror semantics (ADR-046). */
 class FakeFlightRepository : FlightRepository {
     private val flights = MutableStateFlow<Map<String, FlightJourney>>(emptyMap())
+    private val passengers = MutableStateFlow<Map<String, FlightPassenger>>(emptyMap())
 
     val savedIds: MutableList<String> = mutableListOf()
     val appliedResults: MutableList<Pair<String, FlightStatusResult>> = mutableListOf()
@@ -32,6 +37,21 @@ class FakeFlightRepository : FlightRepository {
     fun seed(vararg journeys: FlightJourney) {
         flights.value = journeys.associateBy { it.id }
     }
+
+    fun seedPassengers(vararg rows: FlightPassenger) {
+        passengers.value = passengers.value + rows.associateBy { it.id }
+    }
+
+    /** Every live passenger row of every flight (assertions). */
+    fun allPassengers(): List<FlightPassenger> =
+        passengers.value.values
+            .filter { it.deletedAt == null }
+            .sortedBy { it.sortOrder }
+
+    private fun livePassengers(flightId: String) =
+        passengers.value.values
+            .filter { it.flightId == flightId && it.deletedAt == null }
+            .sortedBy { it.sortOrder }
 
     private fun active() = flights.map { all -> all.values.filter { !it.archived && it.deletedAt == null } }
 
@@ -43,6 +63,49 @@ class FakeFlightRepository : FlightRepository {
                 it.archived && it.deletedAt == null
             }
         }
+
+    override fun observeActiveWithPassengers(): Flow<List<FlightWithPassengers>> =
+        combine(active(), passengers) { list, _ -> list.map { FlightWithPassengers(it, livePassengers(it.id)) } }
+
+    override fun observeArchivedWithPassengers(): Flow<List<FlightWithPassengers>> =
+        combine(observeArchived(), passengers) { list, _ -> list.map { FlightWithPassengers(it, livePassengers(it.id)) } }
+
+    override fun observePassengers(flightId: String): Flow<List<FlightPassenger>> = passengers.map { livePassengers(flightId) }
+
+    override suspend fun getPassengers(flightId: String): List<FlightPassenger> = livePassengers(flightId)
+
+    override suspend fun savePassengers(
+        flightId: String,
+        passengers: List<FlightPassenger>,
+    ): List<FlightPassenger> {
+        val stamped = passengers.map { it.copy(flightId = flightId, updatedAt = Instant.now()) }
+        this.passengers.value = this.passengers.value + stamped.associateBy { it.id }
+        syncMirror(flightId)
+        return stamped
+    }
+
+    override suspend fun replacePassengers(
+        flightId: String,
+        passengers: List<FlightPassenger>,
+    ): List<FlightPassenger> {
+        val keep = passengers.map { it.id }.toSet()
+        this.passengers.value =
+            this.passengers.value.mapValues { (_, p) ->
+                if (p.flightId == flightId && p.id !in keep && p.deletedAt == null) p.copy(deletedAt = Instant.now()) else p
+            }
+        return savePassengers(flightId, passengers.mapIndexed { index, p -> p.copy(sortOrder = index) })
+    }
+
+    override suspend fun deletePassenger(id: String) {
+        val passenger = passengers.value[id] ?: return
+        passengers.value = passengers.value + (id to passenger.copy(deletedAt = Instant.now()))
+        syncMirror(passenger.flightId)
+    }
+
+    private fun syncMirror(flightId: String) {
+        val current = flights.value[flightId] ?: return
+        flights.value = flights.value + (flightId to FlightPassengerMatching.mirror(current, livePassengers(flightId)))
+    }
 
     override fun observeFlight(id: String): Flow<FlightJourney?> = flights.map { it[id] }
 
@@ -107,6 +170,7 @@ class FakeFlightRepository : FlightRepository {
 
     override suspend fun delete(id: String) {
         flights.value[id]?.let { flights.value = flights.value + (id to it.copy(deletedAt = Instant.now())) }
+        passengers.value = passengers.value.mapValues { (_, p) -> if (p.flightId == id) p.copy(deletedAt = Instant.now()) else p }
     }
 }
 
@@ -116,6 +180,8 @@ class FakeBoardingPassImporter(
     var storedPath: String? = "/data/fake/pass.jpg",
 ) : BoardingPassImporter {
     val prefilled: MutableList<String> = mutableListOf()
+
+    /** (uri, passengerId) per stored copy — ADR-046 keys files by passenger. */
     val stored: MutableList<Pair<String, String>> = mutableListOf()
 
     override suspend fun prefill(uriString: String): BoardingPassExtraction {
@@ -125,14 +191,14 @@ class FakeBoardingPassImporter(
 
     override suspend fun store(
         uriString: String,
-        flightId: String,
+        passengerId: String,
     ): String? {
-        stored += uriString to flightId
-        // Like production: one copy PER flight (`<flightId>.<ext>`), unless a fixed path was forced.
-        return storedPath?.let { if (perFlightPaths) "/data/passes/$flightId.jpg" else it }
+        stored += uriString to passengerId
+        // Like production: one copy PER passenger (`<passengerId>.<ext>`), unless a fixed path was forced.
+        return storedPath?.let { if (perFlightPaths) "/data/passes/$passengerId.jpg" else it }
     }
 
-    /** When true (ADR-045 tests) the returned path is keyed by flight id like the real store. */
+    /** When true (ADR-045/046 tests) the returned path is keyed by passenger id like the real store. */
     var perFlightPaths: Boolean = false
 }
 

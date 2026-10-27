@@ -91,7 +91,9 @@ class FlightFormViewModelTest {
                 viewModel.startFromText("the quick brown fox jumps over the lazy dog")
 
                 assertThat(awaitItem()).isEqualTo(FlightFormEvent.PrefillEmpty)
-                assertThat(viewModel.formState.value).isEqualTo(FlightFormState())
+                val state = viewModel.formState.value
+                assertThat(state.copy(passengers = emptyList())).isEqualTo(FlightFormState(passengers = emptyList()))
+                assertThat(state.passengers.single().hasInfo).isFalse()
             }
         }
 
@@ -135,7 +137,7 @@ class FlightFormViewModelTest {
         runTest {
             viewModel.startBlank()
             viewModel.update {
-                it.copy(airlineIata = "6E", flightNumber = "2345", dateText = "2026-09-25", seat = "14A")
+                it.copy(airlineIata = "6E", flightNumber = "2345", dateText = "2026-09-25").withSeat("14A")
             }
 
             var saved: String? = null
@@ -210,7 +212,10 @@ class FlightFormViewModelTest {
             var saved: String? = null
             viewModel.save { saved = it }
 
-            assertThat(importer.stored).containsExactly("content://picked/pass" to saved)
+            // ADR-046: the file is keyed by the PASSENGER (row 1) and mirrored onto the flight row.
+            val passenger = repository.getPassengers(saved!!).single()
+            assertThat(importer.stored).containsExactly("content://picked/pass" to passenger.id)
+            assertThat(passenger.boardingPassPath).isEqualTo("/data/passes/stored.pdf")
             assertThat(repository.getFlight(saved!!)!!.boardingPassPath).isEqualTo("/data/passes/stored.pdf")
         }
 
@@ -226,7 +231,7 @@ class FlightFormViewModelTest {
                 )
             repository.seed(existing)
             viewModel.startEdit(existing.id)
-            viewModel.update { it.copy(seat = "1A") }
+            viewModel.update { it.withSeat("1A") }
 
             var saved: String? = null
             viewModel.save { saved = it }
@@ -460,7 +465,7 @@ class FlightFormViewModelTest {
             val journey = Fixtures.flightJourney(airlineIata = "AI", flightNumber = "101", date = flightDate, seat = "1A")
             repository.seed(journey)
             viewModel.startEdit(journey.id)
-            viewModel.update { it.copy(seat = "2B") }
+            viewModel.update { it.withSeat("2B") }
 
             var saved: String? = null
             viewModel.save { saved = it }
@@ -578,14 +583,15 @@ class FlightFormViewModelTest {
                 assertThat(flights.map { it.seat }).containsExactly("12A", "10A").inOrder()
                 assertThat(flights.map { it.depTerminal }).containsExactly("2", "2")
                 assertThat(flights.map { it.schedDep }.all { it != null }).isTrue()
-                // The file is stored once PER flight, under that flight's id.
-                assertThat(importer.stored.map { it.second }).containsExactlyElementsIn(outcome.savedIds).inOrder()
+                // The file is stored once PER flight, under that flight's passenger's id (ADR-046).
+                val passengerIds = outcome.savedIds.map { repository.getPassengers(it).single().id }
+                assertThat(importer.stored.map { it.second }).containsExactlyElementsIn(passengerIds).inOrder()
                 assertThat(flights.map { it.boardingPassPath }.toSet()).hasSize(2)
                 // Deleting one flight leaves the other's copy referenced.
                 repository.delete(outcome.savedIds[0])
                 assertThat(
                     repository.getFlight(outcome.savedIds[1])!!.boardingPassPath,
-                ).isEqualTo("/data/passes/${outcome.savedIds[1]}.jpg")
+                ).isEqualTo("/data/passes/${passengerIds[1]}.jpg")
             }
         }
 
@@ -613,7 +619,14 @@ class FlightFormViewModelTest {
     @Test
     fun `duplicates are skipped per segment and the rest still save`() =
         runTest {
-            val existing = Fixtures.flightJourney(airlineIata = "IX", flightNumber = "2019", date = LocalDate.parse("2026-10-29"))
+            // The existing journey already carries the segment's passenger (same seat, no name).
+            val existing =
+                Fixtures.flightJourney(
+                    airlineIata = "IX",
+                    flightNumber = "2019",
+                    date = LocalDate.parse("2026-10-29"),
+                    seat = "12A",
+                )
             repository.seed(existing)
             importer.extraction = BoardingPassExtraction(flights = listOf(onward, back), source = BoardingPassSource.OCR_TEXT)
             viewModel.startFromBoardingPass("content://picked/two")
@@ -625,9 +638,199 @@ class FlightFormViewModelTest {
                 assertThat(outcome.savedIds).hasSize(1)
                 assertThat(repository.getFlight(outcome.savedIds.single())!!.flightNumber).isEqualTo("1542")
                 assertThat(outcome.focusFlightId).isEqualTo(outcome.savedIds.single())
-                // Nothing written for the duplicate — not even its file copy.
-                assertThat(importer.stored.map { it.second }).containsExactly(outcome.savedIds.single())
+                // The duplicate's passenger (seat 12A, no pass yet) gains THIS pass — nothing else is written for it.
+                val legacy = repository.getPassengers(existing.id).single()
+                assertThat(legacy.boardingPassPath).isNotNull()
+                assertThat(importer.stored.map { it.second })
+                    .containsExactly(legacy.id, repository.getPassengers(outcome.savedIds.single()).single().id)
+                    .inOrder()
+                assertThat(repository.getFlight(existing.id)!!.boardingPassPath).isEqualTo(legacy.boardingPassPath)
             }
+        }
+
+    @Test
+    fun `a segment for an existing flight with a NEW seat adds a passenger instead of skipping (ADR-046)`() =
+        runTest {
+            val existing =
+                Fixtures.flightJourney(
+                    airlineIata = "IX",
+                    flightNumber = "2019",
+                    date = LocalDate.parse("2026-10-29"),
+                    seat = "12B",
+                )
+            repository.seed(existing)
+            importer.extraction = BoardingPassExtraction(flights = listOf(onward), source = BoardingPassSource.BARCODE)
+            importer.perFlightPaths = true
+            viewModel.startFromBoardingPass("content://picked/one")
+
+            viewModel.events.test {
+                viewModel.save { error("onSaved must not fire: nothing new was saved, a passenger was added") }
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(outcome.savedIds).isEmpty()
+                assertThat(outcome.skippedExistingIds).isEmpty()
+                assertThat(outcome.addedPassengers).containsExactly(AddedPassenger(existing.id, "12A"))
+                assertThat(outcome.isSinglePassengerAdd).isTrue()
+                assertThat(outcome.focusFlightId).isEqualTo(existing.id)
+            }
+            val passengers = repository.getPassengers(existing.id)
+            // The legacy mirror seat became passenger #1; the new seat is passenger #2 with ITS OWN pass copy.
+            assertThat(passengers.map { it.seat }).containsExactly("12B", "12A").inOrder()
+            assertThat(passengers[0].boardingPassPath).isNull()
+            assertThat(passengers[1].boardingPassPath).isEqualTo("/data/passes/${passengers[1].id}.jpg")
+            assertThat(importer.stored.map { it.second }).containsExactly(passengers[1].id)
+            assertThat(repository.getFlight(existing.id)!!.seat).isEqualTo("12B")
+            assertThat(repository.getFlight(existing.id)!!.boardingPassPath).isEqualTo(passengers[1].boardingPassPath)
+        }
+
+    @Test
+    fun `two passes for the same flight from two files become one flight with two named passengers`() =
+        runTest {
+            val prakash = onward.copy(passengerName = ExtractedField.of("PRAKASH KUMAR", ExtractionConfidence.HIGH))
+            val bandana =
+                onward.copy(
+                    passengerName = ExtractedField.of("BANDANA KUMARI", ExtractionConfidence.HIGH),
+                    seat = ExtractedField.of("12B", ExtractionConfidence.HIGH),
+                )
+            importer.perFlightPaths = true
+
+            importer.extraction = BoardingPassExtraction(flights = listOf(prakash), source = BoardingPassSource.BARCODE)
+            viewModel.startFromBoardingPass("content://picked/prakash")
+            var saved: String? = null
+            viewModel.save { saved = it }
+            val flightId = saved!!
+
+            importer.extraction = BoardingPassExtraction(flights = listOf(bandana), source = BoardingPassSource.BARCODE)
+            viewModel.startFromBoardingPass("content://picked/bandana")
+            viewModel.events.test {
+                viewModel.save { error("the second pass must join the first flight") }
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(outcome.addedPassengers).containsExactly(AddedPassenger(flightId, "BANDANA KUMARI"))
+            }
+
+            assertThat(repository.observeActive().first()).hasSize(1)
+            val passengers = repository.getPassengers(flightId)
+            assertThat(passengers.map { it.name to it.seat }).containsExactly("PRAKASH KUMAR" to "12A", "BANDANA KUMARI" to "12B").inOrder()
+            assertThat(passengers.map { it.boardingPassPath })
+                .containsExactly(
+                    "/data/passes/${passengers[0].id}.jpg",
+                    "/data/passes/${passengers[1].id}.jpg",
+                ).inOrder()
+            assertThat(importer.stored.map { it.first }).containsExactly("content://picked/prakash", "content://picked/bandana").inOrder()
+
+            // The same pass again: already on board → the ADR-025 notice, nothing written.
+            viewModel.startFromBoardingPass("content://picked/bandana-again")
+            viewModel.events.test {
+                viewModel.save { error("not saved") }
+                assertThat((awaitItem() as FlightFormEvent.DuplicateFlight).existingFlightId).isEqualTo(flightId)
+            }
+            assertThat(repository.getPassengers(flightId)).hasSize(2)
+            assertThat(importer.stored).hasSize(2)
+        }
+
+    @Test
+    fun `a different name on the same seat is a new passenger, and a named pass completes a nameless legacy row`() =
+        runTest {
+            val flightId = "ix1542"
+            val existing =
+                Fixtures.flightJourney(
+                    id = flightId,
+                    airlineIata = "IX",
+                    flightNumber = "1542",
+                    date = LocalDate.parse("2026-10-31"),
+                )
+            repository.seed(existing)
+            repository.seedPassengers(Fixtures.flightPassenger(flightId = flightId, name = "", seat = "10A", boardingPassPath = null))
+
+            // Bandana, seat 10A, pass → claims the nameless 10A row (name + pass filled, no new row).
+            importer.extraction =
+                BoardingPassExtraction(
+                    flights = listOf(back.copy(passengerName = ExtractedField.of("BANDANA KUMARI", ExtractionConfidence.HIGH))),
+                    source = BoardingPassSource.OCR_TEXT,
+                )
+            viewModel.startFromBoardingPass("content://picked/bandana")
+            viewModel.events.test {
+                viewModel.save { error("not a new flight") }
+                assertThat((awaitItem() as FlightFormEvent.DuplicateFlight).existingFlightId).isEqualTo(flightId)
+            }
+            val claimed = repository.getPassengers(flightId).single()
+            assertThat(claimed.name).isEqualTo("BANDANA KUMARI")
+            assertThat(claimed.boardingPassPath).isEqualTo("/data/fake/pass.jpg")
+
+            // Prakash, ALSO seat 10A (the image had him there): a different name wins → second passenger.
+            importer.extraction =
+                BoardingPassExtraction(
+                    flights = listOf(back.copy(passengerName = ExtractedField.of("PRAKASH KUMAR", ExtractionConfidence.HIGH))),
+                    source = BoardingPassSource.OCR_TEXT,
+                )
+            viewModel.startFromBoardingPass("content://picked/prakash")
+            viewModel.events.test {
+                viewModel.save { error("not a new flight") }
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(outcome.addedPassengers.single().label).isEqualTo("PRAKASH KUMAR")
+            }
+            assertThat(repository.getPassengers(flightId).map { it.name }).containsExactly("BANDANA KUMARI", "PRAKASH KUMAR").inOrder()
+        }
+
+    @Test
+    fun `a manual save naming nobody on an existing flight is still refused as a duplicate`() =
+        runTest {
+            val existing = Fixtures.flightJourney(airlineIata = "AI", flightNumber = "101", date = flightDate)
+            repository.seed(existing)
+            fillNewFlight("AI", "101")
+
+            viewModel.events.test {
+                viewModel.save { error("not saved") }
+                assertThat((awaitItem() as FlightFormEvent.DuplicateFlight).existingFlightId).isEqualTo(existing.id)
+            }
+            assertThat(repository.savedIds).isEmpty()
+        }
+
+    @Test
+    fun `passenger rows add, edit and remove - save writes the rows and edit reloads them`() =
+        runTest {
+            viewModel.startBlank()
+            assertThat(viewModel.formState.value.passengers).hasSize(1)
+            viewModel.addPassengerRow()
+            val rows = viewModel.formState.value.passengers
+            assertThat(rows).hasSize(2)
+            viewModel.updatePassengerRow(rows[0].rowKey) { it.copy(name = "A", seat = "1a") }
+            viewModel.updatePassengerRow(rows[1].rowKey) { it.copy(name = "B", seat = "1B") }
+            viewModel.addPassengerRow()
+            viewModel.removePassengerRow(
+                viewModel.formState.value.passengers[2]
+                    .rowKey,
+            )
+            viewModel.update { it.copy(airlineIata = "6E", flightNumber = "2345", dateText = "2026-09-25") }
+
+            var saved: String? = null
+            viewModel.save { saved = it }
+
+            val passengers = repository.getPassengers(saved!!)
+            assertThat(passengers.map { it.name to it.seat }).containsExactly("A" to "1a", "B" to "1B").inOrder()
+            assertThat(passengers.map { it.id }).containsExactly(rows[0].rowKey, rows[1].rowKey).inOrder()
+            assertThat(repository.getFlight(saved!!)!!.seat).isEqualTo("1a")
+
+            // Edit: rows reload with their ids; removing B tombstones B and keeps A's id.
+            viewModel.startEdit(saved!!)
+            assertThat(
+                viewModel.formState.value.passengers
+                    .map { it.rowKey },
+            ).containsExactly(rows[0].rowKey, rows[1].rowKey).inOrder()
+            viewModel.removePassengerRow(rows[1].rowKey)
+            viewModel.save { }
+            assertThat(repository.getPassengers(saved!!).map { it.id }).containsExactly(rows[0].rowKey)
+
+            // Removing the last row leaves one blank row, which saves as "no passengers".
+            viewModel.startEdit(saved!!)
+            viewModel.removePassengerRow(rows[0].rowKey)
+            assertThat(
+                viewModel.formState.value.passengers
+                    .single()
+                    .hasInfo,
+            ).isFalse()
+            viewModel.save { }
+            assertThat(repository.getPassengers(saved!!)).isEmpty()
+            assertThat(repository.getFlight(saved!!)!!.seat).isEmpty()
         }
 
     @Test
@@ -719,7 +922,9 @@ class FlightFormViewModelTest {
                 assertThat(savedCallback).isNull()
                 assertThat(outcome.savedIds).hasSize(2)
                 assertThat(repository.getFlight(outcome.savedIds[1])!!.depAirport).isEqualTo("LKO")
-                assertThat(importer.stored.map { it.second }).containsExactlyElementsIn(outcome.savedIds).inOrder()
+                assertThat(importer.stored.map { it.second })
+                    .containsExactlyElementsIn(outcome.savedIds.map { repository.getPassengers(it).single().id })
+                    .inOrder()
                 assertThat(viewModel.formState.value.walkthrough).isNull()
             }
         }
@@ -727,7 +932,13 @@ class FlightFormViewModelTest {
     @Test
     fun `a duplicate met during the walk-through is skipped and the walk advances`() =
         runTest {
-            val existing = Fixtures.flightJourney(airlineIata = "IX", flightNumber = "2019", date = LocalDate.parse("2026-10-29"))
+            val existing =
+                Fixtures.flightJourney(
+                    airlineIata = "IX",
+                    flightNumber = "2019",
+                    date = LocalDate.parse("2026-10-29"),
+                    seat = "12A",
+                )
             repository.seed(existing)
             val noRoute = back.copy(fromAirport = ExtractedField.EMPTY, toAirport = ExtractedField.EMPTY)
             importer.extraction = BoardingPassExtraction(flights = listOf(onward, noRoute), source = BoardingPassSource.OCR_TEXT)
@@ -760,4 +971,10 @@ class FlightFormViewModelTest {
             assertThat(viewModel.formState.value.walkthrough).isEqualTo(WalkthroughProgress(index = 1, total = 2))
             assertThat(repository.savedIds).isEmpty()
         }
+
+    private companion object {
+        /** Row 1's seat — what the pre-ADR-046 single Seat field was. */
+        fun FlightFormState.withSeat(seat: String): FlightFormState =
+            copy(passengers = listOf((passengers.firstOrNull() ?: PassengerFormRow()).copy(seat = seat)) + passengers.drop(1))
+    }
 }

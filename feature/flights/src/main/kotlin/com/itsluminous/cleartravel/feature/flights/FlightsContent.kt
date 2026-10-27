@@ -199,6 +199,7 @@ fun FlightsContent(
                         // Pick mode (ADR-028): the leg links the first journey the file produced.
                         finishAddRequest(
                             outcome.savedIds.firstOrNull()?.let { FlightsEntryResult.Saved(it) }
+                                ?: outcome.addedPassengers.firstOrNull()?.let { FlightsEntryResult.Saved(it.flightId) }
                                 ?: outcome.skippedExistingIds.firstOrNull()?.let { FlightsEntryResult.DuplicateFlight(it) }
                                 ?: FlightsEntryResult.Cancelled,
                         )

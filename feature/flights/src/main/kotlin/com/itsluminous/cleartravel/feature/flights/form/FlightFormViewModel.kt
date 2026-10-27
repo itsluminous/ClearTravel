@@ -2,9 +2,12 @@ package com.itsluminous.cleartravel.feature.flights.form
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.itsluminous.cleartravel.core.data.repository.FlightPassengerMatching
 import com.itsluminous.cleartravel.core.data.repository.FlightRepository
 import com.itsluminous.cleartravel.core.data.share.FlightSharePayload
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
+import com.itsluminous.cleartravel.core.model.FlightPassengerIds
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
 import com.itsluminous.cleartravel.feature.flights.checkin.CheckInRuleSource
@@ -50,17 +53,35 @@ data class FlightImportReview(
     val selectedCount: Int get() = items.count { it.selected }
 }
 
-/** How a multi-flight import ended (ADR-045): what was written and what ADR-025 refused. */
+/** A passenger added to an EXISTING journey by an import or save (ADR-046 decision 5). */
+data class AddedPassenger(
+    val flightId: String,
+    /** Display name, or the seat when the pass carried no name. */
+    val label: String,
+)
+
+/**
+ * How an import or a save that met an existing journey ended (ADR-045/046): journeys
+ * written, passengers added to existing journeys, and identities refused as already
+ * saved.
+ */
 data class FlightBatchOutcome(
     val savedIds: List<String>,
-    /** Existing journeys that already carried a selected segment's identity — nothing written for them. */
+    /** Existing journeys that already carried a selected segment's identity AND its passenger — nothing written for them. */
     val skippedExistingIds: List<String>,
+    /** Passengers added to journeys that already existed (ADR-046). */
+    val addedPassengers: List<AddedPassenger> = emptyList(),
 ) {
     val addedCount: Int get() = savedIds.size
     val skippedCount: Int get() = skippedExistingIds.size
+    val passengerCount: Int get() = addedPassengers.size
 
-    /** The journey a "View" action should open: the first added, else the first existing. */
-    val focusFlightId: String? get() = savedIds.firstOrNull() ?: skippedExistingIds.firstOrNull()
+    /** The journey a "View" action should open: the first added, else the first grown, else the first existing. */
+    val focusFlightId: String?
+        get() = savedIds.firstOrNull() ?: addedPassengers.firstOrNull()?.flightId ?: skippedExistingIds.firstOrNull()
+
+    /** True when the whole outcome is ONE passenger joining ONE existing journey — the "Added X to IX 2019" notice. */
+    val isSinglePassengerAdd: Boolean get() = savedIds.isEmpty() && skippedExistingIds.isEmpty() && addedPassengers.size == 1
 }
 
 /** One-shot outcomes of the flight form that hosts react to (saves stay callback-based). */
@@ -84,12 +105,28 @@ sealed interface FlightFormEvent {
 
     /**
      * A multi-flight import finished (ADR-045) — directly from the review sheet or at
-     * the end of the walk-through. The host leaves the form and reports
-     * "Added N, skipped M already saved".
+     * the end of the walk-through — OR a single save met an existing journey and added
+     * its passenger to it (ADR-046). The host leaves the form and reports "Added N,
+     * skipped M already saved" / "Added Bandana Kumari to IX 2019".
      */
     data class BatchImported(
         val outcome: FlightBatchOutcome,
     ) : FlightFormEvent
+}
+
+/** What became of ONE flight written through the ADR-025/046 guard. */
+private sealed interface WriteResult {
+    data class Saved(
+        val flightId: String,
+    ) : WriteResult
+
+    data class PassengerAdded(
+        val added: List<AddedPassenger>,
+    ) : WriteResult
+
+    data class AlreadySaved(
+        val existingFlightId: String,
+    ) : WriteResult
 }
 
 @HiltViewModel
@@ -124,6 +161,7 @@ class FlightFormViewModel
         private var walkUri: String? = null
         private val walkSaved = mutableListOf<String>()
         private val walkSkipped = mutableListOf<String>()
+        private val walkPassengers = mutableListOf<AddedPassenger>()
 
         /** Blank add form. */
         fun startBlank() {
@@ -131,12 +169,34 @@ class FlightFormViewModel
             state.value = FlightFormState()
         }
 
-        /** Edit form for an existing journey. */
+        /** Edit form for an existing journey and its passengers (ADR-046). */
         fun startEdit(flightId: String) {
             clearWalkthrough()
             viewModelScope.launch {
-                repository.getFlight(flightId)?.let { state.value = FlightFormState.fromJourney(it) }
+                repository.getFlight(flightId)?.let { flight ->
+                    state.value = FlightFormState.fromJourney(flight, repository.getPassengers(flightId))
+                }
             }
+        }
+
+        /** Passengers section (ADR-046): append an empty row. */
+        fun addPassengerRow() {
+            update { it.copy(passengers = it.passengers + PassengerFormRow()) }
+        }
+
+        /** Passengers section: drop the row; the last row is cleared instead of removed so one row always shows. */
+        fun removePassengerRow(rowKey: String) {
+            update { current ->
+                val remaining = current.passengers.filterNot { it.rowKey == rowKey }
+                current.copy(passengers = remaining.ifEmpty { listOf(PassengerFormRow()) })
+            }
+        }
+
+        fun updatePassengerRow(
+            rowKey: String,
+            transform: (PassengerFormRow) -> PassengerFormRow,
+        ) {
+            update { current -> current.copy(passengers = current.passengers.map { if (it.rowKey == rowKey) transform(it) else it }) }
         }
 
         /**
@@ -244,15 +304,17 @@ class FlightFormViewModel
                 viewModelScope.launch {
                     val saved = mutableListOf<String>()
                     val skipped = mutableListOf<String>()
-                    for (form in chosen) writeImported(form, current.kind, current.uri, saved, skipped)
+                    val passengers = mutableListOf<AddedPassenger>()
+                    for (form in chosen) writeImported(form, current.kind, current.uri, saved, skipped, passengers)
                     busy.value = false
-                    eventsFlow.tryEmit(FlightFormEvent.BatchImported(FlightBatchOutcome(saved, skipped)))
+                    eventsFlow.tryEmit(FlightFormEvent.BatchImported(FlightBatchOutcome(saved, skipped, passengers)))
                 }
             } else {
                 walkKind = current.kind
                 walkUri = current.uri
                 walkSaved.clear()
                 walkSkipped.clear()
+                walkPassengers.clear()
                 walkQueue = chosen.drop(1)
                 state.value = chosen.first().copy(walkthrough = WalkthroughProgress(index = 1, total = chosen.size))
             }
@@ -295,10 +357,14 @@ class FlightFormViewModel
          * caller can close the form or chain straight into the status-check flow
          * ("Save & fetch details"). When another live journey already has this
          * airline + flight number + date, NOTHING is written and
-         * [FlightFormEvent.DuplicateFlight] is emitted instead (ADR-025) — editing a
-         * journey never trips on its own identity, only re-pointing it at ANOTHER
-         * journey's does. Every add path (manual, boarding pass, booking confirmation, pasted text,
-         * share-sheet intake) funnels through here, so the guard covers all of them.
+         * the form's passengers are matched against that journey's (ADR-046): a NEW
+         * person is added to it and [FlightFormEvent.BatchImported] reports "Added X to
+         * IX 2019"; a person already on board — or a form naming nobody — emits
+         * [FlightFormEvent.DuplicateFlight] instead (ADR-025) and writes nothing. Editing
+         * a journey never trips on its own identity, only re-pointing it at ANOTHER
+         * journey's does. Every add path (manual, boarding pass, booking confirmation,
+         * pasted text, share-sheet intake) funnels through here, so the guard covers all
+         * of them.
          *
          * ADR-045 walk-through: while [FlightFormState.walkthrough] is set, a save (or a
          * refused duplicate, counted as skipped) ADVANCES to the next segment's form
@@ -319,7 +385,7 @@ class FlightFormViewModel
                     val kind = walkKind
                     val uri = walkUri
                     if (kind != null && uri != null) {
-                        writeImported(current.copy(walkthrough = null), kind, uri, walkSaved, walkSkipped)
+                        writeImported(current.copy(walkthrough = null), kind, uri, walkSaved, walkSkipped, walkPassengers)
                     }
                     advanceWalkthrough(current.walkthrough)
                     busy.value = false
@@ -330,15 +396,25 @@ class FlightFormViewModel
                         .findByFlight(current.airlineIata, current.flightNumber, date)
                         ?.takeIf { it.id != current.editingId }
                 if (duplicate != null) {
+                    // ADR-046: the flight exists — maybe the PERSON does not. Re-pointing an
+                    // EDITED journey onto another's identity stays a plain refusal: merging
+                    // one journey's passengers into another is never what an edit means.
+                    val result =
+                        if (current.editingId != null) WriteResult.AlreadySaved(duplicate.id) else mergeIntoExisting(duplicate, current)
                     busy.value = false
-                    eventsFlow.tryEmit(FlightFormEvent.DuplicateFlight(existingFlightId = duplicate.id))
+                    when (result) {
+                        is WriteResult.PassengerAdded ->
+                            eventsFlow.tryEmit(
+                                FlightFormEvent.BatchImported(FlightBatchOutcome(emptyList(), emptyList(), result.added)),
+                            )
+                        is WriteResult.AlreadySaved -> eventsFlow.tryEmit(FlightFormEvent.DuplicateFlight(existingFlightId = duplicate.id))
+                        is WriteResult.Saved -> onSaved(result.flightId)
+                    }
                     return@launch
                 }
                 val journey = buildJourney(current)
-                val passPath =
-                    current.pendingPassUri?.let { importer.store(it, journey.id) }
-                        ?: journey.boardingPassPath
-                repository.save(journey.copy(boardingPassPath = passPath))
+                repository.save(journey)
+                writePassengers(journey.id, current, current.pendingPassUri)
                 // Booking confirmations live as FLIGHT attachment rows (ADR-017), so
                 // Drive upload + backup bundling apply automatically; a failed copy
                 // simply saves the flight without the document.
@@ -349,9 +425,89 @@ class FlightFormViewModel
         }
 
         /**
-         * Writes ONE imported segment: ADR-025 guard → journey row → the file stored for
-         * THIS flight (its own encrypted copy, so deleting one flight never touches the
-         * other's). A refused duplicate lands in [skipped], a write in [saved].
+         * Writes the form's passenger rows for [flightId] (ADR-046): the pending
+         * boarding pass — when any — is stored as ROW 1's pass under the passenger's id;
+         * stored passes of edited rows survive; removed rows are tombstoned.
+         */
+        private suspend fun writePassengers(
+            flightId: String,
+            form: FlightFormState,
+            passUri: String?,
+        ) {
+            val rows = form.toPassengers(flightId).toMutableList()
+            if (passUri != null) {
+                val first = rows.firstOrNull() ?: PassengerFormRow().toPassenger(flightId, 0).also { rows += it }
+                importer.store(passUri, first.id)?.let { rows[0] = first.copy(boardingPassPath = it) }
+            }
+            repository.replacePassengers(flightId, rows)
+        }
+
+        /**
+         * ADR-046 decision 5: the form's identity matches [existing]. Every row with
+         * passenger info that is NOT already on the flight is added (its pending pass
+         * stored under the new passenger's id, a pending booking attached to the flight);
+         * a row that IS on it fills the matched passenger's blanks (name, locator, a
+         * missing pass). No row with info at all → the ADR-025 refusal as before.
+         */
+        private suspend fun mergeIntoExisting(
+            existing: FlightJourney,
+            form: FlightFormState,
+        ): WriteResult {
+            val incoming = form.toPassengers(existing.id).filter(FlightPassengerMatching::hasPassengerInfo)
+            if (incoming.isEmpty()) return WriteResult.AlreadySaved(existing.id)
+            val onBoard = repository.getPassengers(existing.id).toMutableList()
+            if (onBoard.isEmpty() && (existing.seat.isNotBlank() || existing.boardingPassPath != null)) {
+                // A journey written before passengers existed (or straight through
+                // `save`): its mirror seat/pass IS passenger #1 — materialise the same row
+                // the schema migration would have, so the match below sees them.
+                onBoard +=
+                    repository.savePassengers(
+                        existing.id,
+                        listOf(
+                            FlightPassenger(
+                                id = FlightPassengerIds.legacy(existing.id),
+                                flightId = existing.id,
+                                seat = existing.seat.trim(),
+                                boardingPassPath = existing.boardingPassPath,
+                            ),
+                        ),
+                    )
+            }
+            val added = mutableListOf<AddedPassenger>()
+            incoming.forEachIndexed { index, candidate ->
+                val passUri = form.pendingPassUri?.takeIf { index == 0 }
+                val match = FlightPassengerMatching.findMatch(onBoard, candidate)
+                if (match == null) {
+                    val passPath = passUri?.let { importer.store(it, candidate.id) }
+                    val saved =
+                        repository.savePassengers(
+                            existing.id,
+                            listOf(candidate.copy(boardingPassPath = passPath, sortOrder = onBoard.size)),
+                        )
+                    onBoard += saved
+                    added += AddedPassenger(existing.id, candidate.name.ifBlank { candidate.seat })
+                } else {
+                    var filled = FlightPassengerMatching.fillBlanks(match, candidate)
+                    if (filled.boardingPassPath == null && passUri != null) {
+                        filled = filled.copy(boardingPassPath = importer.store(passUri, match.id))
+                    }
+                    if (filled != match) {
+                        repository.savePassengers(existing.id, listOf(filled))
+                        onBoard[onBoard.indexOf(match)] = filled
+                    }
+                }
+            }
+            if (added.isEmpty()) return WriteResult.AlreadySaved(existing.id)
+            form.pendingBookingUri?.let { bookingImporter.attach(it, existing.id) }
+            return WriteResult.PassengerAdded(added)
+        }
+
+        /**
+         * Writes ONE imported segment: ADR-025/046 guard → journey row + passenger row →
+         * the file stored for THIS flight's passenger (its own encrypted copy, so deleting
+         * one never touches another's). An existing journey gains the segment's passenger
+         * when they are new to it ([passengers]), is skipped when they are already on it
+         * ([skipped]); a new journey lands in [saved].
          */
         private suspend fun writeImported(
             form: FlightFormState,
@@ -359,31 +515,34 @@ class FlightFormViewModel
             uri: String,
             saved: MutableList<String>,
             skipped: MutableList<String>,
+            passengers: MutableList<AddedPassenger>,
         ) {
             val date = FlightFormState.parseDate(form.dateText) ?: return
+            val staged =
+                when (kind) {
+                    FlightImportKind.BOARDING_PASS -> form.copy(editingId = null, pendingPassUri = uri, pendingBookingUri = null)
+                    FlightImportKind.BOOKING_CONFIRMATION -> form.copy(editingId = null, pendingPassUri = null, pendingBookingUri = uri)
+                }
             val duplicate = repository.findByFlight(form.airlineIata, form.flightNumber, date)
             if (duplicate != null) {
-                skipped += duplicate.id
+                when (val result = mergeIntoExisting(duplicate, staged)) {
+                    is WriteResult.PassengerAdded -> passengers += result.added
+                    is WriteResult.AlreadySaved -> skipped += duplicate.id
+                    is WriteResult.Saved -> saved += result.flightId
+                }
                 return
             }
-            val journey = buildJourney(form.copy(editingId = null))
-            when (kind) {
-                FlightImportKind.BOARDING_PASS -> {
-                    val passPath = importer.store(uri, journey.id)
-                    repository.save(journey.copy(boardingPassPath = passPath))
-                }
-                FlightImportKind.BOOKING_CONFIRMATION -> {
-                    repository.save(journey)
-                    bookingImporter.attach(uri, journey.id)
-                }
-            }
+            val journey = buildJourney(staged)
+            repository.save(journey)
+            writePassengers(journey.id, staged, staged.pendingPassUri)
+            staged.pendingBookingUri?.let { bookingImporter.attach(it, journey.id) }
             saved += journey.id
         }
 
         private fun advanceWalkthrough(progress: WalkthroughProgress) {
             val next = walkQueue.firstOrNull()
             if (next == null) {
-                val outcome = FlightBatchOutcome(walkSaved.toList(), walkSkipped.toList())
+                val outcome = FlightBatchOutcome(walkSaved.toList(), walkSkipped.toList(), walkPassengers.toList())
                 clearWalkthrough()
                 state.value = FlightFormState()
                 eventsFlow.tryEmit(FlightFormEvent.BatchImported(outcome))
@@ -399,10 +558,14 @@ class FlightFormViewModel
             walkUri = null
             walkSaved.clear()
             walkSkipped.clear()
+            walkPassengers.clear()
             review.value = null
         }
 
-        /** Merge-on-edit: user-editable fields overwrite; provider fields survive. */
+        /**
+         * Merge-on-edit: user-editable fields overwrite; provider fields survive; the
+         * mirror columns (`seat`, `boardingPassPath`) are the repository's to derive.
+         */
         private suspend fun buildJourney(current: FlightFormState): FlightJourney {
             val checkInUrl = checkInRuleSource.load().checkInUrl(current.airlineIata.trim().uppercase())
             val draft = current.toJourney(checkInUrl = checkInUrl)
@@ -412,7 +575,6 @@ class FlightFormViewModel
                 flightNumber = draft.flightNumber,
                 date = draft.date,
                 pnrBookingRef = draft.pnrBookingRef,
-                seat = draft.seat,
                 cabinClass = draft.cabinClass,
                 depAirport = draft.depAirport,
                 arrAirport = draft.arrAirport,

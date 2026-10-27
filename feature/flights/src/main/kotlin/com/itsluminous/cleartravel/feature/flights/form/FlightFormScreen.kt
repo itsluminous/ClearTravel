@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.AirplaneTicket
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
@@ -31,8 +33,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -76,6 +80,7 @@ fun FlightFormScreen(
      */
     onBatchImported: (FlightBatchOutcome) -> Unit = { outcome ->
         outcome.savedIds.firstOrNull()?.let(onSaved)
+            ?: outcome.addedPassengers.firstOrNull()?.let { onSaved(it.flightId) }
             ?: outcome.skippedExistingIds.firstOrNull()?.let(onDuplicate)
             ?: onClose()
     },
@@ -234,21 +239,34 @@ fun FlightFormScreen(
                 labelRes = R.string.flights_field_pnr,
                 confidence = state.confidences[FlightField.PNR],
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                FormField(
-                    value = state.seat,
-                    onChange = { value -> viewModel.update { it.copy(seat = value) } },
-                    labelRes = R.string.flights_field_seat,
-                    confidence = state.confidences[FlightField.SEAT],
-                    modifier = Modifier.weight(1f),
+            FormField(
+                value = state.cabinClass,
+                onChange = { value -> viewModel.update { it.copy(cabinClass = value) } },
+                labelRes = R.string.flights_field_cabin,
+                confidence = state.confidences[FlightField.CABIN],
+            )
+
+            // ADR-046: one row per person; row 1 is what the old Seat field was.
+            Text(
+                text = stringResource(R.string.flights_form_passengers),
+                style = MaterialTheme.typography.titleSmall,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Text(
+                text = stringResource(R.string.flights_form_passengers_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            state.passengers.forEachIndexed { index, row ->
+                PassengerRowEditor(
+                    row = row,
+                    seatConfidence = if (index == 0) state.confidences[FlightField.SEAT] else null,
+                    onUpdate = { transform -> viewModel.updatePassengerRow(row.rowKey, transform) },
+                    onRemove = { viewModel.removePassengerRow(row.rowKey) },
                 )
-                FormField(
-                    value = state.cabinClass,
-                    onChange = { value -> viewModel.update { it.copy(cabinClass = value) } },
-                    labelRes = R.string.flights_field_cabin,
-                    confidence = state.confidences[FlightField.CABIN],
-                    modifier = Modifier.weight(1f),
-                )
+            }
+            OutlinedButton(onClick = viewModel::addPassengerRow, modifier = Modifier.testTag(ADD_PASSENGER_TAG)) {
+                AutoShrinkText(stringResource(R.string.flights_form_add_passenger))
             }
 
             Text(
@@ -309,6 +327,48 @@ fun FlightFormScreen(
                         modifier = Modifier.weight(1f),
                     ) { AutoShrinkText(stringResource(R.string.flights_form_save_fetch)) }
                 }
+            }
+        }
+    }
+}
+
+/** Test tag of the form's "Add passenger" button (e2e). */
+const val ADD_PASSENGER_TAG = "flights_form_add_passenger"
+
+/** One passenger row (ADR-046): name + seat, a stored-pass marker, and a remove control. */
+@Composable
+private fun PassengerRowEditor(
+    row: PassengerFormRow,
+    seatConfidence: ExtractionConfidence?,
+    onUpdate: ((PassengerFormRow) -> PassengerFormRow) -> Unit,
+    onRemove: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FormField(
+            value = row.name,
+            onChange = { value -> onUpdate { it.copy(name = value) } },
+            labelRes = R.string.flights_form_passenger_name,
+            modifier = Modifier.weight(1.6f),
+        )
+        FormField(
+            value = row.seat,
+            onChange = { value -> onUpdate { it.copy(seat = value.uppercase()) } },
+            labelRes = R.string.flights_field_seat,
+            confidence = seatConfidence,
+            modifier = Modifier.weight(1f),
+        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            ExplainableIcon(
+                icon = Icons.Filled.Delete,
+                explanationRes = R.string.flights_form_remove_passenger,
+                onClick = onRemove,
+            )
+            if (row.existingPassPath != null) {
+                ExplainableIcon(
+                    icon = Icons.AutoMirrored.Filled.AirplaneTicket,
+                    explanationRes = R.string.flights_form_passenger_has_pass,
+                    tint = MaterialTheme.colorScheme.primary,
+                )
             }
         }
     }

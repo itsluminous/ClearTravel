@@ -5,7 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.itsluminous.cleartravel.core.data.repository.AttachmentRepository
 import com.itsluminous.cleartravel.core.model.Attachment
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
-import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
+import com.itsluminous.cleartravel.core.model.FlightWithPassengers
 import com.itsluminous.cleartravel.feature.flights.form.BookingConfirmationImporter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
@@ -14,7 +15,7 @@ import javax.inject.Inject
 
 /** What a flight-document row represents (drives its label + viewer title). */
 enum class FlightDocumentType {
-    /** The special gate-display file referenced by `FlightJourney.boardingPassPath`. */
+    /** A passenger's stored boarding pass (ADR-046), or the legacy `FlightJourney.boardingPassPath` file. */
     BOARDING_PASS,
 
     /** An [Attachment] row owned by the flight — booking confirmations (ADR-017). */
@@ -25,25 +26,29 @@ enum class FlightDocumentType {
 data class FlightDocument(
     val type: FlightDocumentType,
     val path: String,
-    /** Backing attachment row id; null for the boarding-pass path entry. */
+    /** Backing attachment row id; null for a boarding-pass entry. */
     val attachmentId: String? = null,
+    /** The passenger a boarding pass belongs to (ADR-046); null for a legacy flight-level pass or an attachment. */
+    val passenger: FlightPassenger? = null,
 )
 
 /**
- * PURE builder of the detail sheet's documents list: the boarding pass (from the
- * frozen `boardingPassPath` column — stays special) first, then attachment rows.
- * The Drive-upload engine registers boarding passes as attachment rows keyed by the
- * same local path (ADR-016), so those duplicates are skipped; rows without a local
- * copy yet (Drive-only until the restore ladder runs) are not listed.
+ * PURE builder of the detail sheet's documents list: one boarding pass per passenger
+ * (ADR-046; a legacy flight-level pass when the flight has no passenger passes) first,
+ * then attachment rows. The Drive-upload engine registers boarding passes as attachment
+ * rows keyed by the same local path (ADR-016), so those duplicates are skipped; rows
+ * without a local copy yet (Drive-only until the restore ladder runs) are not listed.
  */
 fun buildFlightDocuments(
-    flight: FlightJourney,
+    entry: FlightWithPassengers,
     attachments: List<Attachment>,
 ): List<FlightDocument> {
     val documents = mutableListOf<FlightDocument>()
-    flight.boardingPassPath?.let { documents += FlightDocument(FlightDocumentType.BOARDING_PASS, it) }
+    val passes = entry.boardingPasses
+    passes.forEach { documents += FlightDocument(FlightDocumentType.BOARDING_PASS, it.path, passenger = it.passenger) }
+    val passPaths = passes.map { it.path }.toSet()
     attachments
-        .filter { it.localPath.isNotBlank() && it.localPath != flight.boardingPassPath }
+        .filter { it.localPath.isNotBlank() && it.localPath !in passPaths }
         .forEach {
             documents += FlightDocument(FlightDocumentType.BOOKING_CONFIRMATION, it.localPath, it.id)
         }

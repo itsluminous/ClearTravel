@@ -4,6 +4,7 @@ import com.itsluminous.cleartravel.core.data.share.FlightSharePayload
 import com.itsluminous.cleartravel.core.data.share.SharePayloadMappers
 import com.itsluminous.cleartravel.core.model.EntityIds
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
 import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BoardingPassSource
@@ -49,6 +50,57 @@ data class WalkthroughProgress(
 )
 
 /**
+ * One editable passenger row (ADR-046). [rowKey] doubles as the passenger id on save,
+ * so an edited row keeps its id (and its boarding pass) and a new row gets a fresh UUID.
+ * [existingPassPath] is the stored pass of a loaded passenger; [pnr] / [sequenceNumber]
+ * / [cabinClass] are carried from an import (not editable here) so the passenger row
+ * keeps what the pass printed.
+ */
+data class PassengerFormRow(
+    val rowKey: String = EntityIds.newId(),
+    val name: String = "",
+    val seat: String = "",
+    val existingPassPath: String? = null,
+    val pnr: String = "",
+    val sequenceNumber: String = "",
+    val cabinClass: String = "",
+) {
+    /** A row worth saving: a name, a seat or a stored pass. */
+    val hasInfo: Boolean get() = name.isNotBlank() || seat.isNotBlank() || existingPassPath != null
+
+    /** The passenger row for [flightId] at list position [sortOrder]. */
+    fun toPassenger(
+        flightId: String,
+        sortOrder: Int,
+    ): FlightPassenger =
+        FlightPassenger(
+            id = rowKey,
+            flightId = flightId,
+            name = name.trim(),
+            seat = seat.trim(),
+            pnrBookingRef = pnr.trim(),
+            boardingPassPath = existingPassPath,
+            sequenceNumber = sequenceNumber.trim(),
+            cabinClass = cabinClass.trim(),
+            sortOrder = sortOrder,
+        )
+
+    companion object {
+        /** A row editing a stored passenger (its id, pass and imported fields preserved). */
+        fun fromPassenger(passenger: FlightPassenger): PassengerFormRow =
+            PassengerFormRow(
+                rowKey = passenger.id,
+                name = passenger.name,
+                seat = passenger.seat,
+                existingPassPath = passenger.boardingPassPath,
+                pnr = passenger.pnrBookingRef,
+                sequenceNumber = passenger.sequenceNumber,
+                cabinClass = passenger.cabinClass,
+            )
+    }
+}
+
+/**
  * Editable form state. All values are raw user-typed strings; [toJourney] converts.
  * [confidences] carries the OCR/barcode per-field markers (ADR-009 review-first
  * discipline: prefills are NEVER saved blind); [prefillSource] drives the
@@ -60,16 +112,20 @@ data class FlightFormState(
     val flightNumber: String = "",
     val dateText: String = "",
     val pnr: String = "",
-    val seat: String = "",
     val cabinClass: String = "",
+    /**
+     * The people on board (ADR-046) — at least one row is always shown (the old Seat
+     * field is row 1); rows without a name, seat or pass are dropped on save.
+     */
+    val passengers: List<PassengerFormRow> = listOf(PassengerFormRow()),
     val depAirport: String = "",
     val arrAirport: String = "",
     val depTimeText: String = "",
     val arrTimeText: String = "",
     val confidences: Map<FlightField, ExtractionConfidence> = emptyMap(),
     val prefillSource: BoardingPassSource = BoardingPassSource.NONE,
+    /** Picked boarding-pass file, stored on save as PASSENGER ROW 1's pass (ADR-046). */
     val pendingPassUri: String? = null,
-    val existingPassPath: String? = null,
     /** Picked booking-confirmation file, stored as a FLIGHT attachment on save. */
     val pendingBookingUri: String? = null,
     /** How the booking-confirmation prefill was obtained (barcode/OCR/nothing). */
@@ -93,6 +149,16 @@ data class FlightFormState(
 ) {
     val isEdit: Boolean get() = editingId != null
 
+    /** Row 1's seat — what the pre-ADR-046 single Seat field held (review sheet, tests). */
+    val seat: String get() = passengers.firstOrNull()?.seat.orEmpty()
+
+    /** Row 1's name — the passenger an imported document named. */
+    val passengerName: String get() = passengers.firstOrNull()?.name.orEmpty()
+
+    /** The passenger rows worth saving, in order; [toPassengers] converts them for [flightId]. */
+    fun toPassengers(flightId: String): List<FlightPassenger> =
+        passengers.filter { it.hasInfo }.mapIndexed { index, row -> row.toPassenger(flightId, index) }
+
     /**
      * ADR-045 direct-save rule: valid per [validate] AND both airports present, so the
      * journey can be written without a review form.
@@ -110,16 +176,28 @@ data class FlightFormState(
         private val FLIGHT_NUMBER_PATTERN = Regex("[0-9]{1,4}[A-Z]?")
         private val AIRPORT_PATTERN = Regex("[A-Za-z]{3}")
 
-        fun fromJourney(journey: FlightJourney): FlightFormState {
+        /**
+         * Edit form for a stored journey and its live [passengers] (ADR-046). A flight
+         * without passenger rows shows its mirror seat/pass as the single row, so a
+         * legacy flight edits exactly as it did.
+         */
+        fun fromJourney(
+            journey: FlightJourney,
+            passengers: List<FlightPassenger> = emptyList(),
+        ): FlightFormState {
             val zone = ZoneId.systemDefault()
+            val rows =
+                passengers.sortedBy { it.sortOrder }.map(PassengerFormRow::fromPassenger).ifEmpty {
+                    listOf(PassengerFormRow(seat = journey.seat, existingPassPath = journey.boardingPassPath))
+                }
             return FlightFormState(
                 editingId = journey.id,
                 airlineIata = journey.airlineIata,
                 flightNumber = journey.flightNumber,
                 dateText = journey.date?.format(DATE_FORMAT).orEmpty(),
                 pnr = journey.pnrBookingRef,
-                seat = journey.seat,
                 cabinClass = journey.cabinClass,
+                passengers = rows,
                 depAirport = journey.depAirport,
                 arrAirport = journey.arrAirport,
                 depTimeText =
@@ -134,14 +212,14 @@ data class FlightFormState(
                         ?.toLocalTime()
                         ?.format(TIME_FORMAT)
                         .orEmpty(),
-                existingPassPath = journey.boardingPassPath,
             )
         }
 
         /**
          * Prefill from a shared flight link (ADR-039): identity, route and scheduled
-         * times in the DEVICE zone; personal fields (PNR, seat, cabin) are left blank
-         * for the recipient. No confidence markers — the data is exact, not scanned.
+         * times in the DEVICE zone; personal fields (PNR, cabin) are left blank for the
+         * recipient, while the sharer's passengers (ADR-046) become editable rows the
+         * recipient trims. No confidence markers — the data is exact, not scanned.
          */
         fun fromSharePayload(
             payload: FlightSharePayload,
@@ -163,6 +241,10 @@ data class FlightFormState(
                 arrAirport = payload.arrAirport.trim().uppercase(),
                 depTimeText = timeText(payload.schedDep),
                 arrTimeText = timeText(payload.schedArr),
+                passengers =
+                    payload.passengers
+                        .map { PassengerFormRow(name = it.name.trim(), seat = it.seat.trim().uppercase()) }
+                        .ifEmpty { listOf(PassengerFormRow()) },
                 fromSharedLink = true,
             )
         }
@@ -171,8 +253,8 @@ data class FlightFormState(
          * Prefill from ONE extracted flight segment (ADR-045) — confidence markers per
          * field; times arrive as `HH:mm` and are re-formatted the way the form shows
          * them; terminals are not form fields (the status check owns them) but travel on
-         * the state so they reach the journey and the banner; the passenger name is
-         * dropped (the form has no such field).
+         * the state so they reach the journey and the banner; the passenger name, seat,
+         * sequence number and locator become passenger row 1 (ADR-046).
          */
         fun fromFlight(flight: ExtractedFlight): FlightFormState {
             fun conf(field: ExtractedField) = field.confidence
@@ -191,8 +273,17 @@ data class FlightFormState(
                 flightNumber = flight.flightNumber.value.orEmpty(),
                 dateText = flight.flightDate.value.orEmpty(),
                 pnr = flight.pnr.value.orEmpty(),
-                seat = flight.seat.value.orEmpty(),
                 cabinClass = flight.cabinClass.value.orEmpty(),
+                passengers =
+                    listOf(
+                        PassengerFormRow(
+                            name = flight.passengerName.value.orEmpty(),
+                            seat = flight.seat.value.orEmpty(),
+                            pnr = flight.pnr.value.orEmpty(),
+                            sequenceNumber = flight.sequenceNumber.value.orEmpty(),
+                            cabinClass = flight.cabinClass.value.orEmpty(),
+                        ),
+                    ),
                 depAirport =
                     flight.fromAirport.value
                         .orEmpty()
@@ -258,7 +349,7 @@ data class FlightFormState(
         /**
          * Prefill from pasted/shared SMS or email text (ADR-042) — confidence markers per
          * field. Times arrive as `HH:mm` and are re-formatted the way the form shows
-         * them; the passenger name is dropped (the form has no such field).
+         * them; the passenger name and seat become passenger row 1 (ADR-046).
          */
         fun fromTextExtraction(extraction: FlightTextExtraction): FlightFormState {
             fun conf(field: ExtractedField) = field.confidence
@@ -277,8 +368,15 @@ data class FlightFormState(
                 flightNumber = extraction.flightNumber.value.orEmpty(),
                 dateText = extraction.flightDate.value.orEmpty(),
                 pnr = extraction.pnr.value.orEmpty(),
-                seat = extraction.seat.value.orEmpty(),
                 cabinClass = extraction.cabinClass.value.orEmpty(),
+                passengers =
+                    listOf(
+                        PassengerFormRow(
+                            name = extraction.passengerName.value.orEmpty(),
+                            seat = extraction.seat.value.orEmpty(),
+                            pnr = extraction.pnr.value.orEmpty(),
+                        ),
+                    ),
                 depAirport =
                     extraction.fromAirport.value
                         .orEmpty()
@@ -336,7 +434,11 @@ data class FlightFormState(
         }
     }
 
-    /** Converts a VALIDATED state into the domain model (id preserved on edit). */
+    /**
+     * Converts a VALIDATED state into the domain model (id preserved on edit). `seat`
+     * and `boardingPassPath` are left blank: they are MIRROR columns the repository
+     * derives from the passenger rows after `replacePassengers` (ADR-046).
+     */
     fun toJourney(
         checkInUrl: String?,
         zone: ZoneId = ZoneId.systemDefault(),
@@ -356,7 +458,6 @@ data class FlightFormState(
             flightNumber = flightNumber.trim().uppercase(),
             date = date,
             pnrBookingRef = pnr.trim(),
-            seat = seat.trim(),
             cabinClass = cabinClass.trim(),
             depAirport = airportOrEmpty(depAirport),
             arrAirport = airportOrEmpty(arrAirport),
@@ -364,7 +465,6 @@ data class FlightFormState(
             schedArr = instant(arrTimeText),
             depTerminal = depTerminal.trim(),
             arrTerminal = arrTerminal.trim(),
-            boardingPassPath = existingPassPath,
             checkInUrl = checkInUrl,
         )
     }

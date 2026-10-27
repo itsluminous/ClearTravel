@@ -16,14 +16,14 @@ import com.itsluminous.cleartravel.core.data.share.ShareUrlResult
 import com.itsluminous.cleartravel.core.designsystem.component.CardShare
 import com.itsluminous.cleartravel.core.designsystem.component.CardShare.findActivity
 import com.itsluminous.cleartravel.core.designsystem.theme.ClearTravelTheme
-import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightWithPassengers
 import com.itsluminous.cleartravel.feature.flights.R
 import com.itsluminous.cleartravel.feature.flights.list.FlightCardBody
 
 /** The self-contained card rendered OFF-SCREEN into the share image (no actions, no freshness line). */
 @Composable
 internal fun ShareFlightCard(
-    flight: FlightJourney,
+    entry: FlightWithPassengers,
     modifier: Modifier = Modifier,
 ) {
     Surface(
@@ -32,7 +32,7 @@ internal fun ShareFlightCard(
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp,
     ) {
-        FlightCardBody(flight = flight, showFreshness = false, modifier = Modifier.padding(16.dp))
+        FlightCardBody(entry = entry, showFreshness = false, modifier = Modifier.padding(16.dp))
     }
 }
 
@@ -57,9 +57,10 @@ enum class FlightShareOutcome {
 class FlightSharer(
     private val context: Context,
 ) {
-    fun share(flight: FlightJourney): FlightShareOutcome {
+    fun share(entry: FlightWithPassengers): FlightShareOutcome {
+        val flight = entry.flight
         val url =
-            when (val result = FlightShareText.shareUrl(flight)) {
+            when (val result = FlightShareText.shareUrl(flight, entry.passengers)) {
                 is ShareUrlResult.Ok -> result.url
                 is ShareUrlResult.TooLong -> return FlightShareOutcome.FAILED
             }
@@ -70,7 +71,7 @@ class FlightSharer(
                 template = context.getString(R.string.flights_share_text),
                 routeSeparator = context.getString(R.string.flights_card_route_separator),
             )
-        val imageUri = runCatching { renderImage(flight) }.getOrNull()
+        val imageUri = runCatching { renderImage(entry) }.getOrNull()
         CardShare.send(
             context = context,
             text = text,
@@ -80,14 +81,15 @@ class FlightSharer(
         return if (imageUri == null) FlightShareOutcome.SHARED_TEXT_ONLY else FlightShareOutcome.SHARED
     }
 
-    private fun renderImage(flight: FlightJourney): Uri? {
+    private fun renderImage(entry: FlightWithPassengers): Uri? {
+        val flight = entry.flight
         val activity = context.findActivity() ?: return null
         val bitmap =
             CardShare.render(activity) {
                 // Light scheme on purpose: the image lands in other apps' chat bubbles.
                 ClearTravelTheme(darkTheme = false) {
                     Surface(color = MaterialTheme.colorScheme.surfaceContainerLow) {
-                        ShareFlightCard(flight = flight)
+                        ShareFlightCard(entry = entry)
                     }
                 }
             }

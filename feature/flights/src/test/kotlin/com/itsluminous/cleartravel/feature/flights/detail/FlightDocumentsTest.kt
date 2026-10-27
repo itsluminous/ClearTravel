@@ -2,6 +2,7 @@ package com.itsluminous.cleartravel.feature.flights.detail
 
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.model.AttachmentOwnerType
+import com.itsluminous.cleartravel.core.model.FlightWithPassengers
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.core.testing.MainDispatcherRule
 import com.itsluminous.cleartravel.feature.flights.FakeAttachmentRepository
@@ -22,7 +23,7 @@ class FlightDocumentsBuilderTest {
                 localPath = "/data/attachments/a1.pdf",
             )
 
-        val documents = buildFlightDocuments(flight, listOf(attachment))
+        val documents = buildFlightDocuments(FlightWithPassengers(flight), listOf(attachment))
 
         assertThat(documents).hasSize(2)
         assertThat(documents[0].type).isEqualTo(FlightDocumentType.BOARDING_PASS)
@@ -44,16 +45,31 @@ class FlightDocumentsBuilderTest {
                 localPath = "/data/passes/f1.jpg",
             )
 
-        val documents = buildFlightDocuments(flight, listOf(passRow))
+        val documents = buildFlightDocuments(FlightWithPassengers(flight), listOf(passRow))
 
         assertThat(documents).hasSize(1)
         assertThat(documents.single().type).isEqualTo(FlightDocumentType.BOARDING_PASS)
     }
 
     @Test
+    fun `one boarding-pass row per passenger, each naming its passenger, and the legacy mirror is not repeated`() {
+        val flight = Fixtures.flightJourney(boardingPassPath = "/data/passes/p1.jpg")
+        val p1 = Fixtures.flightPassenger(flightId = flight.id, name = "A", boardingPassPath = "/data/passes/p1.jpg", sortOrder = 0)
+        val p2 = Fixtures.flightPassenger(flightId = flight.id, name = "B", boardingPassPath = "/data/passes/p2.pdf", sortOrder = 1)
+        val noPass = Fixtures.flightPassenger(flightId = flight.id, name = "C", boardingPassPath = null, sortOrder = 2)
+        val mirrorRow = Fixtures.attachment(ownerType = AttachmentOwnerType.FLIGHT, ownerId = flight.id, localPath = "/data/passes/p2.pdf")
+
+        val documents = buildFlightDocuments(FlightWithPassengers(flight, listOf(p1, p2, noPass)), listOf(mirrorRow))
+
+        assertThat(documents.map { it.type }).containsExactly(FlightDocumentType.BOARDING_PASS, FlightDocumentType.BOARDING_PASS)
+        assertThat(documents.map { it.passenger }).containsExactly(p1, p2).inOrder()
+        assertThat(documents.map { it.path }).containsExactly("/data/passes/p1.jpg", "/data/passes/p2.pdf").inOrder()
+    }
+
+    @Test
     fun `no boarding pass and no attachments yields an empty documents list`() {
         val flight = Fixtures.flightJourney(boardingPassPath = null)
-        assertThat(buildFlightDocuments(flight, emptyList())).isEmpty()
+        assertThat(buildFlightDocuments(FlightWithPassengers(flight), emptyList())).isEmpty()
     }
 
     @Test
@@ -67,7 +83,7 @@ class FlightDocumentsBuilderTest {
                 driveFileId = "drive-1",
             )
 
-        assertThat(buildFlightDocuments(flight, listOf(driveOnly))).isEmpty()
+        assertThat(buildFlightDocuments(FlightWithPassengers(flight), listOf(driveOnly))).isEmpty()
     }
 }
 

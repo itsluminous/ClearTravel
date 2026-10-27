@@ -56,7 +56,7 @@ class FlightListViewModelTest {
             viewModel.uiState.test {
                 val state = awaitItemMatching { it.flights.isNotEmpty() }
                 assertThat(state.filter).isEqualTo(FlightListFilter.ACTIVE)
-                assertThat(state.flights.map { it.id }).containsExactly(active.id)
+                assertThat(state.flights.map { it.flight.id }).containsExactly(active.id)
             }
         }
 
@@ -67,7 +67,7 @@ class FlightListViewModelTest {
                 awaitItemMatching { it.flights.isNotEmpty() }
                 viewModel.setFilter(FlightListFilter.ARCHIVED)
                 val state = awaitItemMatching { it.filter == FlightListFilter.ARCHIVED }
-                assertThat(state.flights.map { it.id }).containsExactly(archived.id)
+                assertThat(state.flights.map { it.flight.id }).containsExactly(archived.id)
             }
         }
 

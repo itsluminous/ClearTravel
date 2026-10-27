@@ -24,19 +24,21 @@ interface BoardingPassImporter {
     /**
      * Copies the picked file into app-private storage for offline gate display and
      * returns the stored path — null when the copy failed (form saves without a pass).
-     * Keyed by [flightId]: a file covering several flights (ADR-045) is stored once PER
-     * flight, so deleting one journey never touches another's copy.
+     * Keyed by [passengerId] (ADR-046): a file covering several flights (ADR-045) or
+     * several people is stored once PER passenger, so deleting one journey or one
+     * passenger never touches another's copy.
      */
     suspend fun store(
         uriString: String,
-        flightId: String,
+        passengerId: String,
     ): String?
 }
 
 /**
  * The storage half of the boarding-pass import: an ENCRYPTED copy into
- * `filesDir/boarding_passes/<flightId>.<ext>` (ADR-031). Separate from the OCR half
- * so it can be exercised with a real cipher in Robolectric (ADR-045 per-flight copies).
+ * `filesDir/boarding_passes/<passengerId>.<ext>` (ADR-031/046; pre-046 files are
+ * `<flightId>.<ext>` in the same directory and stay readable). Separate from the OCR
+ * half so it can be exercised with a real cipher in Robolectric.
  */
 @Singleton
 class BoardingPassFileStore
@@ -47,13 +49,13 @@ class BoardingPassFileStore
     ) {
         suspend fun store(
             uriString: String,
-            flightId: String,
+            passengerId: String,
         ): String? =
             withContext(Dispatchers.IO) {
                 runCatching {
                     val uri = Uri.parse(uriString)
                     val dir = AppFileLayout.boardingPasses(context.filesDir).apply { mkdirs() }
-                    val target = File(dir, "$flightId.${extensionOf(uri)}")
+                    val target = File(dir, "$passengerId.${extensionOf(uri)}")
                     context.contentResolver.openInputStream(uri)?.use { input ->
                         fileCipher.encryptTo(input, target)
                     } ?: return@runCatching null
@@ -88,6 +90,6 @@ class OcrBoardingPassImporter
 
         override suspend fun store(
             uriString: String,
-            flightId: String,
-        ): String? = fileStore.store(uriString, flightId)
+            passengerId: String,
+        ): String? = fileStore.store(uriString, passengerId)
     }

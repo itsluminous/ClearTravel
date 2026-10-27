@@ -8,6 +8,8 @@ import com.itsluminous.cleartravel.core.data.repository.ItineraryRepository
 import com.itsluminous.cleartravel.core.data.repository.TrainRepository
 import com.itsluminous.cleartravel.core.data.repository.TripRepository
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
+import com.itsluminous.cleartravel.core.model.FlightWithPassengers
 import com.itsluminous.cleartravel.core.model.ItineraryItem
 import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
@@ -167,6 +169,28 @@ class FakeFlightRepository : FlightRepository {
         flights.value = flights.value.filterNot { it.id == flight.id } + flight
         return flight
     }
+
+    override fun observeActiveWithPassengers(): Flow<List<FlightWithPassengers>> =
+        observeActive().map { list -> list.map { FlightWithPassengers(it) } }
+
+    override fun observeArchivedWithPassengers(): Flow<List<FlightWithPassengers>> =
+        observeArchived().map { list -> list.map { FlightWithPassengers(it) } }
+
+    override fun observePassengers(flightId: String): Flow<List<FlightPassenger>> = flowOf(emptyList())
+
+    override suspend fun getPassengers(flightId: String): List<FlightPassenger> = emptyList()
+
+    override suspend fun savePassengers(
+        flightId: String,
+        passengers: List<FlightPassenger>,
+    ): List<FlightPassenger> = passengers
+
+    override suspend fun replacePassengers(
+        flightId: String,
+        passengers: List<FlightPassenger>,
+    ): List<FlightPassenger> = passengers
+
+    override suspend fun deletePassenger(id: String) = Unit
 
     override suspend fun applyStatusResult(
         flightId: String,

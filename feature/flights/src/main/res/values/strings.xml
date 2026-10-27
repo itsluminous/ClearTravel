@@ -164,7 +164,7 @@
     <string name="flights_import_batch_skipped">skipped %d already saved</string>
     <string name="flights_import_batch_skipped_only">Skipped %d already saved</string>
     <string name="flights_import_batch_view">View</string>
-    <string name="flights_form_duplicate">Flight already exists</string>
+    <string name="flights_form_duplicate">Already saved</string>
     <string name="flights_form_duplicate_view">View</string>
     <!-- ADR-028: trips whose itinerary links this flight -->
     <string name="flights_detail_part_of">Part of</string>
@@ -183,5 +183,34 @@
     <string name="flights_share_text_only">Couldn\'t render the card image - shared the link only</string>
     <string name="flights_share_failed">Couldn\'t share the flight</string>
     <!-- ADR-039: add form prefilled from a shared flight link -->
-    <string name="flights_prefill_source_shared">Filled from a shared flight link - add your booking reference and seat, then save</string>
+    <string name="flights_prefill_source_shared">Filled from a shared flight link - add your booking reference, keep the passengers that are yours, then save</string>
+
+    <!-- ADR-046: passengers -->
+    <string name="flights_form_passengers">Passengers</string>
+    <string name="flights_form_passengers_hint">One row per person on this flight. A boarding pass you import belongs to the first row.</string>
+    <string name="flights_form_passenger_name">Passenger name</string>
+    <string name="flights_form_add_passenger">Add passenger</string>
+    <string name="flights_form_remove_passenger">Remove this passenger</string>
+    <string name="flights_form_passenger_has_pass">Boarding pass attached</string>
+    <string name="flights_detail_passengers">Passengers</string>
+    <string name="flights_passenger_unnamed">Passenger %d</string>
+    <string name="flights_passenger_seat">Seat %s</string>
+    <string name="flights_passenger_no_seat">No seat yet</string>
+    <string name="flights_passenger_view_pass">View this passenger\'s boarding pass</string>
+    <string name="flights_card_seats">Seats %s</string>
+    <string name="flights_card_seat">Seat %s</string>
+    <string name="flights_card_seat_separator">", "</string>
+    <string name="flights_card_passenger_separator">" · "</string>
+    <string name="flights_pass_chooser_title">Whose boarding pass?</string>
+    <string name="flights_doc_boarding_pass_of">Boarding pass · %s</string>
+    <string name="flights_passenger_added">Added %1$s to %2$s</string>
+    <plurals name="flights_import_batch_passengers">
+        <item quantity="one">added %d passenger</item>
+        <item quantity="other">added %d passengers</item>
+    </plurals>
+    <plurals name="flights_import_batch_passengers_only">
+        <item quantity="one">Added %d passenger to an existing flight</item>
+        <item quantity="other">Added %d passengers to existing flights</item>
+    </plurals>
+    <string name="flights_import_review_passenger">%s</string>
 </resources>

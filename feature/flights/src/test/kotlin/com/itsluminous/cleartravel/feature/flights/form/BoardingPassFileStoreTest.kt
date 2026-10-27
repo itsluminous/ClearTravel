@@ -47,6 +47,26 @@ class BoardingPassFileStoreTest {
         }
 
     @Test
+    fun `passenger copies land next to a legacy flight-keyed file, which stays readable as-is (ADR-046)`() =
+        runTest {
+            val bytes = ByteArray(3_000) { (it % 97).toByte() }
+            val picked = File(context.cacheDir, "picked-pass.pdf").apply { writeBytes(bytes) }
+            // A pre-046 install stored the flight's pass under its FLIGHT id; the schema
+            // migration points the backfilled passenger at this very path.
+            val legacy = store.store(Uri.fromFile(picked).toString(), "flight-legacy")!!
+            val passenger = store.store(Uri.fromFile(picked).toString(), "passenger-2")!!
+
+            assertThat(File(legacy).parentFile).isEqualTo(File(passenger).parentFile)
+            assertThat(legacy).endsWith("flight-legacy.pdf")
+            assertThat(passenger).endsWith("passenger-2.pdf")
+            for (path in listOf(legacy, passenger)) {
+                val out = ByteArrayOutputStream()
+                cipher.decryptTo(File(path), out)
+                assertThat(out.toByteArray()).isEqualTo(bytes)
+            }
+        }
+
+    @Test
     fun `an unreadable uri stores nothing`() =
         runTest {
             assertThat(store.store("file:///nonexistent/nowhere.pdf", "flight-x")).isNull()

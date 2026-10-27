@@ -10,8 +10,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.AirplaneTicket
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -31,27 +33,36 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
+import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightPassenger
 import com.itsluminous.cleartravel.feature.flights.R
 import com.itsluminous.cleartravel.feature.flights.list.FlightStatusChip
 import com.itsluminous.cleartravel.feature.flights.list.formatDate
 import com.itsluminous.cleartravel.feature.flights.list.formatTime
 import com.itsluminous.cleartravel.feature.flights.list.formatTimestamp
+import com.itsluminous.cleartravel.feature.flights.list.passengerLabel
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcome
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcomeKind
 import com.itsluminous.cleartravel.feature.flights.status.FlightStatusFallbacks
 
+/** Test tag of every passenger row in the detail sheet (e2e). */
+const val PASSENGER_ROW_TAG = "flights_detail_passenger_row"
+
 /**
  * Everything about one flight + the spec's MANDATORY manual trigger buttons:
  * "Check status" (scrape flow), "Open web check-in" (per-airline URL from the
- * check-in data file, web-search fallback), "View boarding pass" — plus the
- * documents row (boarding pass + attached booking confirmations, each opening the
- * document viewer) and "Attach booking confirmation" (ADR-017).
+ * check-in data file, web-search fallback) — plus the passengers list (ADR-046: each
+ * with their seat and, when they have one, a "View boarding pass" control), the
+ * documents row (one boarding pass per passenger + attached booking confirmations,
+ * each opening the document viewer) and "Attach booking confirmation" (ADR-017).
  */
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FlightDetailSheet(
@@ -63,6 +74,8 @@ fun FlightDetailSheet(
     onArchiveToggle: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier,
+    /** The people on board (ADR-046); empty for a flight that predates passengers and was never edited. */
+    passengers: List<FlightPassenger> = emptyList(),
     /** Transient last-attempt outcome (D2) — rendered under the fetched timestamp. */
     lastCheckOutcome: CheckOutcome? = null,
     /** Documents list (boarding pass + attachments); see [buildFlightDocuments]. */
@@ -129,9 +142,54 @@ fun FlightDetailSheet(
 
             DetailRow(labelRes = R.string.flights_label_belt, value = flight.baggageBelt)
             DetailRow(labelRes = R.string.flights_label_aircraft, value = flight.aircraftType)
-            DetailRow(labelRes = R.string.flights_label_seat, value = flight.seat)
+            if (passengers.isEmpty()) DetailRow(labelRes = R.string.flights_label_seat, value = flight.seat)
             DetailRow(labelRes = R.string.flights_label_cabin, value = flight.cabinClass)
             DetailRow(labelRes = R.string.flights_label_pnr, value = flight.pnrBookingRef)
+
+            if (passengers.isNotEmpty()) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                Text(
+                    text = stringResource(R.string.flights_detail_passengers),
+                    style = MaterialTheme.typography.titleSmall,
+                )
+                passengers.forEachIndexed { index, passenger ->
+                    val passPath = passenger.boardingPassPath
+                    ListItem(
+                        headlineContent = { AutoShrinkText(passengerLabel(passenger, index), minScale = 0.8f) },
+                        supportingContent = {
+                            val seat = passenger.seat.trim()
+                            val pnr = passenger.pnrBookingRef.trim().takeIf { it.isNotBlank() && it != flight.pnrBookingRef.trim() }
+                            AutoShrinkText(
+                                listOfNotNull(
+                                    if (seat.isNotBlank()) {
+                                        stringResource(
+                                            R.string.flights_passenger_seat,
+                                            seat,
+                                        )
+                                    } else {
+                                        stringResource(R.string.flights_passenger_no_seat)
+                                    },
+                                    pnr?.let { stringResource(R.string.flights_import_review_pnr, it) },
+                                ).joinToString(stringResource(R.string.flights_card_passenger_separator)),
+                                minScale = 0.8f,
+                            )
+                        },
+                        leadingContent = { Icon(Icons.Filled.Person, contentDescription = null) },
+                        trailingContent =
+                            passPath?.let { path ->
+                                {
+                                    ExplainableIcon(
+                                        icon = Icons.AutoMirrored.Filled.AirplaneTicket,
+                                        explanationRes = R.string.flights_passenger_view_pass,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        onClick = { onViewPass(path) },
+                                    )
+                                }
+                            },
+                        modifier = Modifier.testTag(PASSENGER_ROW_TAG),
+                    )
+                }
+            }
 
             Text(
                 text =
@@ -179,9 +237,13 @@ fun FlightDetailSheet(
             ) {
                 AutoShrinkText(stringResource(R.string.flights_action_web_checkin))
             }
-            flight.boardingPassPath?.let { path ->
-                FilledTonalButton(onClick = { onViewPass(path) }, modifier = Modifier.fillMaxWidth()) {
-                    AutoShrinkText(stringResource(R.string.flights_action_view_pass))
+            // A flight that predates passengers (ADR-046) and has no passenger rows keeps the
+            // single "View boarding pass" button; otherwise the passenger rows carry the passes.
+            if (passengers.isEmpty()) {
+                flight.boardingPassPath?.let { path ->
+                    FilledTonalButton(onClick = { onViewPass(path) }, modifier = Modifier.fillMaxWidth()) {
+                        AutoShrinkText(stringResource(R.string.flights_action_view_pass))
+                    }
                 }
             }
             FilledTonalButton(onClick = onAttachBooking, modifier = Modifier.fillMaxWidth()) {
@@ -197,14 +259,19 @@ fun FlightDetailSheet(
                 documents.forEach { document ->
                     ListItem(
                         headlineContent = {
-                            Text(
-                                stringResource(
-                                    when (document.type) {
-                                        FlightDocumentType.BOARDING_PASS -> R.string.flights_doc_boarding_pass
-                                        FlightDocumentType.BOOKING_CONFIRMATION ->
-                                            R.string.flights_doc_booking_confirmation
-                                    },
-                                ),
+                            AutoShrinkText(
+                                when (document.type) {
+                                    FlightDocumentType.BOARDING_PASS ->
+                                        document.passenger?.let { passenger ->
+                                            stringResource(
+                                                R.string.flights_doc_boarding_pass_of,
+                                                passengerLabel(passenger, passengers.indexOf(passenger).coerceAtLeast(0)),
+                                            )
+                                        } ?: stringResource(R.string.flights_doc_boarding_pass)
+                                    FlightDocumentType.BOOKING_CONFIRMATION ->
+                                        stringResource(R.string.flights_doc_booking_confirmation)
+                                },
+                                minScale = 0.8f,
                             )
                         },
                         supportingContent = { Text(stringResource(R.string.flights_doc_open_hint)) },

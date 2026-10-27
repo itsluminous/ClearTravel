@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.itsluminous.cleartravel.core.data.repository.FlightRepository
 import com.itsluminous.cleartravel.core.model.FlightJourney
+import com.itsluminous.cleartravel.core.model.FlightWithPassengers
 import com.itsluminous.cleartravel.feature.flights.checkin.CheckInGateDecision
 import com.itsluminous.cleartravel.feature.flights.checkin.CheckInRuleSource
 import com.itsluminous.cleartravel.feature.flights.checkin.decideCheckInGate
@@ -22,7 +23,8 @@ import javax.inject.Inject
 enum class FlightListFilter { ACTIVE, ARCHIVED }
 
 data class FlightListUiState(
-    val flights: List<FlightJourney> = emptyList(),
+    /** Journeys with their live passengers (ADR-046) — cards and the detail sheet read both. */
+    val flights: List<FlightWithPassengers> = emptyList(),
     val filter: FlightListFilter = FlightListFilter.ACTIVE,
 )
 
@@ -38,8 +40,8 @@ class FlightListViewModel
 
         val uiState: StateFlow<FlightListUiState> =
             combine(
-                repository.observeActive(),
-                repository.observeArchived(),
+                repository.observeActiveWithPassengers(),
+                repository.observeArchivedWithPassengers(),
                 filter,
             ) { active, archived, selected ->
                 FlightListUiState(
