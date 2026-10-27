@@ -253,8 +253,11 @@ data class FlightFormState(
          * Prefill from ONE extracted flight segment (ADR-045) — confidence markers per
          * field; times arrive as `HH:mm` and are re-formatted the way the form shows
          * them; terminals are not form fields (the status check owns them) but travel on
-         * the state so they reach the journey and the banner; the passenger name, seat,
-         * sequence number and locator become passenger row 1 (ADR-046).
+         * the state so they reach the journey and the banner; EVERY extracted passenger
+         * becomes a row in document order (ADR-046/047) — their name, seat and sequence
+         * number, plus the locator / cabin printed for them (the segment's when the
+         * document printed one for the flight). A segment naming nobody shows one blank
+         * row. The SEAT confidence marker is passenger #1's.
          */
         fun fromFlight(flight: ExtractedFlight): FlightFormState {
             fun conf(field: ExtractedField) = field.confidence
@@ -275,15 +278,16 @@ data class FlightFormState(
                 pnr = flight.pnr.value.orEmpty(),
                 cabinClass = flight.cabinClass.value.orEmpty(),
                 passengers =
-                    listOf(
-                        PassengerFormRow(
-                            name = flight.passengerName.value.orEmpty(),
-                            seat = flight.seat.value.orEmpty(),
-                            pnr = flight.pnr.value.orEmpty(),
-                            sequenceNumber = flight.sequenceNumber.value.orEmpty(),
-                            cabinClass = flight.cabinClass.value.orEmpty(),
-                        ),
-                    ),
+                    flight.passengers
+                        .map { passenger ->
+                            PassengerFormRow(
+                                name = passenger.name.value.orEmpty(),
+                                seat = passenger.seat.value.orEmpty(),
+                                pnr = (passenger.pnr.value ?: flight.pnr.value).orEmpty(),
+                                sequenceNumber = passenger.sequenceNumber.value.orEmpty(),
+                                cabinClass = (passenger.cabinClass.value ?: flight.cabinClass.value).orEmpty(),
+                            )
+                        }.ifEmpty { listOf(PassengerFormRow()) },
                 depAirport =
                     flight.fromAirport.value
                         .orEmpty()

@@ -11,6 +11,7 @@ import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationSource
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedField
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedFlight
+import com.itsluminous.cleartravel.core.ocr.model.ExtractedPassenger
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.core.testing.MainDispatcherRule
 import com.itsluminous.cleartravel.feature.flights.FakeBoardingPassImporter
@@ -527,11 +528,35 @@ class FlightFormViewModelTest {
         depTime = ExtractedField.of("10:30", ExtractionConfidence.MEDIUM),
         depTerminal = ExtractedField.of("2", ExtractionConfidence.MEDIUM),
         pnr = ExtractedField.of(pnr, ExtractionConfidence.HIGH),
+        passengers = ExtractedPassenger.single(seat = ExtractedField.of(seat, ExtractionConfidence.MEDIUM)),
+    )
+
+    /** ONE named passenger on the segment (ADR-047), replacing whatever it carried. */
+    private fun ExtractedFlight.withPassenger(
+        name: String,
+        seat: String? = this.seat.value,
+    ) = copy(
+        passengers =
+            ExtractedPassenger.single(
+                name = ExtractedField.of(name, ExtractionConfidence.HIGH),
+                seat = ExtractedField.of(seat, ExtractionConfidence.HIGH),
+            ),
+    )
+
+    private fun passenger(
+        name: String,
+        seat: String,
+    ) = ExtractedPassenger(
+        name = ExtractedField.of(name, ExtractionConfidence.MEDIUM),
         seat = ExtractedField.of(seat, ExtractionConfidence.MEDIUM),
     )
 
     private val onward = segment("2019", "BLR", "LKO", "2026-10-29", seat = "12A")
     private val back = segment("1542", "LKO", "BLR", "2026-10-31", pnr = "D2FE9V", seat = "10A")
+
+    /** ADR-047: the two-traveller OTA confirmation — both legs carry Prakash and Bandana. */
+    private val onwardTwoPax = onward.copy(passengers = listOf(passenger("PRAKASH KUMAR", "12A"), passenger("BANDANA KUMARI", "12B")))
+    private val backTwoPax = back.copy(passengers = listOf(passenger("PRAKASH KUMAR", "10A"), passenger("BANDANA KUMARI", "10C")))
 
     @Test
     fun `a single-segment boarding pass opens the form with no review step`() =
@@ -685,12 +710,8 @@ class FlightFormViewModelTest {
     @Test
     fun `two passes for the same flight from two files become one flight with two named passengers`() =
         runTest {
-            val prakash = onward.copy(passengerName = ExtractedField.of("PRAKASH KUMAR", ExtractionConfidence.HIGH))
-            val bandana =
-                onward.copy(
-                    passengerName = ExtractedField.of("BANDANA KUMARI", ExtractionConfidence.HIGH),
-                    seat = ExtractedField.of("12B", ExtractionConfidence.HIGH),
-                )
+            val prakash = onward.withPassenger("PRAKASH KUMAR")
+            val bandana = onward.withPassenger("BANDANA KUMARI", seat = "12B")
             importer.perFlightPaths = true
 
             importer.extraction = BoardingPassExtraction(flights = listOf(prakash), source = BoardingPassSource.BARCODE)
@@ -744,7 +765,7 @@ class FlightFormViewModelTest {
             // Bandana, seat 10A, pass → claims the nameless 10A row (name + pass filled, no new row).
             importer.extraction =
                 BoardingPassExtraction(
-                    flights = listOf(back.copy(passengerName = ExtractedField.of("BANDANA KUMARI", ExtractionConfidence.HIGH))),
+                    flights = listOf(back.withPassenger("BANDANA KUMARI")),
                     source = BoardingPassSource.OCR_TEXT,
                 )
             viewModel.startFromBoardingPass("content://picked/bandana")
@@ -759,7 +780,7 @@ class FlightFormViewModelTest {
             // Prakash, ALSO seat 10A (the image had him there): a different name wins → second passenger.
             importer.extraction =
                 BoardingPassExtraction(
-                    flights = listOf(back.copy(passengerName = ExtractedField.of("PRAKASH KUMAR", ExtractionConfidence.HIGH))),
+                    flights = listOf(back.withPassenger("PRAKASH KUMAR")),
                     source = BoardingPassSource.OCR_TEXT,
                 )
             viewModel.startFromBoardingPass("content://picked/prakash")
@@ -769,6 +790,154 @@ class FlightFormViewModelTest {
                 assertThat(outcome.addedPassengers.single().label).isEqualTo("PRAKASH KUMAR")
             }
             assertThat(repository.getPassengers(flightId).map { it.name }).containsExactly("BANDANA KUMARI", "PRAKASH KUMAR").inOrder()
+        }
+
+    // ---- several passengers per segment (ADR-047) ----
+
+    @Test
+    fun `a two-passenger confirmation saves each flight with both passengers and one attachment`() =
+        runTest {
+            bookingImporter.extraction =
+                BookingConfirmationExtraction(flights = listOf(onwardTwoPax, backTwoPax), source = BookingConfirmationSource.OCR_TEXT)
+            viewModel.startFromBookingConfirmation("content://picked/two-pax")
+            val review = viewModel.importReview.value!!
+            assertThat(review.items.map { item -> item.form.passengers.map { it.name to it.seat } })
+                .containsExactly(
+                    listOf("PRAKASH KUMAR" to "12A", "BANDANA KUMARI" to "12B"),
+                    listOf("PRAKASH KUMAR" to "10A", "BANDANA KUMARI" to "10C"),
+                ).inOrder()
+
+            viewModel.events.test {
+                viewModel.confirmReview()
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(outcome.savedIds).hasSize(2)
+                assertThat(outcome.addedPassengers).isEmpty()
+                val (first, second) = outcome.savedIds.map { repository.getPassengers(it) }
+                assertThat(first.map { it.name to it.seat }).containsExactly("PRAKASH KUMAR" to "12A", "BANDANA KUMARI" to "12B").inOrder()
+                assertThat(second.map { it.name to it.seat }).containsExactly("PRAKASH KUMAR" to "10A", "BANDANA KUMARI" to "10C").inOrder()
+                assertThat(first.map { it.pnrBookingRef }).containsExactly("R87T5G", "R87T5G")
+                // Mirror seat = passenger #1; the confirmation is ONE attachment per flight, no pass copies.
+                assertThat(repository.getFlight(outcome.savedIds[0])!!.seat).isEqualTo("12A")
+                assertThat(bookingImporter.attached.map { it.second }).containsExactlyElementsIn(outcome.savedIds)
+                assertThat(importer.stored).isEmpty()
+            }
+        }
+
+    @Test
+    fun `a stacked boarding-pass page with two passengers stores the file once per passenger`() =
+        runTest {
+            importer.extraction =
+                BoardingPassExtraction(
+                    flights = listOf(onward.copy(passengers = listOf(passenger("RAHUL SHARMA", "12A"), passenger("PRIYA SHARMA", "12B")))),
+                    source = BoardingPassSource.OCR_TEXT,
+                )
+            importer.perFlightPaths = true
+            // One segment → the form directly, two rows prefilled.
+            viewModel.startFromBoardingPass("content://picked/stacked")
+            assertThat(viewModel.importReview.value).isNull()
+            assertThat(
+                viewModel.formState.value.passengers
+                    .map { it.name },
+            ).containsExactly("RAHUL SHARMA", "PRIYA SHARMA").inOrder()
+
+            var saved: String? = null
+            viewModel.save { saved = it }
+            val passengers = repository.getPassengers(saved!!)
+            assertThat(passengers.map { it.seat }).containsExactly("12A", "12B").inOrder()
+            // Through the plain form the pass belongs to row 1 (ADR-046); the review/batch path copies it per passenger.
+            assertThat(passengers[0].boardingPassPath).isEqualTo("/data/passes/${passengers[0].id}.jpg")
+            assertThat(passengers[1].boardingPassPath).isNull()
+        }
+
+    @Test
+    fun `a batch-saved stacked page copies the pass for every passenger`() =
+        runTest {
+            val stacked = onward.copy(passengers = listOf(passenger("RAHUL SHARMA", "12A"), passenger("PRIYA SHARMA", "12B")))
+            importer.extraction = BoardingPassExtraction(flights = listOf(stacked, back), source = BoardingPassSource.OCR_TEXT)
+            importer.perFlightPaths = true
+            viewModel.startFromBoardingPass("content://picked/stacked-two")
+
+            viewModel.events.test {
+                viewModel.confirmReview()
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(outcome.savedIds).hasSize(2)
+                val stackedPassengers = repository.getPassengers(outcome.savedIds[0])
+                assertThat(stackedPassengers.map { it.boardingPassPath })
+                    .containsExactly("/data/passes/${stackedPassengers[0].id}.jpg", "/data/passes/${stackedPassengers[1].id}.jpg")
+                    .inOrder()
+                assertThat(importer.stored.map { it.second })
+                    .containsExactly(
+                        stackedPassengers[0].id,
+                        stackedPassengers[1].id,
+                        repository.getPassengers(outcome.savedIds[1]).single().id,
+                    ).inOrder()
+            }
+        }
+
+    @Test
+    fun `a two-passenger segment for a flight that has one of them adds only the other`() =
+        runTest {
+            val flightId = "ix2019"
+            repository.seed(
+                Fixtures.flightJourney(id = flightId, airlineIata = "IX", flightNumber = "2019", date = LocalDate.parse("2026-10-29")),
+            )
+            repository.seedPassengers(Fixtures.flightPassenger(flightId = flightId, name = "Kumar/Prakash", seat = "12A"))
+            bookingImporter.extraction =
+                BookingConfirmationExtraction(flights = listOf(onwardTwoPax, backTwoPax), source = BookingConfirmationSource.OCR_TEXT)
+            viewModel.startFromBookingConfirmation("content://picked/two-pax")
+
+            viewModel.events.test {
+                viewModel.confirmReview()
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(outcome.savedIds).hasSize(1)
+                assertThat(outcome.skippedExistingIds).isEmpty()
+                assertThat(outcome.addedPassengers).containsExactly(AddedPassenger(flightId, "BANDANA KUMARI", "IX 2019"))
+            }
+            assertThat(repository.getPassengers(flightId).map { it.name to it.seat })
+                .containsExactly("Kumar/Prakash" to "12A", "BANDANA KUMARI" to "12B")
+                .inOrder()
+        }
+
+    @Test
+    fun `a two-passenger segment whose passengers are both on board is skipped as already saved`() =
+        runTest {
+            val flightId = "ix2019"
+            repository.seed(
+                Fixtures.flightJourney(id = flightId, airlineIata = "IX", flightNumber = "2019", date = LocalDate.parse("2026-10-29")),
+            )
+            repository.seedPassengers(
+                Fixtures.flightPassenger(flightId = flightId, name = "PRAKASH KUMAR", seat = "12A", sortOrder = 0),
+                Fixtures.flightPassenger(flightId = flightId, name = "MRS BANDANA KUMARI", seat = "", sortOrder = 1),
+            )
+            bookingImporter.extraction =
+                BookingConfirmationExtraction(flights = listOf(onwardTwoPax, backTwoPax), source = BookingConfirmationSource.OCR_TEXT)
+            viewModel.startFromBookingConfirmation("content://picked/two-pax")
+
+            viewModel.events.test {
+                viewModel.confirmReview()
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(outcome.skippedExistingIds).containsExactly(flightId)
+                assertThat(outcome.savedIds).hasSize(1)
+                assertThat(outcome.addedPassengers).isEmpty()
+            }
+            // Bandana's blank seat was filled from the confirmation; nobody was added.
+            assertThat(repository.getPassengers(flightId).map { it.seat }).containsExactly("12A", "12B").inOrder()
+        }
+
+    @Test
+    fun `an incomplete two-passenger segment walks through the form with both rows prefilled`() =
+        runTest {
+            val undated = onwardTwoPax.copy(flightDate = ExtractedField.EMPTY)
+            bookingImporter.extraction =
+                BookingConfirmationExtraction(flights = listOf(undated, backTwoPax), source = BookingConfirmationSource.OCR_TEXT)
+            viewModel.startFromBookingConfirmation("content://picked/two-pax")
+
+            viewModel.confirmReview()
+            val form = viewModel.formState.value
+            assertThat(form.walkthrough).isEqualTo(WalkthroughProgress(index = 1, total = 2))
+            assertThat(
+                form.passengers.map { it.name to it.seat },
+            ).containsExactly("PRAKASH KUMAR" to "12A", "BANDANA KUMARI" to "12B").inOrder()
         }
 
     @Test

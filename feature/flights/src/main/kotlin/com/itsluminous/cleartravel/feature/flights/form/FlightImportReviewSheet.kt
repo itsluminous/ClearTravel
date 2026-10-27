@@ -148,13 +148,48 @@ private fun reviewTitle(form: FlightFormState): String {
         .ifBlank { stringResource(R.string.flights_import_review_unknown_flight) }
 }
 
-/** `Thu, 29 Oct 2026 · 10:30 · PNR R87T5G · Seat 12A · BANDANA KUMARI` — only the parts the segment has (ADR-046 names the passenger). */
+/**
+ * `Thu, 29 Oct 2026 · 10:30 · PNR R87T5G · Seat 12A · BANDANA KUMARI` — only the parts the
+ * segment has (ADR-046 names the passenger). A segment carrying SEVERAL passengers
+ * (ADR-047) ends with `2 passengers: PRAKASH KUMAR 12A, BANDANA KUMARI 12B` instead of
+ * the single seat + name.
+ */
 @Composable
-private fun reviewDetails(form: FlightFormState): String =
-    listOfNotNull(
-        FlightFormState.parseDate(form.dateText)?.let { formatDate(it) },
-        form.depTimeText.takeIf { it.isNotBlank() },
-        form.pnr.takeIf { it.isNotBlank() }?.let { stringResource(R.string.flights_import_review_pnr, it) },
-        form.seat.takeIf { it.isNotBlank() }?.let { stringResource(R.string.flights_import_review_seat, it) },
-        form.passengerName.takeIf { it.isNotBlank() }?.let { stringResource(R.string.flights_import_review_passenger, it) },
+private fun reviewDetails(form: FlightFormState): String {
+    val people = form.passengers.filter { it.hasInfo }
+    val passengerParts =
+        if (people.size > 1) {
+            listOf(
+                pluralStringResource(
+                    R.plurals.flights_import_review_passengers,
+                    people.size,
+                    people.size,
+                    people
+                        .mapIndexed { index, row -> reviewPassenger(index, row) }
+                        .joinToString(stringResource(R.string.flights_import_review_passenger_list_separator)),
+                ),
+            )
+        } else {
+            listOfNotNull(
+                form.seat.takeIf { it.isNotBlank() }?.let { stringResource(R.string.flights_import_review_seat, it) },
+                form.passengerName.takeIf { it.isNotBlank() }?.let { stringResource(R.string.flights_import_review_passenger, it) },
+            )
+        }
+    return (
+        listOfNotNull(
+            FlightFormState.parseDate(form.dateText)?.let { formatDate(it) },
+            form.depTimeText.takeIf { it.isNotBlank() },
+            form.pnr.takeIf { it.isNotBlank() }?.let { stringResource(R.string.flights_import_review_pnr, it) },
+        ) + passengerParts
     ).joinToString(stringResource(R.string.flights_import_review_separator))
+}
+
+/** `PRAKASH KUMAR 12A`; an unnamed row is `Passenger 2 12B`; a seatless one just the name. */
+@Composable
+private fun reviewPassenger(
+    index: Int,
+    row: PassengerFormRow,
+): String {
+    val name = row.name.ifBlank { stringResource(R.string.flights_passenger_unnamed, index + 1) }
+    return if (row.seat.isBlank()) name else stringResource(R.string.flights_import_review_passenger_seat, name, row.seat)
+}

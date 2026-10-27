@@ -10,6 +10,7 @@ import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationExtraction
 import com.itsluminous.cleartravel.core.ocr.model.BookingConfirmationSource
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedField
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedFlight
+import com.itsluminous.cleartravel.core.ocr.model.ExtractedPassenger
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.feature.flights.text.FlightTextExtraction
 import org.junit.Test
@@ -183,7 +184,7 @@ class FlightFormStateTest {
                 flights =
                     listOf(
                         ExtractedFlight(
-                            passengerName = ExtractedField.of("DOE/JOHN", ExtractionConfidence.HIGH),
+                            passengers = ExtractedPassenger.single(name = ExtractedField.of("DOE/JOHN", ExtractionConfidence.HIGH)),
                             pnr = ExtractedField.of("AB1CD2", ExtractionConfidence.HIGH),
                             carrier = ExtractedField.of("ai", ExtractionConfidence.HIGH),
                             flightNumber = ExtractedField.of("0101", ExtractionConfidence.HIGH),
@@ -192,7 +193,6 @@ class FlightFormStateTest {
                             flightDate = ExtractedField.of("2026-09-20", ExtractionConfidence.LOW),
                             depTime = ExtractedField.of("16:25", ExtractionConfidence.HIGH),
                             depTerminal = ExtractedField.of("1", ExtractionConfidence.MEDIUM),
-                            seat = ExtractedField.EMPTY,
                         ),
                     ),
                 source = BoardingPassSource.BARCODE,
@@ -218,7 +218,7 @@ class FlightFormStateTest {
     fun `fromBookingExtraction maps values, cabin confidence and the return-leg hint`() {
         val onward =
             ExtractedFlight(
-                passengerName = ExtractedField.of("ARJUN NAIR", ExtractionConfidence.HIGH),
+                passengers = ExtractedPassenger.single(name = ExtractedField.of("ARJUN NAIR", ExtractionConfidence.HIGH)),
                 pnr = ExtractedField.of("T5K2M9", ExtractionConfidence.HIGH),
                 carrier = ExtractedField.of("ai", ExtractionConfidence.MEDIUM),
                 flightNumber = ExtractedField.of("503", ExtractionConfidence.MEDIUM),
@@ -226,7 +226,6 @@ class FlightFormStateTest {
                 toAirport = ExtractedField.of("del", ExtractionConfidence.MEDIUM),
                 flightDate = ExtractedField.of("2026-09-26", ExtractionConfidence.HIGH),
                 cabinClass = ExtractedField.of("BUSINESS", ExtractionConfidence.HIGH),
-                seat = ExtractedField.EMPTY,
             )
         val extraction =
             BookingConfirmationExtraction(
@@ -271,5 +270,52 @@ class FlightFormStateTest {
 
         assertThat(state.returnLegHint).isFalse()
         assertThat(state.pendingPassUri).isNull() // never crosses into the pass slot
+    }
+
+    @Test
+    fun `fromFlight makes one passenger row per extracted passenger (ADR-047)`() {
+        val flight =
+            ExtractedFlight(
+                pnr = ExtractedField.of("R87T5G", ExtractionConfidence.HIGH),
+                carrier = ExtractedField.of("IX", ExtractionConfidence.MEDIUM),
+                flightNumber = ExtractedField.of("2019", ExtractionConfidence.MEDIUM),
+                flightDate = ExtractedField.of("2026-10-29", ExtractionConfidence.MEDIUM),
+                cabinClass = ExtractedField.of("ECONOMY", ExtractionConfidence.LOW),
+                passengers =
+                    listOf(
+                        ExtractedPassenger(
+                            name = ExtractedField.of("PRAKASH KUMAR", ExtractionConfidence.MEDIUM),
+                            seat = ExtractedField.of("12A", ExtractionConfidence.HIGH),
+                        ),
+                        ExtractedPassenger(
+                            name = ExtractedField.of("BANDANA KUMARI", ExtractionConfidence.MEDIUM),
+                            seat = ExtractedField.of("12B", ExtractionConfidence.MEDIUM),
+                            sequenceNumber = ExtractedField.of("26", ExtractionConfidence.HIGH),
+                            pnr = ExtractedField.of("ZZ9Y8X", ExtractionConfidence.HIGH),
+                        ),
+                    ),
+            )
+
+        val state = FlightFormState.fromFlight(flight)
+
+        assertThat(
+            state.passengers.map { it.name to it.seat },
+        ).containsExactly("PRAKASH KUMAR" to "12A", "BANDANA KUMARI" to "12B").inOrder()
+        // The segment's locator / cabin reach every row; a passenger's own locator wins.
+        assertThat(state.passengers.map { it.pnr }).containsExactly("R87T5G", "ZZ9Y8X").inOrder()
+        assertThat(state.passengers.map { it.cabinClass }).containsExactly("ECONOMY", "ECONOMY").inOrder()
+        assertThat(state.passengers[1].sequenceNumber).isEqualTo("26")
+        // Derived views and the SEAT marker read passenger #1.
+        assertThat(state.passengerName).isEqualTo("PRAKASH KUMAR")
+        assertThat(state.seat).isEqualTo("12A")
+        assertThat(state.confidences[FlightField.SEAT]).isEqualTo(ExtractionConfidence.HIGH)
+        // A segment naming nobody still shows one blank row.
+        assertThat(
+            FlightFormState
+                .fromFlight(flight.copy(passengers = emptyList()))
+                .passengers
+                .single()
+                .hasInfo,
+        ).isFalse()
     }
 }

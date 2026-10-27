@@ -429,17 +429,24 @@ class FlightFormViewModel
         /**
          * Writes the form's passenger rows for [flightId] (ADR-046): the pending
          * boarding pass — when any — is stored as ROW 1's pass under the passenger's id;
-         * stored passes of edited rows survive; removed rows are tombstoned.
+         * stored passes of edited rows survive; removed rows are tombstoned. An IMPORTED
+         * file whose rows all came out of it ([passForEveryRow], ADR-047: a stacked page
+         * or a pass per page) is stored once per passenger, each under their own id, so
+         * every traveller carries their pass and deleting one never touches another's.
          */
         private suspend fun writePassengers(
             flightId: String,
             form: FlightFormState,
             passUri: String?,
+            passForEveryRow: Boolean = false,
         ) {
             val rows = form.toPassengers(flightId).toMutableList()
             if (passUri != null) {
-                val first = rows.firstOrNull() ?: PassengerFormRow().toPassenger(flightId, 0).also { rows += it }
-                importer.store(passUri, first.id)?.let { rows[0] = first.copy(boardingPassPath = it) }
+                if (rows.isEmpty()) rows += PassengerFormRow().toPassenger(flightId, 0)
+                val holders = if (passForEveryRow) rows.indices else listOf(0)
+                for (index in holders) {
+                    importer.store(passUri, rows[index].id)?.let { rows[index] = rows[index].copy(boardingPassPath = it) }
+                }
             }
             repository.replacePassengers(flightId, rows)
         }
@@ -449,11 +456,14 @@ class FlightFormViewModel
          * passenger info that is NOT already on the flight is added (its pending pass
          * stored under the new passenger's id, a pending booking attached to the flight);
          * a row that IS on it fills the matched passenger's blanks (name, locator, a
-         * missing pass). No row with info at all → the ADR-025 refusal as before.
+         * missing pass). No row with info at all → the ADR-025 refusal as before. The
+         * pending pass belongs to row 1, or to EVERY row of an imported file whose rows
+         * all came out of it ([passForEveryRow], ADR-047).
          */
         private suspend fun mergeIntoExisting(
             existing: FlightJourney,
             form: FlightFormState,
+            passForEveryRow: Boolean = false,
         ): WriteResult {
             val incoming = form.toPassengers(existing.id).filter(FlightPassengerMatching::hasPassengerInfo)
             if (incoming.isEmpty()) return WriteResult.AlreadySaved(existing.id)
@@ -477,7 +487,7 @@ class FlightFormViewModel
             }
             val added = mutableListOf<AddedPassenger>()
             incoming.forEachIndexed { index, candidate ->
-                val passUri = form.pendingPassUri?.takeIf { index == 0 }
+                val passUri = form.pendingPassUri?.takeIf { passForEveryRow || index == 0 }
                 val match = FlightPassengerMatching.findMatch(onBoard, candidate)
                 if (match == null) {
                     val passPath = passUri?.let { importer.store(it, candidate.id) }
@@ -510,11 +520,12 @@ class FlightFormViewModel
         }
 
         /**
-         * Writes ONE imported segment: ADR-025/046 guard → journey row + passenger row →
-         * the file stored for THIS flight's passenger (its own encrypted copy, so deleting
-         * one never touches another's). An existing journey gains the segment's passenger
-         * when they are new to it ([passengers]), is skipped when they are already on it
-         * ([skipped]); a new journey lands in [saved].
+         * Writes ONE imported segment: ADR-025/046 guard → journey row + passenger rows →
+         * the file stored for THIS flight's passengers (a boarding pass once per passenger,
+         * ADR-047; a confirmation once per flight — its own encrypted copy, so deleting one
+         * never touches another's). An existing journey gains EVERY passenger of the
+         * segment who is new to it ([passengers]), is skipped when all are already on it
+         * ([skipped]); a new journey lands in [saved] with all its passengers.
          */
         private suspend fun writeImported(
             form: FlightFormState,
@@ -530,9 +541,10 @@ class FlightFormViewModel
                     FlightImportKind.BOARDING_PASS -> form.copy(editingId = null, pendingPassUri = uri, pendingBookingUri = null)
                     FlightImportKind.BOOKING_CONFIRMATION -> form.copy(editingId = null, pendingPassUri = null, pendingBookingUri = uri)
                 }
+            val passForEveryRow = kind == FlightImportKind.BOARDING_PASS
             val duplicate = repository.findByFlight(form.airlineIata, form.flightNumber, date)
             if (duplicate != null) {
-                when (val result = mergeIntoExisting(duplicate, staged)) {
+                when (val result = mergeIntoExisting(duplicate, staged, passForEveryRow)) {
                     is WriteResult.PassengerAdded -> passengers += result.added
                     is WriteResult.AlreadySaved -> skipped += duplicate.id
                     is WriteResult.Saved -> saved += result.flightId
@@ -541,7 +553,7 @@ class FlightFormViewModel
             }
             val journey = buildJourney(staged)
             repository.save(journey)
-            writePassengers(journey.id, staged, staged.pendingPassUri)
+            writePassengers(journey.id, staged, staged.pendingPassUri, passForEveryRow)
             staged.pendingBookingUri?.let { bookingImporter.attach(it, journey.id) }
             saved += journey.id
         }

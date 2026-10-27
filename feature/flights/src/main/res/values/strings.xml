@@ -213,4 +213,11 @@
         <item quantity="other">Added %d passengers to existing flights</item>
     </plurals>
     <string name="flights_import_review_passenger">%s</string>
+    <!-- ADR-047: several passengers on one segment -->
+    <plurals name="flights_import_review_passengers">
+        <item quantity="one">%1$d passenger: %2$s</item>
+        <item quantity="other">%1$d passengers: %2$s</item>
+    </plurals>
+    <string name="flights_import_review_passenger_list_separator">", "</string>
+    <string name="flights_import_review_passenger_seat">%1$s %2$s</string>
 </resources>
