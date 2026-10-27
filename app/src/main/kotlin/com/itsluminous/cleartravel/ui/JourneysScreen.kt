@@ -137,6 +137,7 @@ private fun JourneysScreen(
                         initialAction = landing?.action ?: FlightsLandingAction.OPEN_DETAIL,
                         landingNonce = landing?.nonce,
                         onLandingConsumed = { nonce -> landings.consumeFlights(nonce) },
+                        initialBatch = landing?.flightsBatch,
                         addRequest = addRequest?.takeIf { it.type == JourneyType.FLIGHT }?.let { FlightsAddRequest(nonce = it.nonce) },
                         onAddRequestDone = { result ->
                             addRequest?.let { request ->

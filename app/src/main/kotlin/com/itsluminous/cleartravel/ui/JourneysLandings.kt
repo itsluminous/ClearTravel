@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.itsluminous.cleartravel.core.notifications.DeepLinkContract
 import com.itsluminous.cleartravel.feature.flights.FlightsLandingAction
+import com.itsluminous.cleartravel.feature.flights.form.FlightBatchOutcome
 import com.itsluminous.cleartravel.feature.trains.TrainsLandingAction
 
 /**
@@ -16,6 +17,8 @@ data class SegmentLanding<A>(
     val entityId: String,
     val action: A,
     val nonce: Long,
+    /** ADR-045: counts of a finished multi-flight import (Flights segment only). */
+    val flightsBatch: FlightBatchOutcome? = null,
 )
 
 /**
@@ -50,7 +53,7 @@ class JourneysLandings {
             DeepLinkContract.TARGET_TRAIN ->
                 trains = link.entityId?.let { SegmentLanding(it, link.trainsAction, link.nonce) }
             DeepLinkContract.TARGET_FLIGHT ->
-                flights = link.entityId?.let { SegmentLanding(it, link.flightsAction, link.nonce) }
+                flights = link.entityId?.let { SegmentLanding(it, link.flightsAction, link.nonce, link.flightsBatch) }
         }
     }
 

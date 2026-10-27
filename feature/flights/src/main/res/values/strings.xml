@@ -23,8 +23,8 @@
     <string name="flights_paste_dialog_confirm">Prefill form</string>
     <string name="flights_text_import_failed">Could not read a flight from that text</string>
     <string name="flights_prefill_source_text">Filled from pasted text - review carefully before saving</string>
-    <string name="flights_prefill_text_dep_terminal">Departure terminal from the text: %1$s</string>
-    <string name="flights_prefill_text_arr_terminal">Arrival terminal from the text: %1$s</string>
+    <string name="flights_prefill_text_dep_terminal">Departure terminal read: %1$s</string>
+    <string name="flights_prefill_text_arr_terminal">Arrival terminal read: %1$s</string>
     <string name="flights_card_route_separator">→</string>
     <string name="flights_card_dep_arr">Dep %1$s · Arr %2$s</string>
     <string name="flights_last_fetched">Checked %1$s</string>
@@ -140,6 +140,30 @@
     <string name="flights_icon_close">Close</string>
     <string name="flights_icon_boarding_pass">Boarding pass attached - tap to view</string>
     <!-- Duplicate-save notice (ADR-025) -->
+    <!-- ADR-045 multi-flight import review step -->
+    <plurals name="flights_import_review_title">
+        <item quantity="one">Found %d flight in this file</item>
+        <item quantity="other">Found %d flights in this file</item>
+    </plurals>
+    <string name="flights_import_review_hint_pass">Each flight gets its own copy of the boarding pass. Untick any you do not want.</string>
+    <string name="flights_import_review_hint_booking">Each flight gets the confirmation attached. Untick any you do not want.</string>
+    <plurals name="flights_import_review_confirm">
+        <item quantity="one">Add %d flight</item>
+        <item quantity="other">Add %d flights</item>
+    </plurals>
+    <string name="flights_import_review_needs_details">Needs details - you will review it in the form</string>
+    <string name="flights_import_review_separator">" · "</string>
+    <string name="flights_import_review_pnr">PNR %s</string>
+    <string name="flights_import_review_seat">Seat %s</string>
+    <string name="flights_import_review_unknown_flight">Flight (details unread)</string>
+    <string name="flights_import_walkthrough_progress">Flight %1$d of %2$d</string>
+    <plurals name="flights_import_batch_added">
+        <item quantity="one">Added %d flight</item>
+        <item quantity="other">Added %d flights</item>
+    </plurals>
+    <string name="flights_import_batch_skipped">skipped %d already saved</string>
+    <string name="flights_import_batch_skipped_only">Skipped %d already saved</string>
+    <string name="flights_import_batch_view">View</string>
     <string name="flights_form_duplicate">Flight already exists</string>
     <string name="flights_form_duplicate_view">View</string>
     <!-- ADR-028: trips whose itinerary links this flight -->

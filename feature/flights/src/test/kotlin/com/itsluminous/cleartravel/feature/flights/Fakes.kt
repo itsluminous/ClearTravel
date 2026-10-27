@@ -128,8 +128,12 @@ class FakeBoardingPassImporter(
         flightId: String,
     ): String? {
         stored += uriString to flightId
-        return storedPath
+        // Like production: one copy PER flight (`<flightId>.<ext>`), unless a fixed path was forced.
+        return storedPath?.let { if (perFlightPaths) "/data/passes/$flightId.jpg" else it }
     }
+
+    /** When true (ADR-045 tests) the returned path is keyed by flight id like the real store. */
+    var perFlightPaths: Boolean = false
 }
 
 /**

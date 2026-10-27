@@ -40,6 +40,15 @@ enum class FlightFormError {
 }
 
 /**
+ * ADR-045 walk-through position: this form is flight [index] (1-based) of [total]
+ * segments read from one file whose incomplete segments are reviewed one at a time.
+ */
+data class WalkthroughProgress(
+    val index: Int,
+    val total: Int,
+)
+
+/**
  * Editable form state. All values are raw user-typed strings; [toJourney] converts.
  * [confidences] carries the OCR/barcode per-field markers (ADR-009 review-first
  * discipline: prefills are NEVER saved blind); [prefillSource] drives the
@@ -78,9 +87,21 @@ data class FlightFormState(
      */
     val depTerminal: String = "",
     val arrTerminal: String = "",
+    /** Set while walking the segments of a multi-flight file one form at a time (ADR-045). */
+    val walkthrough: WalkthroughProgress? = null,
     val errors: Set<FlightFormError> = emptySet(),
 ) {
     val isEdit: Boolean get() = editingId != null
+
+    /**
+     * ADR-045 direct-save rule: valid per [validate] AND both airports present, so the
+     * journey can be written without a review form.
+     */
+    val isCompleteForDirectSave: Boolean
+        get() =
+            validate(this).isEmpty() &&
+                AIRPORT_PATTERN.matches(depAirport.trim()) &&
+                AIRPORT_PATTERN.matches(arrAirport.trim())
 
     companion object {
         val DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ISO_LOCAL_DATE

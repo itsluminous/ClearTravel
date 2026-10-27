@@ -21,6 +21,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -69,9 +70,19 @@ fun FlightFormScreen(
     sharedPayload: FlightSharePayload? = null,
     /** Pasted or shared SMS/email text to read the flight from (ADR-042); defaulted likewise. */
     sharedText: String? = null,
+    /**
+     * A multi-flight import finished (ADR-045): hosts leave the form and report the
+     * outcome. Defaulted to the single-flight callbacks so existing call sites behave.
+     */
+    onBatchImported: (FlightBatchOutcome) -> Unit = { outcome ->
+        outcome.savedIds.firstOrNull()?.let(onSaved)
+            ?: outcome.skippedExistingIds.firstOrNull()?.let(onDuplicate)
+            ?: onClose()
+    },
 ) {
     val state by viewModel.formState.collectAsStateWithLifecycle()
     val busy by viewModel.isBusy.collectAsStateWithLifecycle()
+    val review by viewModel.importReview.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
 
@@ -81,8 +92,23 @@ fun FlightFormScreen(
                 is FlightFormEvent.DuplicateFlight -> onDuplicate(event.existingFlightId)
                 FlightFormEvent.PrefillEmpty ->
                     snackbarHostState.showSnackbar(context.getString(R.string.flights_text_import_failed))
+                is FlightFormEvent.BatchImported -> onBatchImported(event.outcome)
             }
         }
+    }
+
+    // ADR-045: a file with several flights is confirmed before anything is written;
+    // dismissing the sheet is the same as closing the form (nothing saved).
+    review?.let { current ->
+        FlightImportReviewSheet(
+            review = current,
+            onToggle = viewModel::toggleReviewItem,
+            onConfirm = viewModel::confirmReview,
+            onDismiss = {
+                viewModel.dismissReview()
+                onClose()
+            },
+        )
     }
 
     LaunchedEffect(editId, importUri, bookingUri, sharedPayload, sharedText) {
@@ -114,6 +140,20 @@ fun FlightFormScreen(
                         explanationRes = R.string.flights_icon_back,
                         onClick = onClose,
                     )
+                },
+                actions = {
+                    // ADR-045 walk-through position: "Flight 1 of 2".
+                    state.walkthrough?.let { progress ->
+                        SuggestionChip(
+                            onClick = {},
+                            label = {
+                                AutoShrinkText(
+                                    stringResource(R.string.flights_import_walkthrough_progress, progress.index, progress.total),
+                                )
+                            },
+                            modifier = Modifier.padding(end = 12.dp),
+                        )
+                    }
                 },
             )
         },
@@ -260,11 +300,15 @@ fun FlightFormScreen(
                     enabled = !busy,
                     modifier = Modifier.weight(1f),
                 ) { AutoShrinkText(stringResource(R.string.flights_form_save)) }
-                Button(
-                    onClick = { viewModel.save(onSavedAndCheck) },
-                    enabled = !busy,
-                    modifier = Modifier.weight(1f),
-                ) { AutoShrinkText(stringResource(R.string.flights_form_save_fetch)) }
+                // Save & check status needs a single journey to chain into; during an
+                // ADR-045 walk-through Save advances to the next flight instead.
+                if (state.walkthrough == null) {
+                    Button(
+                        onClick = { viewModel.save(onSavedAndCheck) },
+                        enabled = !busy,
+                        modifier = Modifier.weight(1f),
+                    ) { AutoShrinkText(stringResource(R.string.flights_form_save_fetch)) }
+                }
             }
         }
     }
@@ -319,8 +363,17 @@ private fun PrefillBanner(state: FlightFormState) {
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.primary,
         )
+        if (state.returnLegHint) {
+            Text(
+                text = stringResource(R.string.flights_booking_return_hint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+            )
+        }
+    }
+    if (state.fromText || state.pendingPassUri != null || state.pendingBookingUri != null) {
         // Terminals are not form fields (the status check owns them) — surfaced here so
-        // nothing read from the text lands on the journey unseen.
+        // nothing read from the text or document lands on the journey unseen (ADR-042/045).
         if (state.depTerminal.isNotBlank()) {
             Text(
                 text = stringResource(R.string.flights_prefill_text_dep_terminal, state.depTerminal),
@@ -333,13 +386,6 @@ private fun PrefillBanner(state: FlightFormState) {
                 text = stringResource(R.string.flights_prefill_text_arr_terminal, state.arrTerminal),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (state.returnLegHint) {
-            Text(
-                text = stringResource(R.string.flights_booking_return_hint),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.tertiary,
             )
         }
     }

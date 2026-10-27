@@ -8,6 +8,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.itsluminous.cleartravel.core.data.share.FlightSharePayload
+import com.itsluminous.cleartravel.feature.flights.form.FlightBatchOutcome
 import com.itsluminous.cleartravel.feature.flights.form.FlightFormScreen
 import com.itsluminous.cleartravel.feature.flights.status.StatusCheckScreen
 
@@ -56,6 +57,11 @@ sealed interface FlightsEntryResult {
     data class DuplicateFlight(
         val existingFlightId: String,
     ) : FlightsEntryResult
+
+    /** A multi-flight file was imported (ADR-045): N journeys written, M refused as duplicates. */
+    data class BatchImported(
+        val outcome: FlightBatchOutcome,
+    ) : FlightsEntryResult
 }
 
 /**
@@ -79,6 +85,12 @@ enum class FlightsLandingAction {
 
     /** Show the list with a duplicate notice whose "View" opens the EXISTING journey. */
     DUPLICATE_FLIGHT,
+
+    /**
+     * Show the list with the ADR-045 batch notice ("Added N, skipped M already saved")
+     * whose "View" opens the journey; the counts travel in `FlightsContent.initialBatch`.
+     */
+    BATCH_IMPORTED,
 }
 
 /**
@@ -118,6 +130,7 @@ fun FlightsExternalEntry(
             onSaved = { id -> onDone(FlightsEntryResult.Saved(id)) },
             onSavedAndCheck = { id -> checkingFlightId = id },
             onDuplicate = { existingId -> onDone(FlightsEntryResult.DuplicateFlight(existingId)) },
+            onBatchImported = { outcome -> onDone(FlightsEntryResult.BatchImported(outcome)) },
             modifier = modifier,
         )
     }

@@ -49,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
@@ -69,6 +70,7 @@ import com.itsluminous.cleartravel.feature.flights.detail.FlightDocumentType
 import com.itsluminous.cleartravel.feature.flights.detail.FlightDocumentsViewModel
 import com.itsluminous.cleartravel.feature.flights.detail.FlightTripLinksViewModel
 import com.itsluminous.cleartravel.feature.flights.detail.buildFlightDocuments
+import com.itsluminous.cleartravel.feature.flights.form.FlightBatchOutcome
 import com.itsluminous.cleartravel.feature.flights.share.FlightShareOutcome
 import com.itsluminous.cleartravel.feature.flights.share.rememberFlightSharer
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcome
@@ -82,6 +84,16 @@ import kotlinx.coroutines.launch
  */
 data class DuplicateFlightNotice(
     val existingFlightId: String,
+    val nonce: Long = System.nanoTime(),
+)
+
+/**
+ * A finished multi-flight import (ADR-045) to explain over the list: "Added N, skipped M
+ * already saved", with a "View" action opening the first added (else first existing)
+ * journey's sheet. [nonce] makes consecutive imports distinct so the notice re-fires.
+ */
+data class BatchImportNotice(
+    val outcome: FlightBatchOutcome,
     val nonce: Long = System.nanoTime(),
 )
 
@@ -111,6 +123,8 @@ fun FlightListScreen(
     lastCheckOutcome: CheckOutcome? = null,
     /** Duplicate-save notice (ADR-025) with a "View" action for the existing journey. */
     duplicateNotice: DuplicateFlightNotice? = null,
+    /** Multi-flight import notice (ADR-045) with a "View" action. */
+    batchNotice: BatchImportNotice? = null,
     /** ADR-028: opens the add-options sheet on arrival (one open per distinct nonce). */
     openAddSheetNonce: Long? = null,
     /** The add options were left without picking a path (sheet dismissed, no file chosen). */
@@ -163,6 +177,35 @@ fun FlightListScreen(
                     duration = SnackbarDuration.Long,
                 )
             if (result == SnackbarResult.ActionPerformed) detailFlightId = duplicateNotice.existingFlightId
+        }
+    }
+
+    // ADR-045: "Added 2 flights" / "Added 1 flight, skipped 1 already saved" / "Skipped 2 already saved".
+    val batchMessage =
+        batchNotice?.outcome?.let { outcome ->
+            val added =
+                if (outcome.addedCount > 0) {
+                    pluralStringResource(R.plurals.flights_import_batch_added, outcome.addedCount, outcome.addedCount)
+                } else {
+                    null
+                }
+            when {
+                added != null && outcome.skippedCount > 0 ->
+                    "$added, ${stringResource(R.string.flights_import_batch_skipped, outcome.skippedCount)}"
+                added != null -> added
+                else -> stringResource(R.string.flights_import_batch_skipped_only, outcome.skippedCount)
+            }
+        }
+    val batchViewLabel = stringResource(R.string.flights_import_batch_view)
+    LaunchedEffect(batchNotice) {
+        if (batchNotice != null && batchMessage != null) {
+            val result =
+                snackbarHostState.showSnackbar(
+                    message = batchMessage,
+                    actionLabel = batchNotice.outcome.focusFlightId?.let { batchViewLabel },
+                    duration = SnackbarDuration.Long,
+                )
+            if (result == SnackbarResult.ActionPerformed) detailFlightId = batchNotice.outcome.focusFlightId
         }
     }
 

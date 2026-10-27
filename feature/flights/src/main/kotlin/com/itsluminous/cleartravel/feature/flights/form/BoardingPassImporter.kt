@@ -18,12 +18,14 @@ import javax.inject.Singleton
  * stays plain-JVM testable (tests substitute a fake; URIs travel as strings).
  */
 interface BoardingPassImporter {
-    /** Runs the BCBP-barcode-first / OCR-fallback pipeline on the picked file. */
+    /** Runs the BCBP-barcode-first / OCR-fallback pipeline on the picked file (every segment, ADR-045). */
     suspend fun prefill(uriString: String): BoardingPassExtraction
 
     /**
      * Copies the picked file into app-private storage for offline gate display and
      * returns the stored path — null when the copy failed (form saves without a pass).
+     * Keyed by [flightId]: a file covering several flights (ADR-045) is stored once PER
+     * flight, so deleting one journey never touches another's copy.
      */
     suspend fun store(
         uriString: String,
@@ -32,23 +34,18 @@ interface BoardingPassImporter {
 }
 
 /**
- * Production importer: `OcrPrefillService` + an ENCRYPTED copy into
- * `filesDir/boarding_passes/` (ADR-031 — the OCR runs on the picked URI, never on
- * the stored file).
+ * The storage half of the boarding-pass import: an ENCRYPTED copy into
+ * `filesDir/boarding_passes/<flightId>.<ext>` (ADR-031). Separate from the OCR half
+ * so it can be exercised with a real cipher in Robolectric (ADR-045 per-flight copies).
  */
 @Singleton
-class OcrBoardingPassImporter
+class BoardingPassFileStore
     @Inject
     constructor(
         @ApplicationContext private val context: Context,
-        private val ocrPrefillService: OcrPrefillService,
         private val fileCipher: LocalFileCipher,
-    ) : BoardingPassImporter {
-        override suspend fun prefill(uriString: String): BoardingPassExtraction =
-            runCatching { ocrPrefillService.prefillBoardingPass(Uri.parse(uriString)) }
-                .getOrDefault(BoardingPassExtraction.EMPTY)
-
-        override suspend fun store(
+    ) {
+        suspend fun store(
             uriString: String,
             flightId: String,
         ): String? =
@@ -68,8 +65,29 @@ class OcrBoardingPassImporter
             val mime = context.contentResolver.getType(uri)
             return when {
                 mime == "application/pdf" || uri.toString().endsWith(".pdf", ignoreCase = true) -> "pdf"
-                mime == "image/png" -> "png"
+                mime == "image/png" || uri.toString().endsWith(".png", ignoreCase = true) -> "png"
                 else -> "jpg"
             }
         }
+    }
+
+/**
+ * Production importer: `OcrPrefillService` for reading + [BoardingPassFileStore] for
+ * the encrypted copy (the OCR runs on the picked URI, never on the stored file).
+ */
+@Singleton
+class OcrBoardingPassImporter
+    @Inject
+    constructor(
+        private val ocrPrefillService: OcrPrefillService,
+        private val fileStore: BoardingPassFileStore,
+    ) : BoardingPassImporter {
+        override suspend fun prefill(uriString: String): BoardingPassExtraction =
+            runCatching { ocrPrefillService.prefillBoardingPass(Uri.parse(uriString)) }
+                .getOrDefault(BoardingPassExtraction.EMPTY)
+
+        override suspend fun store(
+            uriString: String,
+            flightId: String,
+        ): String? = fileStore.store(uriString, flightId)
     }

@@ -10,7 +10,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.itsluminous.cleartravel.feature.flights.form.FlightBatchOutcome
 import com.itsluminous.cleartravel.feature.flights.form.FlightFormScreen
+import com.itsluminous.cleartravel.feature.flights.list.BatchImportNotice
 import com.itsluminous.cleartravel.feature.flights.list.DuplicateFlightNotice
 import com.itsluminous.cleartravel.feature.flights.list.FlightListScreen
 import com.itsluminous.cleartravel.feature.flights.pass.BoardingPassViewerScreen
@@ -51,6 +53,8 @@ fun FlightsContent(
     addRequest: FlightsAddRequest? = null,
     onAddRequestDone: (FlightsEntryResult) -> Unit = {},
     onOpenTrip: (tripId: String) -> Unit = {},
+    /** ADR-045: the outcome behind a [FlightsLandingAction.BATCH_IMPORTED] landing (share-sheet imports). */
+    initialBatch: FlightBatchOutcome? = null,
 ) {
     var route by remember { mutableStateOf<FlightsRoute>(FlightsRoute.Journeys) }
     // ADR-028 pick mode: the request being fulfilled, until its outcome is reported;
@@ -74,6 +78,9 @@ fun FlightsContent(
     // a "View" action for the existing journey. Cleared whenever the list is left so
     // it never re-fires on a later return.
     var duplicateNotice by remember { mutableStateOf<DuplicateFlightNotice?>(null) }
+    // Transient (ADR-045): a finished multi-flight import — the list shows "Added N,
+    // skipped M already saved" with a "View" action. Cleared like the duplicate notice.
+    var batchNotice by remember { mutableStateOf<BatchImportNotice?>(null) }
     // Transient (ADR-029): the journey a landing asked to open the sheet for. Cleared
     // with the notice whenever the list is left, for the same never-re-fire reason.
     var landedDetailFlightId by remember { mutableStateOf<String?>(null) }
@@ -105,12 +112,18 @@ fun FlightsContent(
             FlightsLandingAction.OPEN_DETAIL -> landedDetailFlightId = initialFlightId
             FlightsLandingAction.DUPLICATE_FLIGHT ->
                 duplicateNotice = DuplicateFlightNotice(existingFlightId = initialFlightId)
+            FlightsLandingAction.BATCH_IMPORTED ->
+                batchNotice =
+                    BatchImportNotice(
+                        initialBatch ?: FlightBatchOutcome(savedIds = listOf(initialFlightId), skippedExistingIds = emptyList()),
+                    )
         }
     }
 
     LaunchedEffect(route) {
         if (route !is FlightsRoute.Journeys) {
             duplicateNotice = null
+            batchNotice = null
             landedDetailFlightId = null
         }
     }
@@ -144,6 +157,7 @@ fun FlightsContent(
                 initialDetailFlightId = landedDetailFlightId,
                 lastCheckOutcome = checkOutcome,
                 duplicateNotice = duplicateNotice,
+                batchNotice = batchNotice,
                 openAddSheetNonce = activeAddRequest?.nonce,
                 onAddAbandoned = { finishAddRequest(FlightsEntryResult.Cancelled) },
                 onOpenTrip = onOpenTrip,
@@ -177,6 +191,19 @@ fun FlightsContent(
                         // Nothing was written (ADR-025): back to the list, which already
                         // shows the existing journey, with the notice + a "View" action.
                         duplicateNotice = DuplicateFlightNotice(existingFlightId = existingId)
+                    }
+                },
+                onBatchImported = { outcome ->
+                    route = FlightsRoute.Journeys
+                    if (activeAddRequest != null) {
+                        // Pick mode (ADR-028): the leg links the first journey the file produced.
+                        finishAddRequest(
+                            outcome.savedIds.firstOrNull()?.let { FlightsEntryResult.Saved(it) }
+                                ?: outcome.skippedExistingIds.firstOrNull()?.let { FlightsEntryResult.DuplicateFlight(it) }
+                                ?: FlightsEntryResult.Cancelled,
+                        )
+                    } else {
+                        batchNotice = BatchImportNotice(outcome)
                     }
                 },
                 modifier = modifier,

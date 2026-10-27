@@ -242,7 +242,7 @@ class FlightFormViewModelTest {
         }
 
     @Test
-    fun `booking confirmation import prefills the form with source, confidence and return-leg hint`() =
+    fun `single-flight booking confirmation import prefills the form with source and confidence`() =
         runTest {
             bookingImporter.extraction =
                 BookingConfirmationExtraction(
@@ -256,10 +256,6 @@ class FlightFormViewModelTest {
                                 toAirport = ExtractedField.of("DEL", ExtractionConfidence.MEDIUM),
                                 flightDate = ExtractedField.of("2026-09-26", ExtractionConfidence.HIGH),
                                 cabinClass = ExtractedField.of("BUSINESS", ExtractionConfidence.HIGH),
-                            ),
-                            ExtractedFlight(
-                                carrier = ExtractedField.of("AI", ExtractionConfidence.MEDIUM),
-                                flightNumber = ExtractedField.of("504", ExtractionConfidence.MEDIUM),
                             ),
                         ),
                     source = BookingConfirmationSource.OCR_TEXT,
@@ -277,7 +273,9 @@ class FlightFormViewModelTest {
             assertThat(state.confidences[FlightField.PNR]).isEqualTo(ExtractionConfidence.HIGH)
             assertThat(state.confidences[FlightField.CABIN]).isEqualTo(ExtractionConfidence.HIGH)
             assertThat(state.confidences[FlightField.FLIGHT_NUMBER]).isEqualTo(ExtractionConfidence.MEDIUM)
-            assertThat(state.returnLegHint).isTrue()
+            // One segment: no review step, no return-leg hint (ADR-045).
+            assertThat(viewModel.importReview.value).isNull()
+            assertThat(state.returnLegHint).isFalse()
         }
 
     @Test
@@ -504,5 +502,262 @@ class FlightFormViewModelTest {
             assertThat(saved).isNotNull()
             assertThat(saved).isNotEqualTo(deleted.id)
             assertThat(repository.savedIds).containsExactly(saved)
+        }
+
+    // ---- multi-flight import (ADR-045) ----
+
+    private fun segment(
+        number: String,
+        from: String,
+        to: String,
+        date: String,
+        pnr: String = "R87T5G",
+        seat: String? = null,
+    ) = ExtractedFlight(
+        carrier = ExtractedField.of("IX", ExtractionConfidence.MEDIUM),
+        flightNumber = ExtractedField.of(number, ExtractionConfidence.MEDIUM),
+        fromAirport = ExtractedField.of(from, ExtractionConfidence.MEDIUM),
+        toAirport = ExtractedField.of(to, ExtractionConfidence.MEDIUM),
+        flightDate = ExtractedField.of(date, ExtractionConfidence.MEDIUM),
+        depTime = ExtractedField.of("10:30", ExtractionConfidence.MEDIUM),
+        depTerminal = ExtractedField.of("2", ExtractionConfidence.MEDIUM),
+        pnr = ExtractedField.of(pnr, ExtractionConfidence.HIGH),
+        seat = ExtractedField.of(seat, ExtractionConfidence.MEDIUM),
+    )
+
+    private val onward = segment("2019", "BLR", "LKO", "2026-10-29", seat = "12A")
+    private val back = segment("1542", "LKO", "BLR", "2026-10-31", pnr = "D2FE9V", seat = "10A")
+
+    @Test
+    fun `a single-segment boarding pass opens the form with no review step`() =
+        runTest {
+            importer.extraction = BoardingPassExtraction(flights = listOf(onward), source = BoardingPassSource.OCR_TEXT)
+
+            viewModel.startFromBoardingPass("content://picked/one")
+
+            assertThat(viewModel.importReview.value).isNull()
+            assertThat(viewModel.formState.value.flightNumber).isEqualTo("2019")
+            assertThat(viewModel.formState.value.depTimeText).isEqualTo("10:30")
+            assertThat(viewModel.formState.value.pendingPassUri).isEqualTo("content://picked/one")
+        }
+
+    @Test
+    fun `a two-segment file opens the review step with every segment selected and the form untouched`() =
+        runTest {
+            importer.extraction = BoardingPassExtraction(flights = listOf(onward, back), source = BoardingPassSource.OCR_TEXT)
+
+            viewModel.startFromBoardingPass("content://picked/two")
+
+            val review = viewModel.importReview.value!!
+            assertThat(review.kind).isEqualTo(FlightImportKind.BOARDING_PASS)
+            assertThat(review.items).hasSize(2)
+            assertThat(review.items.all { it.selected && it.isComplete }).isTrue()
+            assertThat(review.items.map { it.form.flightNumber }).containsExactly("2019", "1542").inOrder()
+            assertThat(review.items[1].form.pnr).isEqualTo("D2FE9V")
+            assertThat(viewModel.formState.value.flightNumber).isEmpty()
+            assertThat(repository.savedIds).isEmpty()
+        }
+
+    @Test
+    fun `confirming complete segments saves them all with a pass copy per flight`() =
+        runTest {
+            importer.extraction = BoardingPassExtraction(flights = listOf(onward, back), source = BoardingPassSource.BARCODE)
+            importer.perFlightPaths = true
+            viewModel.startFromBoardingPass("content://picked/two")
+
+            viewModel.events.test {
+                viewModel.confirmReview()
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(outcome.savedIds).hasSize(2)
+                assertThat(outcome.skippedExistingIds).isEmpty()
+                assertThat(viewModel.importReview.value).isNull()
+                assertThat(viewModel.isBusy.value).isFalse()
+
+                val flights = outcome.savedIds.map { repository.getFlight(it)!! }
+                assertThat(flights.map { it.flightNumber }).containsExactly("2019", "1542").inOrder()
+                assertThat(flights.map { it.seat }).containsExactly("12A", "10A").inOrder()
+                assertThat(flights.map { it.depTerminal }).containsExactly("2", "2")
+                assertThat(flights.map { it.schedDep }.all { it != null }).isTrue()
+                // The file is stored once PER flight, under that flight's id.
+                assertThat(importer.stored.map { it.second }).containsExactlyElementsIn(outcome.savedIds).inOrder()
+                assertThat(flights.map { it.boardingPassPath }.toSet()).hasSize(2)
+                // Deleting one flight leaves the other's copy referenced.
+                repository.delete(outcome.savedIds[0])
+                assertThat(
+                    repository.getFlight(outcome.savedIds[1])!!.boardingPassPath,
+                ).isEqualTo("/data/passes/${outcome.savedIds[1]}.jpg")
+            }
+        }
+
+    @Test
+    fun `a booking confirmation with two flights attaches the file to each saved flight`() =
+        runTest {
+            bookingImporter.extraction =
+                BookingConfirmationExtraction(flights = listOf(onward, back), source = BookingConfirmationSource.OCR_TEXT)
+            viewModel.startFromBookingConfirmation("content://picked/booking")
+            assertThat(viewModel.importReview.value!!.kind).isEqualTo(FlightImportKind.BOOKING_CONFIRMATION)
+
+            viewModel.events.test {
+                viewModel.confirmReview()
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(outcome.savedIds).hasSize(2)
+                assertThat(bookingImporter.attached.map { it.second }).containsExactlyElementsIn(outcome.savedIds)
+                for (id in outcome.savedIds) {
+                    assertThat(bookingImporter.attachmentRepository.observeForOwner(AttachmentOwnerType.FLIGHT, id).first()).hasSize(1)
+                    assertThat(repository.getFlight(id)!!.boardingPassPath).isNull()
+                }
+                assertThat(importer.stored).isEmpty()
+            }
+        }
+
+    @Test
+    fun `duplicates are skipped per segment and the rest still save`() =
+        runTest {
+            val existing = Fixtures.flightJourney(airlineIata = "IX", flightNumber = "2019", date = LocalDate.parse("2026-10-29"))
+            repository.seed(existing)
+            importer.extraction = BoardingPassExtraction(flights = listOf(onward, back), source = BoardingPassSource.OCR_TEXT)
+            viewModel.startFromBoardingPass("content://picked/two")
+
+            viewModel.events.test {
+                viewModel.confirmReview()
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(outcome.skippedExistingIds).containsExactly(existing.id)
+                assertThat(outcome.savedIds).hasSize(1)
+                assertThat(repository.getFlight(outcome.savedIds.single())!!.flightNumber).isEqualTo("1542")
+                assertThat(outcome.focusFlightId).isEqualTo(outcome.savedIds.single())
+                // Nothing written for the duplicate — not even its file copy.
+                assertThat(importer.stored.map { it.second }).containsExactly(outcome.savedIds.single())
+            }
+        }
+
+    @Test
+    fun `re-importing the same file skips every segment`() =
+        runTest {
+            importer.extraction = BoardingPassExtraction(flights = listOf(onward, back), source = BoardingPassSource.OCR_TEXT)
+            viewModel.startFromBoardingPass("content://picked/two")
+            viewModel.events.test {
+                viewModel.confirmReview()
+                assertThat((awaitItem() as FlightFormEvent.BatchImported).outcome.savedIds).hasSize(2)
+            }
+
+            viewModel.startFromBoardingPass("content://picked/two")
+            viewModel.events.test {
+                viewModel.confirmReview()
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(outcome.savedIds).isEmpty()
+                assertThat(outcome.skippedExistingIds).hasSize(2)
+                assertThat(repository.savedIds).hasSize(2)
+            }
+        }
+
+    @Test
+    fun `an unticked segment is not saved`() =
+        runTest {
+            importer.extraction = BoardingPassExtraction(flights = listOf(onward, back), source = BoardingPassSource.OCR_TEXT)
+            viewModel.startFromBoardingPass("content://picked/two")
+
+            viewModel.toggleReviewItem(0)
+            assertThat(viewModel.importReview.value!!.selectedCount).isEqualTo(1)
+            viewModel.events.test {
+                viewModel.confirmReview()
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(outcome.savedIds).hasSize(1)
+                assertThat(repository.getFlight(outcome.savedIds.single())!!.flightNumber).isEqualTo("1542")
+            }
+        }
+
+    @Test
+    fun `dismissing the review writes nothing`() =
+        runTest {
+            importer.extraction = BoardingPassExtraction(flights = listOf(onward, back), source = BoardingPassSource.OCR_TEXT)
+            viewModel.startFromBoardingPass("content://picked/two")
+
+            viewModel.dismissReview()
+
+            assertThat(viewModel.importReview.value).isNull()
+            assertThat(repository.savedIds).isEmpty()
+            assertThat(importer.stored).isEmpty()
+        }
+
+    @Test
+    fun `an incomplete segment walks the selection through the form and Save advances`() =
+        runTest {
+            val noRoute = back.copy(fromAirport = ExtractedField.EMPTY, toAirport = ExtractedField.EMPTY)
+            importer.extraction = BoardingPassExtraction(flights = listOf(onward, noRoute), source = BoardingPassSource.OCR_TEXT)
+            importer.perFlightPaths = true
+            viewModel.startFromBoardingPass("content://picked/two")
+            assertThat(
+                viewModel.importReview.value!!
+                    .items
+                    .map { it.isComplete },
+            ).containsExactly(true, false).inOrder()
+
+            viewModel.events.test {
+                viewModel.confirmReview()
+                expectNoEvents()
+
+                // Walk-through: flight 1 of 2 is on the form, nothing written yet.
+                var state = viewModel.formState.value
+                assertThat(state.walkthrough).isEqualTo(WalkthroughProgress(index = 1, total = 2))
+                assertThat(state.flightNumber).isEqualTo("2019")
+                assertThat(repository.savedIds).isEmpty()
+
+                // Save writes flight 1 and advances; onSaved is NOT called mid-walk.
+                var savedCallback: String? = null
+                viewModel.save { savedCallback = it }
+                assertThat(savedCallback).isNull()
+                assertThat(repository.savedIds).hasSize(1)
+                state = viewModel.formState.value
+                assertThat(state.walkthrough).isEqualTo(WalkthroughProgress(index = 2, total = 2))
+                assertThat(state.flightNumber).isEqualTo("1542")
+                assertThat(state.depAirport).isEmpty()
+
+                // The user fills the missing route and saves the last one → BatchImported.
+                viewModel.update { it.copy(depAirport = "LKO", arrAirport = "BLR") }
+                viewModel.save { savedCallback = it }
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(savedCallback).isNull()
+                assertThat(outcome.savedIds).hasSize(2)
+                assertThat(repository.getFlight(outcome.savedIds[1])!!.depAirport).isEqualTo("LKO")
+                assertThat(importer.stored.map { it.second }).containsExactlyElementsIn(outcome.savedIds).inOrder()
+                assertThat(viewModel.formState.value.walkthrough).isNull()
+            }
+        }
+
+    @Test
+    fun `a duplicate met during the walk-through is skipped and the walk advances`() =
+        runTest {
+            val existing = Fixtures.flightJourney(airlineIata = "IX", flightNumber = "2019", date = LocalDate.parse("2026-10-29"))
+            repository.seed(existing)
+            val noRoute = back.copy(fromAirport = ExtractedField.EMPTY, toAirport = ExtractedField.EMPTY)
+            importer.extraction = BoardingPassExtraction(flights = listOf(onward, noRoute), source = BoardingPassSource.OCR_TEXT)
+            viewModel.startFromBoardingPass("content://picked/two")
+
+            viewModel.events.test {
+                viewModel.confirmReview()
+                viewModel.save { error("onSaved must not fire mid-walk") }
+                expectNoEvents()
+                assertThat(viewModel.formState.value.walkthrough).isEqualTo(WalkthroughProgress(index = 2, total = 2))
+
+                viewModel.save { error("onSaved must not fire at the end of a walk either") }
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(outcome.skippedExistingIds).containsExactly(existing.id)
+                assertThat(outcome.savedIds).hasSize(1)
+            }
+        }
+
+    @Test
+    fun `an invalid walk-through form shows errors and does not advance`() =
+        runTest {
+            val noDate = back.copy(flightDate = ExtractedField.EMPTY)
+            importer.extraction = BoardingPassExtraction(flights = listOf(noDate, onward), source = BoardingPassSource.OCR_TEXT)
+            viewModel.startFromBoardingPass("content://picked/two")
+            viewModel.confirmReview()
+
+            viewModel.save { error("not saved") }
+
+            assertThat(viewModel.formState.value.errors).contains(FlightFormError.DATE_INVALID)
+            assertThat(viewModel.formState.value.walkthrough).isEqualTo(WalkthroughProgress(index = 1, total = 2))
+            assertThat(repository.savedIds).isEmpty()
         }
 }

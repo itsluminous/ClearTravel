@@ -6,6 +6,7 @@ import com.itsluminous.cleartravel.core.model.JourneyType
 import com.itsluminous.cleartravel.core.notifications.DeepLinkContract
 import com.itsluminous.cleartravel.feature.flights.FlightsEntryResult
 import com.itsluminous.cleartravel.feature.flights.FlightsLandingAction
+import com.itsluminous.cleartravel.feature.flights.form.FlightBatchOutcome
 import com.itsluminous.cleartravel.feature.trains.TrainsEntryResult
 import com.itsluminous.cleartravel.feature.trains.TrainsLandingAction
 
@@ -25,6 +26,8 @@ data class JourneysDeepLink(
     val trainsAction: TrainsLandingAction = TrainsLandingAction.OPEN_DETAIL,
     val flightsAction: FlightsLandingAction = FlightsLandingAction.OPEN_DETAIL,
     val addRequest: JourneyAddRequest? = null,
+    /** ADR-045: the counts behind a [FlightsLandingAction.BATCH_IMPORTED] landing. */
+    val flightsBatch: FlightBatchOutcome? = null,
     val nonce: Long = System.nanoTime(),
 ) {
     companion object {
@@ -98,6 +101,14 @@ data class JourneysDeepLink(
                         target = DeepLinkContract.TARGET_FLIGHT,
                         entityId = result.existingFlightId,
                         flightsAction = FlightsLandingAction.DUPLICATE_FLIGHT,
+                    )
+                // ADR-045: the list with the batch notice; nothing to focus means the bare list.
+                is FlightsEntryResult.BatchImported ->
+                    JourneysDeepLink(
+                        target = DeepLinkContract.TARGET_FLIGHT,
+                        entityId = result.outcome.focusFlightId,
+                        flightsAction = FlightsLandingAction.BATCH_IMPORTED,
+                        flightsBatch = result.outcome,
                     )
             }
     }

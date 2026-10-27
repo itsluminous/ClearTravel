@@ -73,5 +73,10 @@ object JourneyPickRouting {
             is FlightsEntryResult.DuplicateFlight ->
                 JourneyAddResult.Added(request.nonce, JourneyType.FLIGHT, result.existingFlightId)
             is FlightsEntryResult.Cancelled -> JourneyAddResult.Cancelled(request.nonce)
+            // ADR-045: a leg links ONE journey — the first the file produced (added or existing).
+            is FlightsEntryResult.BatchImported ->
+                result.outcome.focusFlightId
+                    ?.let { JourneyAddResult.Added(request.nonce, JourneyType.FLIGHT, it) }
+                    ?: JourneyAddResult.Cancelled(request.nonce)
         }
 }
