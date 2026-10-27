@@ -58,6 +58,8 @@ data class AddedPassenger(
     val flightId: String,
     /** Display name, or the seat when the pass carried no name. */
     val label: String,
+    /** `IX 2019` — the journey as the notice names it (carried so the notice never waits on the list). */
+    val flightLabel: String,
 )
 
 /**
@@ -485,7 +487,12 @@ class FlightFormViewModel
                             listOf(candidate.copy(boardingPassPath = passPath, sortOrder = onBoard.size)),
                         )
                     onBoard += saved
-                    added += AddedPassenger(existing.id, candidate.name.ifBlank { candidate.seat })
+                    added +=
+                        AddedPassenger(
+                            flightId = existing.id,
+                            label = candidate.name.ifBlank { candidate.seat },
+                            flightLabel = "${existing.airlineIata} ${existing.flightNumber}".trim(),
+                        )
                 } else {
                     var filled = FlightPassengerMatching.fillBlanks(match, candidate)
                     if (filled.boardingPassPath == null && passUri != null) {

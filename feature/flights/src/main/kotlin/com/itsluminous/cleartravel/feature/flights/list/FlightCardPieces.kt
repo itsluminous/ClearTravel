@@ -181,3 +181,10 @@ internal fun passengerLabel(
             ?.takeIf { it.isNotBlank() }
             ?.let { stringResource(R.string.flights_passenger_seat, it) }
         ?: stringResource(R.string.flights_passenger_unnamed, index + 1)
+
+/** `Prakash Kumar`, else `Passenger N` — the detail row headline, whose supporting line already shows the seat. */
+@Composable
+internal fun passengerHeadline(
+    passenger: FlightPassenger,
+    index: Int,
+): String = passenger.name.trim().ifBlank { stringResource(R.string.flights_passenger_unnamed, index + 1) }

@@ -46,6 +46,7 @@ import com.itsluminous.cleartravel.feature.flights.list.FlightStatusChip
 import com.itsluminous.cleartravel.feature.flights.list.formatDate
 import com.itsluminous.cleartravel.feature.flights.list.formatTime
 import com.itsluminous.cleartravel.feature.flights.list.formatTimestamp
+import com.itsluminous.cleartravel.feature.flights.list.passengerHeadline
 import com.itsluminous.cleartravel.feature.flights.list.passengerLabel
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcome
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcomeKind
@@ -155,7 +156,7 @@ fun FlightDetailSheet(
                 passengers.forEachIndexed { index, passenger ->
                     val passPath = passenger.boardingPassPath
                     ListItem(
-                        headlineContent = { AutoShrinkText(passengerLabel(passenger, index), minScale = 0.8f) },
+                        headlineContent = { AutoShrinkText(passengerHeadline(passenger, index), minScale = 0.8f) },
                         supportingContent = {
                             val seat = passenger.seat.trim()
                             val pnr = passenger.pnrBookingRef.trim().takeIf { it.isNotBlank() && it != flight.pnrBookingRef.trim() }

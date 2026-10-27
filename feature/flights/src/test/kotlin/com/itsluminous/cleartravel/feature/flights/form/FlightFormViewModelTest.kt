@@ -668,7 +668,7 @@ class FlightFormViewModelTest {
                 val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
                 assertThat(outcome.savedIds).isEmpty()
                 assertThat(outcome.skippedExistingIds).isEmpty()
-                assertThat(outcome.addedPassengers).containsExactly(AddedPassenger(existing.id, "12A"))
+                assertThat(outcome.addedPassengers).containsExactly(AddedPassenger(existing.id, "12A", "IX 2019"))
                 assertThat(outcome.isSinglePassengerAdd).isTrue()
                 assertThat(outcome.focusFlightId).isEqualTo(existing.id)
             }
@@ -704,7 +704,7 @@ class FlightFormViewModelTest {
             viewModel.events.test {
                 viewModel.save { error("the second pass must join the first flight") }
                 val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
-                assertThat(outcome.addedPassengers).containsExactly(AddedPassenger(flightId, "BANDANA KUMARI"))
+                assertThat(outcome.addedPassengers).containsExactly(AddedPassenger(flightId, "BANDANA KUMARI", "IX 2019"))
             }
 
             assertThat(repository.observeActive().first()).hasSize(1)

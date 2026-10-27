@@ -188,11 +188,7 @@ fun FlightListScreen(
     val batchMessage =
         batchNotice?.outcome?.let { outcome ->
             val single = outcome.addedPassengers.singleOrNull()?.takeIf { outcome.isSinglePassengerAdd }
-            if (single != null) {
-                val flight = uiState.flights.firstOrNull { it.flight.id == single.flightId }?.flight
-                val label = flight?.let { "${it.airlineIata} ${it.flightNumber}" } ?: single.flightId
-                return@let stringResource(R.string.flights_passenger_added, single.label, label)
-            }
+            if (single != null) return@let stringResource(R.string.flights_passenger_added, single.label, single.flightLabel)
             val added =
                 if (outcome.addedCount > 0) {
                     pluralStringResource(R.plurals.flights_import_batch_added, outcome.addedCount, outcome.addedCount)
