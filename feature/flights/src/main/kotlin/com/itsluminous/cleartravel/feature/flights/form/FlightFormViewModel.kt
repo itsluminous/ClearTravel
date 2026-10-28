@@ -84,6 +84,22 @@ data class FlightBatchOutcome(
 
     /** True when the whole outcome is ONE passenger joining ONE existing journey — the "Added X to IX 2019" notice. */
     val isSinglePassengerAdd: Boolean get() = savedIds.isEmpty() && skippedExistingIds.isEmpty() && addedPassengers.size == 1
+
+    /**
+     * The ONE existing journey every added passenger joined when nothing else happened
+     * (ADR-047: a two-traveller segment meeting a flight that had neither) — the
+     * "Added 2 passengers to IX 2019" notice; null when the passengers spread over
+     * several journeys or a save / skip happened too.
+     */
+    val singleFlightPassengerAdd: AddedPassenger?
+        get() =
+            addedPassengers
+                .firstOrNull()
+                ?.takeIf { first ->
+                    savedIds.isEmpty() &&
+                        skippedExistingIds.isEmpty() &&
+                        addedPassengers.all { it.flightId == first.flightId }
+                }
 }
 
 /** One-shot outcomes of the flight form that hosts react to (saves stay callback-based). */

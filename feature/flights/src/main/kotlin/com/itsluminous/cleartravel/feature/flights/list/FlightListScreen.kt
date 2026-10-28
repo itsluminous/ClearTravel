@@ -183,12 +183,22 @@ fun FlightListScreen(
         }
     }
 
-    // ADR-045/046: "Added 2 flights" / "Added 1 flight, added 1 passenger, skipped 1 already
-    // saved" / "Skipped 2 already saved" / "Added Bandana Kumari to IX 2019".
+    // ADR-045/046/047: "Added 2 flights" / "Added 1 flight, added 1 passenger, skipped 1
+    // already saved" / "Skipped 2 already saved" / "Added Bandana Kumari to IX 2019" /
+    // "Added 2 passengers to IX 2019".
     val batchMessage =
         batchNotice?.outcome?.let { outcome ->
             val single = outcome.addedPassengers.singleOrNull()?.takeIf { outcome.isSinglePassengerAdd }
             if (single != null) return@let stringResource(R.string.flights_passenger_added, single.label, single.flightLabel)
+            val joined = outcome.singleFlightPassengerAdd
+            if (joined != null) {
+                return@let pluralStringResource(
+                    R.plurals.flights_passengers_added_to,
+                    outcome.passengerCount,
+                    outcome.passengerCount,
+                    joined.flightLabel,
+                )
+            }
             val added =
                 if (outcome.addedCount > 0) {
                     pluralStringResource(R.plurals.flights_import_batch_added, outcome.addedCount, outcome.addedCount)

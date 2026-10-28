@@ -204,6 +204,11 @@
     <string name="flights_pass_chooser_title">Whose boarding pass?</string>
     <string name="flights_doc_boarding_pass_of">Boarding pass · %s</string>
     <string name="flights_passenger_added">Added %1$s to %2$s</string>
+    <!-- ADR-047: several passengers joined the SAME existing flight -->
+    <plurals name="flights_passengers_added_to">
+        <item quantity="one">Added %1$d passenger to %2$s</item>
+        <item quantity="other">Added %1$d passengers to %2$s</item>
+    </plurals>
     <plurals name="flights_import_batch_passengers">
         <item quantity="one">added %d passenger</item>
         <item quantity="other">added %d passengers</item>

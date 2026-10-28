@@ -899,6 +899,85 @@ class FlightFormViewModelTest {
         }
 
     @Test
+    fun `a two-passenger segment for a flight that has neither adds both - the notice names the one flight`() =
+        runTest {
+            val flightId = "ix2019"
+            repository.seed(
+                Fixtures.flightJourney(id = flightId, airlineIata = "IX", flightNumber = "2019", date = LocalDate.parse("2026-10-29")),
+            )
+            repository.seedPassengers(Fixtures.flightPassenger(flightId = flightId, name = "SOMEONE ELSE", seat = "1A"))
+            bookingImporter.extraction =
+                BookingConfirmationExtraction(flights = listOf(onwardTwoPax), source = BookingConfirmationSource.OCR_TEXT)
+            // ONE segment → the form directly (no review step), both rows prefilled; Save merges.
+            viewModel.startFromBookingConfirmation("content://picked/two-pax")
+            assertThat(viewModel.importReview.value).isNull()
+            assertThat(
+                viewModel.formState.value.passengers
+                    .map { it.name },
+            ).containsExactly("PRAKASH KUMAR", "BANDANA KUMARI").inOrder()
+
+            viewModel.events.test {
+                viewModel.save { error("onSaved must not fire: nothing new was saved, passengers were added") }
+                val outcome = (awaitItem() as FlightFormEvent.BatchImported).outcome
+                assertThat(outcome.savedIds).isEmpty()
+                assertThat(outcome.skippedExistingIds).isEmpty()
+                assertThat(outcome.addedPassengers)
+                    .containsExactly(
+                        AddedPassenger(flightId, "PRAKASH KUMAR", "IX 2019"),
+                        AddedPassenger(flightId, "BANDANA KUMARI", "IX 2019"),
+                    ).inOrder()
+                // Two people joined ONE journey: "Added 2 passengers to IX 2019", not the single-name wording.
+                assertThat(outcome.isSinglePassengerAdd).isFalse()
+                assertThat(outcome.singleFlightPassengerAdd?.flightLabel).isEqualTo("IX 2019")
+                assertThat(outcome.focusFlightId).isEqualTo(flightId)
+            }
+            assertThat(repository.getPassengers(flightId).map { it.name to it.seat })
+                .containsExactly("SOMEONE ELSE" to "1A", "PRAKASH KUMAR" to "12A", "BANDANA KUMARI" to "12B")
+                .inOrder()
+        }
+
+    @Test
+    fun `passengers spread over two journeys or mixed with a save are not a single-flight add`() {
+        val a = AddedPassenger("f1", "A", "IX 2019")
+        val b = AddedPassenger("f2", "B", "IX 1542")
+        assertThat(
+            FlightBatchOutcome(
+                savedIds = emptyList(),
+                skippedExistingIds = emptyList(),
+                addedPassengers = listOf(a, b),
+            ).singleFlightPassengerAdd,
+        ).isNull()
+        assertThat(
+            FlightBatchOutcome(
+                savedIds = listOf("new"),
+                skippedExistingIds = emptyList(),
+                addedPassengers = listOf(a),
+            ).singleFlightPassengerAdd,
+        ).isNull()
+        assertThat(
+            FlightBatchOutcome(
+                savedIds = emptyList(),
+                skippedExistingIds = listOf("f3"),
+                addedPassengers = listOf(a, a),
+            ).singleFlightPassengerAdd,
+        ).isNull()
+        assertThat(
+            FlightBatchOutcome(
+                savedIds = emptyList(),
+                skippedExistingIds = emptyList(),
+                addedPassengers = emptyList(),
+            ).singleFlightPassengerAdd,
+        ).isNull()
+        assertThat(
+            FlightBatchOutcome(
+                savedIds = emptyList(),
+                skippedExistingIds = emptyList(),
+                addedPassengers = listOf(a, a),
+            ).singleFlightPassengerAdd,
+        ).isEqualTo(a)
+    }
+
+    @Test
     fun `a two-passenger segment whose passengers are both on board is skipped as already saved`() =
         runTest {
             val flightId = "ix2019"
