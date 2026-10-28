@@ -1300,3 +1300,42 @@ Notes:
   pass path is exercised by `FlightPassengersE2eTest` and the migrated UK 955 (a4).
 - Two batch segments both joining existing flights read `Added 2 passengers to existing
   flights`; a single pass joining one flight reads `Added <name> to <flight>` (g2).
+
+## Several passengers per extracted flight — two-traveller itinerary, stacked passes, same-flight merge (2026-10-28 05:10–05:50 IST, emulator Play_36_Pixel, API 36, ADR-047)
+
+Debug build (`versionName 0.0.7`) installed **OVER** the ADR-046 demo install, no `pm
+clear`; unlock `TestPass123`. All UI reads are `uiautomator dump` node texts (no
+screenshots viewed). Files pushed to `/sdcard/Download/`: `blr_lko_two_pax.png` (the
+`blr-lko-confirmation-two-pax` fixture rendered as a printed page — the real OTA
+itinerary with a second seat-fare / meal row per leg for **Bandana Kumari**),
+`two_pax_pass.png` (the `boarding-pass-two-pax-same-flight` fixture rendered: two IndiGo
+passes stacked on one page, 6E 2345 DEL→BOM 20 Sep 2025, SHARMA/RAHUL 12A seq 25 +
+SHARMA/PRIYA 12B seq 26) and the ORIGINAL single-traveller `blr_lko.png` (Prakash only).
+
+| # | Step | Evidence | Verdict |
+|---|---|---|---|
+| a1 | Flights FAB → **Import booking confirmation** → `blr_lko_two_pax.png` (3 real ML Kit passes) | review `Found 2 flights in this file`: `IX 2019 · BLR → LKO` / **`Thu, 29 Oct 2026 · 10:30 · PNR R87T5G · 2 passengers: PRAKASH KUMAR 12A, BANDANA KUMARI 12B`**, `IX 1542 · LKO → BLR` / **`… PNR D2FE9V · 2 passengers: PRAKASH KUMAR 10A, BANDANA KUMARI 10C`** — each detail line ONE node of height 63 px (same as its title row; `AutoShrinkText` `minScale 0.8`, no wrap) | PASS |
+| a2 | **Add 2 flights** | two cards **`Seats 12A, 12B`** / **`Seats 10A, 10C`**, snackbar `Added 2 flights` + `View` | PASS |
+| a3 | IX 2019 detail | `PNR / booking ref R87T5G`; `Passengers`: `PRAKASH KUMAR` / `Seat 12A`, `BANDANA KUMARI` / `Seat 12B`; one `Booking confirmation` document | PASS |
+| a4 | IX 1542 detail | `D2FE9V`; `Passengers`: `PRAKASH KUMAR` / `Seat 10A`, `BANDANA KUMARI` / `Seat 10C`; one `Booking confirmation` | PASS |
+| b | Re-import `blr_lko_two_pax.png` → same review (both `2 passengers:` lines) → Add 2 flights | snackbar **`Skipped 2 already saved`**; cards unchanged | PASS |
+| c | Import the ORIGINAL `blr_lko.png` → review `… Seat 12A · PRAKASH KUMAR` / `… Seat 10A · PRAKASH KUMAR` (single-passenger wording, unchanged from ADR-046) → Add 2 flights | snackbar **`Skipped 2 already saved`** — Prakash matched BY NAME on both flights (`PassengerIdentity`), nothing added, cards still `Seats 12A, 12B` / `Seats 10A, 10C` | PASS |
+| d1 | FAB → **Import boarding pass** → `two_pax_pass.png` (stacked page, ONE segment) | no review step: the form opens `Filled from scanned text`, `6E` / `2345` / `2025-09-20` / `X8B2Q4` / `DEL` / `BOM` / `16:25` all `High confidence`, **Passengers: `RAHUL SHARMA` `12A` and `PRIYA SHARMA` `12B`** — both rows prefilled from one page | PASS |
+| d2 | Remove Priya's row, rename row 1 to `SOMEONE ELSE` (seat left at `12A`) → Save (a 6E 2345 that has NEITHER traveller; the pass lands on row 1) | card `6E 2345 … Seat 12A`, `Boarding pass attached` (under **Archived** — the flight has departed; the ADR-025 guard still finds it) | PASS |
+| d3 | Import `two_pax_pass.png` again → form (both rows) → **Save** | snackbar **`Added 2 passengers to 6E 2345`** + `View` (ADR-047 `singleFlightPassengerAdd` wording); card `Seats 12A, 12A, 12B`; detail `Passengers`: `SOMEONE ELSE`, `RAHUL SHARMA`, `PRIYA SHARMA`; `Documents`: `Boarding pass · SOMEONE ELSE`, `Boarding pass · RAHUL SHARMA` (plain-form path: the pass belongs to row 1 — ADR-046; the batch path copies it per passenger, unit-tested) | PASS |
+| d4 | Import `two_pax_pass.png` a third time → Save | snackbar **`Already saved`** + `View` — both Sharmas on board | PASS |
+| — | Clean-up: delete 6E 2345, IX 2019, IX 1542 (detail → Delete → confirm); `rm` the pushed PNGs | Active `No flight journeys yet`; Archived still `EK 501 / UK 955 / AI 131 / 6E 6801`; Trips `Tokyo / Ladakh Trek / Paris / Teosa` — demo data intact; `/sdcard/Download` back to its backups + documents | PASS |
+| g1 | Full gate `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → `twopax.log` | BUILD SUCCESSFUL, unit **1295/1295** (1264 before ADR-047) | PASS |
+| g2 | `connectedDebugAndroidTest` on **Android_16_AOSP_Medium** (`e2e.log`) | **33/33** app e2e incl. the new `MultiPassengerImportE2eTest` (two-pax itinerary PNG shared in → review `2 passengers: PRAKASH KUMAR 12A, BANDANA KUMARI 12B` on both segments → Add → cards `Seats 12A, 12B` / `Seats 10A, 10C` → both flights hold both passengers → detail: two passenger rows → re-share → `Skipped 2 already saved`) + `core:ocr` instrumented, BUILD SUCCESSFUL. A first full run had `TrainReminderE2eTest.settings_notifications_leadOff…` fail on `activeNotifications` being empty right after a post (pre-existing timing flake, unrelated); it passed alone and in the second full run | PASS |
+| g3 | Shutdown | Play_36_Pixel killed after the clean-up; Android_16_AOSP_Medium (headless, g2) killed after; `adb devices` empty, no `qemu` process | PASS |
+
+Notes:
+- The first d3 attempt on the device read `Added 2 passengers to existing flights`: the
+  new single-flight branch computed its string inside a nested `?.let` whose
+  `return@let` targeted the inner lambda, so the value was discarded. Fixed (plain
+  `if`), rebuilt, re-proven. The unit tests pin `singleFlightPassengerAdd`; the
+  rendered snackbar text is device-proven here.
+- `Seats 12A, 12A, 12B` on 6E 2345 after d3 is faithful: the stranger's row kept
+  Rahul's 12A when it was renamed, and the passes brought 12A/12B — same seat, different
+  name → two people by design (ADR-046 decision 4). A first round with the stranger in
+  `1A` gave `Seats 1A, 12A, 12B` the same way.

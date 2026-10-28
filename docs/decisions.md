@@ -58,8 +58,9 @@ how the code works; **amended** = active, but a later ADR changed part of it (na
 | 042 | Flight from SMS/email text + train-or-flight intake for shared text | active |
 | 043 | Background sync while locked — nag fix (once-per-process, imminent-flight-only nudge; silent deferral + status) and the OPT-IN background key | active — relaxes 031 §7 only when the user opts in; nudge rule + worker table extended by 044 |
 | 044 | Train journey reminder — lead-time setting, periodic worker over hashed plaintext hints, PNR link opens the status check | active — extends 043 (second nudging job, shared latch) |
-| 045 | Multi-flight documents — segmented extraction (`List<ExtractedFlight>`), review step, per-segment save with the file on every flight | active — amends 017 (first-leg + hint multi-flight handling superseded); per-segment save amended by 046 (passenger merge, file per passenger) |
-| 046 | Multi-passenger flights — `flight_passengers` (schema v4), passenger merge on an existing flight, pass per passenger, mirror columns | active — amends 004 (schema v4), 015 (entity file), 025 (passenger merge), 038 (bundle per passenger), 039 (payload passengers), 045 (per-segment save) |
+| 045 | Multi-flight documents — segmented extraction (`List<ExtractedFlight>`), review step, per-segment save with the file on every flight | active — amends 017 (first-leg + hint multi-flight handling superseded); per-segment save amended by 046 (passenger merge, file per passenger); segment passenger fields + dedupe amended by 047 (`passengers` list, passenger merge on fold) |
+| 046 | Multi-passenger flights — `flight_passengers` (schema v4), passenger merge on an existing flight, pass per passenger, mirror columns | active — amends 004 (schema v4), 015 (entity file), 025 (passenger merge), 038 (bundle per passenger), 039 (payload passengers), 045 (per-segment save); identity rule hoisted to `core:model` and one-file passenger merge added by 047 |
+| 047 | Several passengers per extracted flight — `ExtractedFlight.passengers`, every seat-table row attaches, passengers merge on segment fold, `PassengerIdentity` in `core:model`, import saves/merges every passenger of a segment | active — amends 045 (segment shape, dedupe), 046 (decision 4 rule location, decision 5 one-file fold) |
 
 ---
 
@@ -3131,6 +3132,13 @@ third nudging job ever appears (none planned).
 > copy is keyed by PASSENGER id (`boarding_passes/<passengerId>.<ext>`) rather than by
 > flight id; `FlightBatchOutcome` gained `addedPassengers`. The §5 extractor dedupe of
 > two passes for the same flight within ONE file is unchanged.
+>
+> **Amended by ADR-047 (2026-10-27).** §1's flat `passengerName / seat / sequenceNumber`
+> became DERIVED views of `ExtractedFlight.passengers: List<ExtractedPassenger>` (the
+> JSON form keeps them, so every recorded fixture is unchanged); §3's seat-table attach
+> takes EVERY row of a route, not the first; §3's dedupe MERGES the folded mention's
+> passengers instead of filling blanks — two passes for the same flight in one file are
+> ONE segment with TWO passengers.
 
 **Context.** Flight imports (ADR-017) read ONE flight per file: the boarding-pass and
 booking-confirmation extractors returned a single flat record, a return trip surfaced
@@ -3305,6 +3313,13 @@ earned trust; a single OCR pass for the intake probe (it still runs three).
 
 ## ADR-046 — Multi-passenger flights: `flight_passengers` (schema v4), passenger merge, pass per passenger (2026-10-27)
 
+> **Amended by ADR-047 (2026-10-27).** Decision 4's identity rule moved to
+> `core:model`'s `PassengerIdentity` (`FlightPassengerMatching` delegates; behaviour
+> unchanged) so `core:ocr` can apply it inside one document. Decision 5's closing
+> sentence — "two passes for the same flight in one file still fold, the second passenger
+> arrives from their own file" — no longer holds: the fold now KEEPS both passengers and
+> the import writes every passenger of a segment.
+
 **Context.** User report (2026-10-27): "I tried adding both tickets (two boarding
 passes for two passengers on the same flight), and the app allows adding one only. If
 the same flight is already added but the seat is different, it should add the second
@@ -3455,3 +3470,139 @@ match on import, two passes same flight → one flight two passengers, chooser; 
 Follow-ups: deleting a passenger does not delete their pass file (the flight delete
 never did either — a storage sweep would cover both); the SMS/email text parser maps its
 one passenger name to row 1 only.
+
+## ADR-047 — Several passengers per extracted flight: `passengers` list, full seat-table attach, merge on fold (2026-10-27)
+
+**Context.** ADR-046 taught the data layer about several passengers on one flight, but
+`core:ocr` still described a segment with ONE `passengerName`, ONE `seat` and ONE
+`sequenceNumber`. Three real cases therefore lost the second traveller inside a single
+document: (1) an OTA itinerary booked for two people prints a seat-fare row per person
+per leg (`Prakash Kumar  BLR-LKO  12A` / `Bandana Kumari  BLR-LKO  12B`) and
+`attachSeatTable` took `rows.firstOrNull` — Bandana's row was dropped; (2) a page with
+two boarding passes for the same flight (or one pass per PDF page) folded in
+`FlightSegments.dedupe` through `fillBlanksFrom`, which keeps the first mention's name
+and seat and discards the second person entirely; (3) an OTA passenger table under a
+`Name  Seat  Meal  Status` header named only its first row. ADR-046 decision 5 even
+documented (2): "the second passenger arrives from their own file". The user has one
+file. The passenger-identity rule the merge needs already existed — in `core:data`'s
+`FlightPassengerMatching`, which `core:ocr` cannot depend on (feature isolation,
+AGENTS.md).
+
+**Decisions.**
+
+1. **`core:model`: `PassengerIdentity`** — the ONE pure rule for "are these two
+   passenger records the same person", hoisted verbatim from ADR-046 decision 4:
+   `Keys(name, seat, sequenceNumber, pnr)` (raw strings, blank = unknown),
+   `normalizeName` (upper-cased letter tokens, honorifics `MR/MRS/MS/MISS/MSTR/MASTER/
+   DR/PROF/SHRI/SMT` dropped, sorted set — `SHARMA/RAHUL` = `Rahul Sharma` = `MR RAHUL
+   SHARMA`), `normalizeSeat` (`010A` → `10A`), `normalizeSequence`, `normalizePnr`, and
+   `indexOfMatch(existing, incoming)`: names decide when both sides have one (a different
+   name is never a match, even on the same seat); a named record otherwise claims only a
+   NAMELESS record on the same seat (the legacy backfill waiting for its name); a nameless
+   record matches by seat, else sequence, else locator; first match in list order wins,
+   `-1` = new person. `core:data`'s `FlightPassengerMatching.findMatch` now projects
+   `FlightPassenger` onto `Keys` (`identityKeys()`) and delegates; its own tests pin the
+   parity. No other copy of the rule may exist. `core:ocr` gains an `implementation`
+   dependency on `core:model` (a contract module, allowed by the ownership rules).
+2. **`core:ocr`: `ExtractedFlight.passengers: List<ExtractedPassenger>`.** New
+   `model/ExtractedPassenger(name, seat, sequenceNumber, pnr, cabinClass)` — every field
+   an `ExtractedField`; `pnr` / `cabinClass` are set ONLY when the document printed a
+   locator / cabin for that person that differs from the segment's (a stacked page of two
+   passes with two locators); `hasInfo` = name, seat or sequence present (a passenger
+   nobody knows anything about is never created — `single(name, seat, seq)` returns an
+   empty list for an all-blank source); `fillBlanksFrom`; `merge(existing, incoming)`
+   folds one person at a time through `PassengerIdentity` (a match fills blanks, anyone
+   new is appended in order). `ExtractedFlight.passengerName / seat / sequenceNumber`
+   stay as DERIVED views of passenger #1, so every single-person caller (the SMS parser,
+   `BcbpMappers`, the status check) reads what it always did. **JSON compatibility:** a
+   custom `KSerializer` writes the flat passenger-#1 fields AND a `passengers` array, and
+   decodes a document WITHOUT the array as its flat fields = its only passenger — every
+   pre-047 `*.expected.json` fixture is byte-for-byte unchanged and still passes; the new
+   fixtures add `passengers` only. `BcbpLeg.toExtractedFlight` yields one passenger per
+   barcode (a second traveller's barcode merges at the dedupe).
+3. **`FlightDocumentExtractor` reads every person it can see.** `extractNames` (was
+   `extractName`): a labeled passenger or a `SURNAME/GIVEN` block still names one person;
+   a `Name …` table header names every CONTIGUOUS row below it whose first cell is a
+   plain name (falling back to the first such row anywhere below when none follows
+   directly), distinct. `extractPassengers`: the segment's seat and sequence belong to the
+   FIRST named person (a pass prints one of each); further names are name-only until a
+   seat row fills them; no name at all → one nameless passenger when there is at least a
+   seat or a sequence. `inheritShared`: a segment naming nobody takes every preamble
+   NAME (never the preamble's seat, which belongs to no particular leg); a segment with a
+   seat but no name is the preamble's single traveller (pre-047 parity). **`attachSeatTable`
+   attaches EVERY `Seat Fare` row of a route** (rows `distinct()`ed first — the same name
+   and seat printed twice attach once): a row naming someone already on the segment
+   fills their seat through `ExtractedPassenger.merge`; a NAMELESS row fills the first
+   seat-less passenger before it counts as a new person (a seat table lists one row per
+   traveller); the segment's own passenger stays #1. Single-flight legacy parity (the
+   whole-document fallback for blank fields) reads from the FIRST mention only when
+   several mentions folded, so a stacked page does not pair one `TERMINAL T1` with its
+   own echo.
+4. **`FlightSegments.dedupe` merges passengers on fold** via the new
+   `ExtractedFlight.mergeSegment(other)`: flight fields fill blanks as before; the folded
+   mention's passengers go through `ExtractedPassenger.merge`, each first tagged with the
+   mention's locator / cabin when it DIFFERS from the merged flight's (so two passes with
+   two PNRs yield two passengers each carrying their own, while the segment keeps the
+   first). Same person on another page (`RAHUL SHARMA` + `Sharma/Rahul`) = one passenger
+   with the union of fields; a different name = passenger #2; a nameless mention with the
+   same seat fills the named passenger; a nameless mention with nothing is nobody.
+   `fillBlanksFrom` itself now merges passengers the same way (the single-flight
+   fallback path uses it).
+5. **`feature:flights` writes every passenger of a segment** (extends ADR-046 decision
+   5 and ADR-045 §5). `FlightFormState.fromFlight` makes one `PassengerFormRow` per
+   extracted passenger in document order — name, seat, sequence, plus their own locator /
+   cabin or the segment's; a segment naming nobody shows one blank row; the SEAT
+   confidence marker is passenger #1's. Direct batch save: a NEW journey lands with all
+   its rows; an EXISTING journey gains every passenger who is new to it (one
+   `AddedPassenger` each) and is `skipped` only when every passenger is already on
+   board — matched passengers still have their blanks filled. Notice wording:
+   `FlightBatchOutcome.singleFlightPassengerAdd` (every added passenger joined the SAME
+   journey and nothing was saved or skipped) reads "Added 2 passengers to IX 2019"
+   (`flights_passengers_added_to`); exactly one passenger keeps ADR-046's "Added
+   Bandana Kumari to IX 2019"; passengers spread over several journeys keep "Added N
+   passengers to existing flights". **File per passenger:** an imported BOARDING PASS
+   whose rows all came out of it (`passForEveryRow`) is stored once per passenger, each
+   under their own id (`BoardingPassFileStore` is passenger-keyed since ADR-046), so
+   every traveller carries their pass and deleting one never touches another's; a
+   BOOKING CONFIRMATION stays one attachment per flight. The plain form (single pass, no
+   review) keeps ADR-046's "the pending pass belongs to row 1". Walk-through for an
+   incomplete segment prefills every row. Review sheet: a segment with several
+   passengers ends its detail line with `2 passengers: PRAKASH KUMAR 12A, BANDANA KUMARI
+   12B` (`flights_import_review_passengers` plural, `AutoShrinkText` `minScale 0.8f`)
+   instead of `Seat 12A · PRAKASH KUMAR`; an unnamed row reads `Passenger 2 12B`.
+
+**Fixtures (ADR-003).** `blr-lko-confirmation-two-pax.txt` — the real ML Kit text of
+the OTA itinerary with the fare table at `Adult(x 2)` and a Bandana Kumari row per leg
+in Seat Fare (`BLR-LKO 12B`, `LKO-BLR 10C`) and Meal → 2 segments × 2 passengers, the
+flat fields identical to `blr-lko-confirmation`. `boarding-pass-two-pax-same-flight.txt`
+— two IndiGo passes stacked on one page for 6E 2345 DEL→BOM 20 Sep (SHARMA/RAHUL 12A
+seq 25, SHARMA/PRIYA 12B seq 26, one PNR) → 1 segment × 2 passengers. The e2e asset
+`blr-lko-confirmation-two-pax.png` renders the two-pax text as a printed page for the
+real on-device ML Kit pipeline.
+
+**Contract touches.** `core:model`: `PassengerIdentity` (new). `core:data`:
+`FlightPassengerMatching` delegates (`identityKeys()` added; signatures unchanged).
+`core:ocr`: `ExtractedPassenger` (new), `ExtractedFlight.passengers` + derived
+`passengerName / seat / sequenceNumber` + `mergeSegment` + custom serializer,
+`core:model` dependency. `feature:flights`: `FlightFormState.fromFlight` rows,
+`writePassengers / mergeIntoExisting / writeImported(passForEveryRow)`,
+`FlightBatchOutcome.singleFlightPassengerAdd`, strings `flights_passengers_added_to`,
+`flights_import_review_passengers`, `flights_import_review_passenger_list_separator`,
+`flights_import_review_passenger_seat`. No schema, repository-interface or backup
+change.
+
+**Consequences.** One document now yields everyone on it, in one tap, with the same
+identity rule the data layer uses — so an import can never create a passenger the merge
+would later refuse. Costs: the OCR model carries a list where callers expect one person
+(the derived views hide it); the custom serializer is one more place to keep in step
+with `ExtractedFlight`'s fields. Tests: `core:model` `PassengerIdentityTest`;
+`core:data` parity case; `core:ocr` two fixtures + dedupe merge cases + seat-table
+multi-row / header-passenger / nameless-row / name-table cases + JSON round trip and
+legacy decode; `feature:flights` `fromFlight` rows + VM batch (new flight with two
+passengers and one attachment, stacked page storing the pass per passenger, existing
+flight with one of two → `Added 1 passenger`, both on board → skipped with blanks
+filled, incomplete segment walk-through with both rows); e2e
+`MultiPassengerImportE2eTest`. Device validation in `docs/validation-report.md`.
+Follow-up: the SMS/email text parser still maps its one name to row 1 (a group SMS is
+rare); a `Name` table whose rows carry seats in a later column is read name-only until
+a seat-fare row supplies the seat.

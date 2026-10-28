@@ -42,7 +42,11 @@ optional Google account link for Calendar/Drive sync.
   Kumari to IX 2019"); the same person again is "Already saved". Cards show the seats
   joined (`Seats 12A, 12B`), the detail sheet lists every passenger with a per-person
   "View boarding pass" control, and the form has a Passengers section to add, edit or
-  remove people. One-tap "Save & check status" opens the airline's status page in a
+  remove people. A document that lists several travellers — a two-person itinerary's
+  seat-fare rows, a page with two boarding passes for the same flight, one pass per PDF
+  page — is read as **one flight with every passenger on it** (`2 passengers: Prakash
+  Kumar 12A, Bandana Kumari 12B` on the review sheet), saved with all of them or merged
+  into the flight you already have ("Added 2 passengers to IX 2019"). One-tap "Save & check status" opens the airline's status page in a
   WebView, auto-fills the query, dismisses consent walls, and extracts status / gate /
   terminal / times into the app — and for every airline without a dedicated rule the
   same flow reads **Google's flight-status card** (cancelled / delayed / landed, gates,
