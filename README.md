@@ -36,6 +36,11 @@ optional Google account link for Calendar/Drive sync.
   not want, and add them in one tap; segments missing their route or date are walked
   through the form one at a time instead. Every flight gets its own copy of the
   file; flights you already have are skipped ("Added 1, skipped 1 already saved").
+  Airline prints that repeat the whole itinerary once per traveller (an IndiGo
+  "Modify Itinerary" PDF: a page pair per passenger, then fare and conditions pages)
+  are read as the two flights they describe with every traveller on each — the
+  conditions pages' example flight numbers and the fare table's amounts are ignored,
+  and long PDFs are read page by page with one page in memory at a time.
   **Multiple passengers per flight:** a flight carries a passenger list (name, seat,
   their own boarding pass). Importing a second person's pass or e-ticket for a flight
   you already have **adds them to that flight** instead of refusing it ("Added Bandana

@@ -1389,3 +1389,53 @@ Notes:
   simply not available without a keyed API.
 - `adb shell am start … --es TEXT 'a, b'` needs the text quoted INSIDE the remote shell
   (the first attempt split on the comma and started nothing).
+
+## Airline per-passenger itinerary print — IndiGo 9-page PDF, page streaming (2026-10-29 09:30–09:40 IST, emulator Play_36_Pixel, API 36, ADR-045 §7 / ADR-047 decision 6)
+
+Debug build (`versionName 0.0.7`) installed **OVER** the ADR-048 demo install, no `pm
+clear`; unlock `TestPass123`. All UI reads are `uiautomator dump` node texts (no
+screenshots viewed). The file is the user's own `OC9ISJ_1792856463610.pdf` (932 KB, 9
+pages): an IndiGo "Modify Itinerary" web-page print — a page PAIR per passenger (header +
+`PNR/Booking Reference` + `Passenger Information` + the DEPARTING leg, then the RETURNED
+leg), a baggage/fare page and four pages of GST notes, conditions of carriage, terminal
+information and delay rules. Ground truth from the PDF text layer (`pypdf`): `6E 432
+PAT→HYD 10 Nov 2026 12:50→15:00`, `6E 6223 HYD→PAT 15 Nov 2026 15:40→17:35`, PNR
+`OC9ISJ`, Saver fare, passengers `hari shankar singh` and `ram nath singh`, seats `- -`
+(none assigned). Pushed to `/sdcard/Download/`; never committed.
+
+**Before** (HEAD `03b7864`, same ML Kit text through the extractor): **7 segments** —
+`6E 432 PAT→JAY` (date 15 Nov LOW, PNR `02HOUR`, passengers `BAG IN` / `BOOKING PNR`,
+seat `6E`), `6E 6223 PAT→JAY` (date 10 Nov), `T2 9300`, `Z4 650 POLICIES→ENSURE`,
+`6E 333 RED→TER`, `6E 103 LHI→NAL` (terminals `3` / `S`), `6E 408 FARES→DOMESTIC`; page 9
+never rendered (cap 8).
+
+| # | Step | Evidence | Verdict |
+|---|---|---|---|
+| a1 | Flights FAB → **Import booking confirmation** → `OC9ISJ_1792856463610.pdf` (9 real ML Kit passes, ~10 s) | review **`Found 2 flights in this file`**: **`6E 432 · PAT → HYD`** / **`Tue, 10 Nov 2026 · 12:50 · PNR 0C9ISJ · 2 passengers: HARI SHANKAR SINGH, RAM NATH SINGH`**, **`6E 6223 · HYD → PAT`** / **`Sun, 15 Nov 2026 · 15:40 · PNR 0C9ISJ · 2 passengers: HARI SHANKAR SINGH, RAM NATH SINGH`**; each detail line one node of height 63 px (no wrap) | PASS |
+| a2 | **Add 2 flights** | two cards `6E 432 · Scheduled · PAT → HYD · Tue, 10 Nov 2026 · Dep 12:50 · Arr 15:00` and `6E 6223 · HYD → PAT · Sun, 15 Nov 2026 · Dep 15:40 · Arr 17:35`; snackbar `Added 2 flights` + `View` | PASS |
+| a3 | 6E 432 detail | `Scheduled: 12:50` / `Scheduled: 15:00`, `PNR / booking ref` **`0C9ISJ`**, `Passengers`: `HARI SHANKAR SINGH` / `No seat yet`, `RAM NATH SINGH` / `No seat yet`; `Documents`: one `Booking confirmation` | PASS |
+| a4 | 6E 6223 detail | `Sun, 15 Nov 2026`, `HYD → PAT`, `Scheduled: 15:40` / `Scheduled: 17:35`, `0C9ISJ`, both passengers, one `Booking confirmation` | PASS |
+| b1 | FAB → **Import boarding pass** → the same PDF (no barcode on any page → OCR lane, BOARDING_PASS profile) | the SAME review: `Found 2 flights in this file` / `Each flight gets its own copy of the boarding pass…`, both lines identical to a1 (no stray `6E` seat from the `Seat  6E Add-ons` header) | PASS |
+| b2 | **Add 2 flights** | snackbar **`Skipped 2 already saved`** — both travellers already on both flights (`PassengerIdentity`), cards unchanged | PASS |
+| c | Memory after two 9-page reads | logcat: no `OutOfMemory`, no crash; `dumpsys meminfo` TOTAL PSS 280 MB / RSS 393 MB with the app in the foreground (pages are streamed: one 2048-px bitmap alive at a time) | PASS |
+| — | Clean-up: delete 6E 432 and 6E 6223 (detail → Delete → `Delete this flight?` → Delete); `rm` the pushed PDF | Active `No flight journeys yet`; Archived still `EK 501 / UK 955 / AI 131 / 6E 6801`; Trips `Tokyo / Ladakh Trek / Paris / Teosa`; `/sdcard/Download` back to its backups + documents | PASS |
+| g1 | Full gate `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → `pdfparse.log` | BUILD SUCCESSFUL, unit **1355/1355** (1338 before; `core:ocr` 114). A first run died in `:app:lintAnalyzeDebugAndroidTest` with lint's own `Error while resolving FirRegularClassImpl … RAW_FIR to TYPES` on the untouched `AppLockSetupE2eTest.kt` (an AGP/K2 analysis crash, not a finding); `:app:lintDebug` alone and the repeated full gate passed | PASS |
+| g2 | `connectedDebugAndroidTest` on **Android_16_AOSP_Medium** (`e2e.log`) | **34/34** app e2e (incl. `MultiFlightImportE2eTest`, `MultiPassengerImportE2eTest`) + `core:ocr` **4/4** `PdfPageRasterizerTest` (a 10-page `PdfDocument`: every page streamed, each bitmap recycled before the next renders, `maxPages` bounds the walk, the default cap ≥ 10; the `@Ignore`d capture harness is the one skip), BUILD SUCCESSFUL in 1m 56s | PASS |
+| g3 | Shutdown | Play_36_Pixel killed after the clean-up; Android_16_AOSP_Medium killed after g2; `adb devices` empty | PASS |
+
+Notes:
+- **PNR reads `0C9ISJ`, true value `OC9ISJ`.** ML Kit read the first character as the
+  digit zero on all five header lines (`0c9ISJ` ×3, `0C9ISJ` ×2 — the case difference is
+  normalised, the O/0 one is not). The new majority vote only settles readings that
+  DISAGREE by look-alikes; with every page agreeing there is nothing to vote on, and the
+  extractor never rewrites a character on its own because airline locators are genuinely
+  alphanumeric (a `0…` PNR exists). The review sheet and the form show the reading for
+  the user to correct; the segment's HIGH confidence is for the LABEL, not the glyph.
+- No seats (the print shows `- -`) and no cabin (`Saver fare` is IndiGo's fare family,
+  not a cabin class) — both correctly blank, not a parse failure.
+- The resumed partial work (prose-page triage, passenger block tables, label chains,
+  dated time rows, code-name route cells, amount guard, seat-header guard) was kept as
+  found and finished with: the rasterizer streaming + cap lift, the locator majority
+  vote, the `DATED_TIME` line-length split, the fixture's `expected.json`, the per-root-cause
+  unit tests (the scratch dump test was deleted), and the harness reverted to `@Ignore`
+  (its only change now is the streaming read).

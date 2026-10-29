@@ -58,9 +58,9 @@ how the code works; **amended** = active, but a later ADR changed part of it (na
 | 042 | Flight from SMS/email text + train-or-flight intake for shared text | active |
 | 043 | Background sync while locked — nag fix (once-per-process, imminent-flight-only nudge; silent deferral + status) and the OPT-IN background key | active — relaxes 031 §7 only when the user opts in; nudge rule + worker table extended by 044 |
 | 044 | Train journey reminder — lead-time setting, periodic worker over hashed plaintext hints, PNR link opens the status check | active — extends 043 (second nudging job, shared latch) |
-| 045 | Multi-flight documents — segmented extraction (`List<ExtractedFlight>`), review step, per-segment save with the file on every flight | active — amends 017 (first-leg + hint multi-flight handling superseded); per-segment save amended by 046 (passenger merge, file per passenger); segment passenger fields + dedupe amended by 047 (`passengers` list, passenger merge on fold) |
+| 045 | Multi-flight documents — segmented extraction (`List<ExtractedFlight>`), review step, per-segment save with the file on every flight | active — amends 017 (first-leg + hint multi-flight handling superseded); per-segment save amended by 046 (passenger merge, file per passenger); segment passenger fields + dedupe amended by 047 (`passengers` list, passenger merge on fold); page streaming (cap 8 → 24, one bitmap alive), prose-page triage, locator vote amended 2026-10-29 (§7) |
 | 046 | Multi-passenger flights — `flight_passengers` (schema v4), passenger merge on an existing flight, pass per passenger, mirror columns | active — amends 004 (schema v4), 015 (entity file), 025 (passenger merge), 038 (bundle per passenger), 039 (payload passengers), 045 (per-segment save); identity rule hoisted to `core:model` and one-file passenger merge added by 047 |
-| 047 | Several passengers per extracted flight — `ExtractedFlight.passengers`, every seat-table row attaches, passengers merge on segment fold, `PassengerIdentity` in `core:model`, import saves/merges every passenger of a segment | active — amends 045 (segment shape, dedupe), 046 (decision 4 rule location, decision 5 one-file fold) |
+| 047 | Several passengers per extracted flight — `ExtractedFlight.passengers`, every seat-table row attaches, passengers merge on segment fold, `PassengerIdentity` in `core:model`, import saves/merges every passenger of a segment | active — amends 045 (segment shape, dedupe), 046 (decision 4 rule location, decision 5 one-file fold); `Passenger Information` block tables + document-wide name sharing amended 2026-10-29 (decision 6) |
 
 ---
 
@@ -3144,6 +3144,14 @@ third nudging job ever appears (none planned).
 > takes EVERY row of a route, not the first; §3's dedupe MERGES the folded mention's
 > passengers instead of filling blanks — two passes for the same flight in one file are
 > ONE segment with TWO passengers.
+>
+> **Amended 2026-10-29 (§7 below).** §1's `PdfPageRasterizer.rasterizeAll` (every page
+> rendered up front, capped at 8) is replaced by `readPages` — pages STREAMED one at a
+> time, each bitmap recycled before the next renders, cap 24 as a time bound; §2 gains a
+> page-level prose triage (`FlightDocumentPages`), `Passenger Information` block tables,
+> `PNR/Booking Reference` label chains with a majority vote over look-alike readings,
+> dated time rows, `CODE-Airport name` route cells and the `DEPARTING / RETURNED` leg
+> labels; §3 adds the real `indigo-return-two-pax-pdf` fixture.
 
 **Context.** Flight imports (ADR-017) read ONE flight per file: the boarding-pass and
 booking-confirmation extractors returned a single flat record, a return trip surfaced
@@ -3287,7 +3295,9 @@ real 3-page MakeMyTrip e-ticket for the same route.
 `(flights, source)` (the flat fields were only read by `feature:flights` prefill and the
 app intake score, both updated); `BcbpLeg.toExtractedFlight`, `BcbpData.toExtractedFlights`;
 `extract/FlightSegments.dedupe/flightKey`, `FlightDocumentRules` + resource
-`flight-document-rules.json`; `PdfPageRasterizer.rasterizeAll` + `DEFAULT_MAX_PAGES`.
+`flight-document-rules.json`; `PdfPageRasterizer.rasterizeAll` + `DEFAULT_MAX_PAGES`
+(2026-10-29: `rasterizeAll` → `readPages`, `DEFAULT_MAX_PAGES` 8 → 24;
+`extract/FlightDocumentPages` new).
 `feature:flights`: `FlightFormState.fromFlight / fromBoardingPassFlight / fromBookingFlight /
 walkthrough / isCompleteForDirectSave`, `WalkthroughProgress`, `FlightImportKind`,
 `FlightImportReview(Item)`, `FlightBatchOutcome`, `FlightFormEvent.BatchImported`,
@@ -3300,10 +3310,75 @@ walkthrough / isCompleteForDirectSave`, `WalkthroughProgress`, `FlightImportKind
 `JourneysDeepLink.flightsBatch`, `SegmentLanding.flightsBatch`. No schema, repository or
 backup-format change.
 
+7. **Airline prints that repeat the itinerary per passenger (amendment, 2026-10-29).**
+   A real IndiGo "Modify Itinerary" PDF (9 pages, two travellers, PAT→HYD and back)
+   came out as SEVEN segments and lost both real flights: OCR'd currency signs
+   (`T944`, `Z40650`) read as carriers, the conditions pages' example flight `6E-333`
+   and terminal lists read as flights, `PAT-Jay Prakash Narayan …` read as the route
+   `PAT→JAY`, `Travel time 02Hour 10min` read as the locator `02HOUR`, the `Seat  6E
+   Add-ons` column header as seat `6E`, and page 9 was never rendered. Each layout
+   trait is handled generally, never by airline:
+   - **Pages are streamed.** `PdfPageRasterizer.readPages(fd, maxPages) { page -> … }`
+     renders ONE page, hands it to the consumer and recycles it before rendering the
+     next (a 2048-px ARGB page is ~24 MB; `rasterizeAll` held eight of them); a page
+     that fails to render is skipped, not fatal. `OcrPrefillService` recycles the
+     preprocessed copy after ML Kit as well. `DEFAULT_MAX_PAGES` is **24** — it now
+     bounds OCR time on long T&C dumps, not memory; a page pair per passenger plus fare
+     and conditions pages is 9 pages for two travellers, 13 for four.
+   - **Prose pages are dropped before segmenting** (`extract/FlightDocumentPages`): a
+     page of at least 8 rows averaging 11+ words, with half its words in sentence-length
+     rows, that carries NO parseable date and NO labeled locator is running text —
+     conditions of carriage, advisories, terminal lists — and is cut; itinerary pages
+     average under seven words a row, a boarding pass three, and a one-page ticket with
+     dense fine print keeps its date, so it is never dropped. Pure and deterministic;
+     the fixture tests exercise it.
+   - **Passenger tables name the booking's travellers.** Besides the `Name  Seat  Meal`
+     row header, a `Passenger Information` / `Traveller Details` block header on a row of
+     its own names every contiguous row below that OPENS with a name — the leading two to
+     four alphabetic words after an optional title and before the first type / gender /
+     status word (`hari shankar singh Adult | Male|` → `HARI SHANKAR SINGH`, upper-cased
+     like every other extracted name). Table names are collected from the WHOLE document
+     (the page break may put the table in any segment) and shared with every segment via
+     `ExtractedPassenger.merge`, so two per-passenger page pairs fold into two segments
+     that each carry both people (ADR-047 decision 6).
+   - **Locators.** `PNR/Booking Reference OC9ISJ` — a slash-joined pair of labels followed
+     by whitespace and a value that contains a digit or ends its cell — reads HIGH
+     (`BOOKING REFERENCE NUMBER:` still never does); a labeled header locator beats a
+     bare body token when the segment inherits (`02HOUR` is also excluded from
+     `BARE_PNR` outright, with `10MINS`, `15KGS`…); and when the labeled readings across
+     the pages disagree ONLY by OCR look-alikes (`O0QD`, `I1L`, `S5`, `B8`, `Z2`, `G6`),
+     every segment takes the reading printed most often (`settleLocatorReadings`). Two
+     genuinely different locators never influence each other, and a single reading is
+     kept as read — characters are never "corrected" on their own, because airline PNRs
+     ARE alphanumeric (the real file's `OC9ISJ` was read `0C9ISJ` on every page; the
+     review form shows it for the user to fix).
+   - **Layout.** `12:50, 10 Nov 2026  15:00, 10 Nov 2026` — a row of two dated clock
+     times — gives departure / arrival times (MEDIUM) and makes its date MEDIUM;
+     `PAT-Jay Prakash Narayan lInternational Airport  HYD-Rajiv Gandhi …` — one
+     `CODE-Airport name` cell per end — is a route (MEDIUM), and such a cell is never a
+     `XXX-YYY` code pair (`CODE_PAIR_GUARD`: three or more unpunctuated words follow);
+     `DEPARTING` / `RETURNED` join the leg labels; `6E 432 . A320` / `6E 6223. A320`
+     read `6E 432` / `6E 6223` (the aircraft type guard already existed); a letter tight
+     against digits (`T944`, `Z40650`) is an OCR'd currency sign, never a carrier (a real
+     carrier prints a space or dash before its number); a `Seat` column header followed
+     by `6E Add-ons` is not a seat, nor is a bare candidate equal to the document's
+     airline code or inside a flight token; identity-only noise is judged on a segment's
+     OWN text before the shared header fields are inherited (otherwise every segment
+     "has" the booking's locator).
+   Fixture (ADR-003): `indigo-return-two-pax-pdf.txt` — the real ML Kit text of all 9
+   pages (contact phone and e-mail redacted; names, PNR and flights as printed) →
+   `6E 432 PAT→HYD 2026-11-10 12:50/15:00` and `6E 6223 HYD→PAT 2026-11-15 15:40/17:35`,
+   PNR `0C9ISJ` (HIGH, OCR's reading), passengers `HARI SHANKAR SINGH` + `RAM NATH SINGH`
+   on both; no seats (the print shows `- -`), no cabin (`Saver fare` is a fare family,
+   not a cabin). Every pre-existing `*.expected.json` is byte-for-byte unchanged. The
+   same text through the boarding-pass profile yields the same two segments.
+
 **Consequences.** Tests: `core:ocr` 82 (fixtures per segment, segmentation edge cases —
 hotel block between flights, seat-fare attach, booking id vs airline PNR, same number on
 two dates = 2 / same number + date = 1, undated repeat folds in, alias carrier, unit /
-aircraft / amount guards, terminal columns, AM/PM, `M2` BCBP, rules sync); `feature:flights`
+aircraft / amount guards, terminal columns, AM/PM, `M2` BCBP, rules sync; **114 after the
+2026-10-29 amendment** — prose-page triage, passenger block, label chains, locator vote,
+dated rows, amount guard, plus the instrumented `PdfPageRasterizerTest`); `feature:flights`
 +12 (1 vs N segments, direct batch with a pass copy per flight, booking attach per flight,
 per-segment dedupe, re-import skips all, untick, dismiss, walk-through advance, duplicate
 mid-walk, invalid form stays; `BoardingPassFileStore` two independent copies). e2e
@@ -3575,6 +3650,17 @@ AGENTS.md).
    passengers ends its detail line with `2 passengers: PRAKASH KUMAR 12A, BANDANA KUMARI
    12B` (`flights_import_review_passengers` plural, `AutoShrinkText` `minScale 0.8f`)
    instead of `Seat 12A · PRAKASH KUMAR`; an unnamed row reads `Passenger 2 12B`.
+
+6. **Passenger blocks and document-wide names (amendment, 2026-10-29, with ADR-045
+   §7).** `extractNames` still names at most one person from a segment's own text (a
+   labeled passenger or a `SURNAME/GIVEN` cell — now matched per CELL, so `PNR/BOOKING
+   REFERENCE` and `CHECK-IN/BAG DROP` never read as names). Passenger TABLES moved to
+   `tableNames`, run over the preamble, every segment and the tail: the `Name …` row
+   header (decision 3) and the new `Passenger Information` / `Traveller Details` block
+   header, whose rows open with the passenger's name before the type / gender tail. The
+   distinct table names are merged into the preamble's passengers, so EVERY segment
+   inherits them — an airline print that lists one traveller per page pair yields two
+   segments that both carry both people, through the same `PassengerIdentity` rule.
 
 **Fixtures (ADR-003).** `blr-lko-confirmation-two-pax.txt` — the real ML Kit text of
 the OTA itinerary with the fare table at `Adult(x 2)` and a Bandana Kumari row per leg
