@@ -4,6 +4,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.database.ClearTravelDatabase
 import com.itsluminous.cleartravel.core.database.entity.toEntity
+import com.itsluminous.cleartravel.core.model.ItineraryItemType
 import com.itsluminous.cleartravel.core.testing.Fixtures
 import com.itsluminous.cleartravel.core.testing.inMemoryDatabase
 import com.itsluminous.cleartravel.core.testing.syncColumns
@@ -141,5 +142,30 @@ class ItineraryDaoTest {
 
             assertThat(dao.observeForTrip("trip-a").first()).isEmpty()
             assertThat(dao.observeForTrip("trip-b").first()).hasSize(1)
+        }
+
+    /** ADR-048: the backfill work list — live PLACE rows missing either coordinate, across trips. */
+    @Test
+    fun `getWithoutCoordinates lists live unplaced places of every trip in trip then day order`() =
+        runTest {
+            val placedA = Fixtures.itineraryItem(tripId = "trip-a", name = "placed")
+            val unplacedA = Fixtures.itineraryItem(tripId = "trip-a", dayIndex = 1, name = "a-day1", latitude = null, longitude = null)
+            val halfA = Fixtures.itineraryItem(tripId = "trip-a", dayIndex = 0, name = "a-half", latitude = 1.0, longitude = null)
+            val unplacedB = Fixtures.itineraryItem(tripId = "trip-b", name = "b", latitude = null, longitude = null)
+            val commute =
+                Fixtures.itineraryItem(tripId = "trip-a", type = ItineraryItemType.COMMUTE, name = "leg", latitude = null, longitude = null)
+            val deleted =
+                Fixtures.itineraryItem(
+                    tripId = "trip-a",
+                    name = "gone",
+                    latitude = null,
+                    longitude = null,
+                    deletedAt = Fixtures.NOW,
+                )
+            dao.upsert(listOf(placedA, unplacedA, halfA, unplacedB, commute, deleted).map { it.toEntity() })
+
+            val names = dao.getWithoutCoordinates().map { it.name }
+
+            assertThat(names).containsExactly("a-half", "a-day1", "b").inOrder()
         }
 }

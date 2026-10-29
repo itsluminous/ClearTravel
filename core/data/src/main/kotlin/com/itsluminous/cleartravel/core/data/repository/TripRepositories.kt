@@ -45,6 +45,13 @@ interface ItineraryRepository {
 
     suspend fun getItem(id: String): ItineraryItem?
 
+    /**
+     * ADR-048: live PLACE items across ALL trips whose coordinates are missing — the
+     * work list of the place-location backfill. Ordered by trip, then (dayIndex,
+     * orderInDay). A one-shot read (the backfill runs to completion), not a Flow.
+     */
+    suspend fun getPlacesWithoutCoordinates(): List<ItineraryItem>
+
     /** Upserts [item] with a bumped `updatedAt`; returns the stored copy. */
     suspend fun save(item: ItineraryItem): ItineraryItem
 

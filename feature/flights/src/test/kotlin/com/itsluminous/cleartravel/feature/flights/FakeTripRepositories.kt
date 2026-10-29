@@ -49,6 +49,9 @@ class FakeItineraryRepository : ItineraryRepository {
 
     override suspend fun getItem(id: String): ItineraryItem? = items.value.firstOrNull { it.id == id }
 
+    override suspend fun getPlacesWithoutCoordinates(): List<ItineraryItem> =
+        items.value.filter { it.latitude == null || it.longitude == null }
+
     override suspend fun save(item: ItineraryItem): ItineraryItem {
         items.value = items.value.filterNot { it.id == item.id } + item
         return item

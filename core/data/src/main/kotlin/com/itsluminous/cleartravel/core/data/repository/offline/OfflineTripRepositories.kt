@@ -74,6 +74,8 @@ class OfflineItineraryRepository
 
         override suspend fun getItem(id: String): ItineraryItem? = itineraryDao.getById(id)?.toModel()
 
+        override suspend fun getPlacesWithoutCoordinates(): List<ItineraryItem> = itineraryDao.getWithoutCoordinates().map { it.toModel() }
+
         override suspend fun save(item: ItineraryItem): ItineraryItem = saveAll(listOf(item)).first()
 
         override suspend fun saveAll(items: List<ItineraryItem>): List<ItineraryItem> {

@@ -11,6 +11,7 @@ import com.itsluminous.cleartravel.core.model.FlightJourney
 import com.itsluminous.cleartravel.core.model.FlightPassenger
 import com.itsluminous.cleartravel.core.model.FlightWithPassengers
 import com.itsluminous.cleartravel.core.model.ItineraryItem
+import com.itsluminous.cleartravel.core.model.ItineraryItemType
 import com.itsluminous.cleartravel.core.model.TrainCoach
 import com.itsluminous.cleartravel.core.model.TrainPassenger
 import com.itsluminous.cleartravel.core.model.TrainRouteStop
@@ -70,6 +71,11 @@ class FakeItineraryRepository : ItineraryRepository {
         }
 
     override suspend fun getItem(id: String): ItineraryItem? = items.value.firstOrNull { it.id == id }
+
+    override suspend fun getPlacesWithoutCoordinates(): List<ItineraryItem> =
+        items.value
+            .filter { it.type == ItineraryItemType.PLACE && (it.latitude == null || it.longitude == null) }
+            .sortedWith(compareBy({ it.tripId }, { it.dayIndex }, { it.orderInDay }))
 
     override suspend fun save(item: ItineraryItem): ItineraryItem {
         items.value = items.value.filterNot { it.id == item.id } + item

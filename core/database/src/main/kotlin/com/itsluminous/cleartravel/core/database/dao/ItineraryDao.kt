@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
 import com.itsluminous.cleartravel.core.database.entity.ItineraryItemEntity
+import com.itsluminous.cleartravel.core.model.ItineraryItemType
 import kotlinx.coroutines.flow.Flow
 import java.time.Instant
 
@@ -22,6 +23,16 @@ interface ItineraryDao {
 
     @Query("SELECT * FROM itinerary_items WHERE id = :id AND deleted_at IS NULL")
     suspend fun getById(id: String): ItineraryItemEntity?
+
+    /**
+     * ADR-048: live PLACE items of EVERY trip that have no coordinates yet — the
+     * location backfill's work list. Ordered by trip, then (dayIndex, orderInDay).
+     */
+    @Query(
+        "SELECT * FROM itinerary_items WHERE type = :type AND deleted_at IS NULL " +
+            "AND (latitude IS NULL OR longitude IS NULL) ORDER BY trip_id, day_index, order_in_day",
+    )
+    suspend fun getWithoutCoordinates(type: ItineraryItemType = ItineraryItemType.PLACE): List<ItineraryItemEntity>
 
     @Upsert
     suspend fun upsert(items: List<ItineraryItemEntity>)

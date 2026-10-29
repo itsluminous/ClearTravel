@@ -1782,7 +1782,10 @@ one-shot signal modelled as durable state.
     auto-followed, ≤4 hops, 5 s timeouts — no new dependency) expands the redirect;
     the dialog is already open with "Reading the link…" and degrades to "name
     unknown + no coordinates" on failure. The item keeps the URL the user shared in
-    `link` either way.
+    `link` either way. *Amended by ADR-048:* a `maps.app.goo.gl` PLACE share redirects
+    to a place-id URL that names the place but carries no coordinates, so the intake
+    continues into the geocode / plus-code rungs of the `PlaceLocator` ladder while
+    staying confirmable, and a place saved without a point is backfilled afterwards.
 12. **Dialog → PLACE on day 1.** `MapsLinkIntakeHost` (public hook the shell renders
     over the tabs, like the file intake): "Create new trip" (name defaults to the
     place name) or "Add to existing trip" (picker; preselected from Room when trips
@@ -2241,7 +2244,9 @@ form's date was typed free-text; and maps-compose 6.12.2 crashed at runtime.
    Places SDK was rejected: it would force API enablement + billing on every fork.
    The response parser is pure (`parseNominatimResponse`, `NominatimParserTest`).
    New dependencies for `feature:itinerary`: `okhttp` + `kotlinx-serialization`
-   (both already in the catalog).
+   (both already in the catalog). *Amended by ADR-048:* the same geocoder is now
+   Hilt-provided app-wide and also serves the place-location ladder, paced to one
+   request per second by `GeocodePacer`; the `User-Agent` carries a contact URL.
 2. **No connecting polylines on the trip map.** Markers alone read better on dense
    maps (user steering); `buildTripMapContent` keeps producing the per-day paths for
    potential reuse, the map view just does not render them.
@@ -3606,3 +3611,111 @@ filled, incomplete segment walk-through with both rows); e2e
 Follow-up: the SMS/email text parser still maps its one name to row 1 (a group SMS is
 rare); a `Name` table whose rows carry seats in a later column is read name-only until
 a seat-fare row supplies the seat.
+
+## ADR-048 — Place-location ladder: Maps place-id links, geocode + plus-code fallback, coordinate backfill (2026-10-28)
+
+*Amends ADR-029 part D (decisions 10–12) and ADR-035 decision 1.*
+
+**Context.** A user built a Lucknow trip by sharing five places from Google Maps and the
+map view said "No places on the map". Their share link decodes to five PLACE items
+whose `name` is the full place + address text and whose `link` is a `maps.app.goo.gl`
+short link — and NO coordinates. Root cause, established with the REAL links from a
+Mac (`curl -sI`, with the resolver's Java user agent AND an Android Chrome 130 user
+agent — identical results, fixture `feature/itinerary/src/test/resources/maps-links/
+real-redirects.txt`): every `maps.app.goo.gl/<id>` place share 302-redirects to
+
+    https://www.google.com/maps/place/<full+address>/data=!4m2!3m1!1s0x399b…:0xb237…!18m1!1e1?utm_source=mstt_1&entry=gps&…
+
+— a **place-id (`ftid`) URL**. It carries the place NAME in the `/place/<name>/`
+segment and NOTHING else: no `!3d<lat>!4d<lng>`, no `/@lat,lng`, no `q=`/`ll=`. The
+ADR-029 resolver ran exactly as designed (HEAD, one hop, name parsed — which is WHY the
+items carry the full address text as their name) and `MapsLinks.parse` correctly found
+no coordinates; the dialog then wrote the item without a point, as ADR-029 decision 11
+specified ("degrades to … no coordinates"). The landing page's HTML is no help either:
+its only coordinates (`APP_INITIALIZATION_STATE`, the `og:image` static-map `center=`)
+are the REQUESTER's IP location — 12.79 N, 77.65 E (Bengaluru) for a Lucknow place —
+so parsing the body would pin every place to wherever the phone is (fixture
+`rumi-darwaza-landing-snippet.html`). A `maps.google.com/?cid=…` rewrite of the ftid
+lands on the same kind of page. ADR-029 listed "geocoding a name-only Maps link" as a
+follow-up; this is it, plus the backfill the already-saved trip needs.
+
+**Decisions.**
+
+1. **`PlaceLocator` — one ladder for every place that lacks a point**
+   (`feature:itinerary/place/`, Hilt-bound `DefaultPlaceLocator`; never throws, every
+   rung swallows its own failure). Rungs, in order:
+   - *Link.* `MapsLinks.parse` on the link; a short link is expanded first through the
+     existing `MapsLinkResolver`. Only coordinates IN THE URL count (`!3d!4d`, `@lat,lng`,
+     `q`/`query`/`ll`/`center`/`destination`/`daddr`); an `ftid`/`cid`-only URL is "no
+     coordinates". The landing HTML is deliberately not read (see Context).
+   - *Full plus code.* A FULL Open Location Code in the text (`7MR2VW6G+7P3`) is exact
+     and decodes offline, so it is taken before any geocoder.
+   - *Geocode.* `PlaceQueries.geocodeCandidates(text)` — the item's own name, else the
+     name the link carried — through the shared `PlaceGeocoder` (ADR-035: Nominatim,
+     platform `Geocoder` fallback), first hit wins. Candidates, most specific first and
+     capped at three: the full text; `name, locality, region`; `name, locality` — where
+     `name` is the first comma segment with parentheticals and a leading plus code
+     removed (`Royal Cafe(Hazratganj)` → `Royal Cafe`), `locality` the last segment
+     before the postal/country tail and `region` that tail minus its postal code
+     (`Uttar Pradesh 226003` → `Uttar Pradesh`). Nominatim returned nothing for any of
+     the five full texts and for `Bada Imambara (Main Building), Lucknow`, and hits for
+     `Bada Imambara, Lucknow`, `Royal Cafe, Lucknow`, `The Residency, Lucknow`, `Rumi
+     Darwaza, Lucknow` — the ladder is shaped by those answers. `Chota Imambada,
+     Lucknow` has no OSM match under that spelling; the platform geocoder gets its
+     turn, and failing that the item stays unplaced (decision 4).
+   - *Short plus code.* `VW6G+7P3` needs a reference point: the geocoded locality
+     (`Lucknow, Uttar Pradesh`), then `OpenLocationCode.recoverNearest` + `decode`.
+2. **`OpenLocationCode` (`logic/`)** — a small pure implementation of decode, encode (what
+   recovery needs) and `recoverNearest`, mirroring github.com/google/open-location-code
+   and checked against its published vectors (`olc-decoding.csv`, 440 rows;
+   `olc-short-codes.csv`) copied as fixtures. The user's code recovers to `7MR2VW6G+7P3`
+   → 26.8606375 N, 80.926796875 E against every Lucknow reference tried, the value the
+   reference Python package gives.
+3. **`GeocodePacer`** — serialises geocoder calls app-wide at ≥ 1 s apart (Nominatim's
+   usage policy); the Nominatim `User-Agent` now carries the contact URL the policy asks
+   for. The picker's debounced search is unaffected.
+4. **`PlaceBackfillRunner`** — fills in the points of EXISTING unplaced places (the
+   user's trip, shared-trip imports, hand-typed addresses). *Eligibility*
+   (`PlaceQueries.isUnplaced`): a live PLACE with no coordinates that has a Google Maps
+   link OR an address-like name (two or more comma segments) — a bare `Lunch` is never
+   geocoded, a wrong pin being worse than none. *Triggers*: the trip screen's ViewModel
+   on open (per trip); app-open housekeeping step 6 in `AppStartupTasks.runOnAppOpen`
+   (every trip, through the new work-list query); a shared-trip import
+   (`ShareImportViewModel` after `SharedContentImporter.import`); and the Maps intake
+   right after a place is saved without a point (decision 6). *Behaviour*: one item at a
+   time through the ladder; each placed item is re-read and saved with its point (the
+   repository bumps `updatedAt`, ADR-002) so the Room-observing map fills in marker by
+   marker; an item deleted or placed meanwhile is left alone; a trip already running is
+   not started twice; an item the ladder could not place is not retried for 6 h within
+   the process; no network → nothing attempted or remembered. `progress` (trip id →
+   done/total) drives the map view; `PlaceBackfill` logcat lines record each placement.
+5. **Map view states (`tripMapPane`)**: markers win; an empty map while the trip's
+   backfill runs shows "Finding locations… (n of m)" instead of the bare no-coordinates
+   notice; a populated map shows the same line as a small overlay chip; once the run is
+   over, places still without a point are listed under "Couldn't place these yet" with a
+   per-item "Pick on map" that opens the item form (where the ADR-035 picker lives).
+6. **Maps intake (ADR-029 D) continues into the ladder.** After the short-link hop the
+   dialog is confirmable as before; when the link named the place but had no point it
+   now shows "Finding the location…" and geocodes in the background — confirm is never
+   blocked. Confirm during that wait saves without a point and kicks the backfill for
+   the trip, so the point lands seconds later; confirm after it saves the point directly.
+7. **Contract additions (additive).** `ItineraryDao.getWithoutCoordinates()` and
+   `ItineraryRepository.getPlacesWithoutCoordinates()` — live PLACE items across all
+   trips missing either coordinate, ordered by trip then (dayIndex, orderInDay); the
+   backfill's work list. No schema change. `MapsLinkResolver` becomes a `fun interface`.
+
+**Consequences.** A Google Maps share now yields a pin in almost every case, and the
+trips already on users' phones fill in on the next open. Costs: up to three Nominatim
+requests per unplaced place (paced), a geocoded point is OSM's idea of the place rather
+than Google's (tens of metres apart on the Lucknow set), and a place with no OSM/platform
+match still needs a manual pick. Tests: `OpenLocationCodeTest` (reference vectors +
+Lucknow), `PlaceQueriesTest`, `MapsLinksRealRedirectsTest` (the five real redirects +
+the landing-HTML negative), `PlaceLocatorTest`, `GeocodePacerTest`,
+`PlaceBackfillRunnerTest`, `TripMapPaneTest`, `MapsLinkIntakeViewModelTest` +2,
+`TripDetailViewModelTest` +1, `ItineraryDaoTest` +1; e2e
+`SharedTripLocationBackfillE2eTest` imports the user's actual share link through the
+REAL ladder over the captured redirects and Nominatim's recorded answers
+(`TestItineraryModule`). Device run: `docs/validation-report.md`. Follow-ups: a
+"Retry" on the unplaced list that clears the cooldown; reading Google's `cid` through
+a key-less endpoint if one ever exists; persisting the "could not place" marker across
+processes.
