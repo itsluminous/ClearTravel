@@ -11,7 +11,7 @@ import javax.inject.Inject
  * carries the place name and coordinates (ADR-029 part D). Network is optional: a
  * failure yields null and the intake proceeds with "name unknown", never blocking.
  */
-interface MapsLinkResolver {
+fun interface MapsLinkResolver {
     suspend fun resolve(shortUrl: String): String?
 }
 

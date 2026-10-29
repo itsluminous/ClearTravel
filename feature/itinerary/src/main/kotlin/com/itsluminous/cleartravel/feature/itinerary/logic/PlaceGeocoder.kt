@@ -30,6 +30,7 @@ fun interface PlaceGeocoder {
 private const val MAX_RESULTS = 5
 private const val NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 private const val TIMEOUT_SECONDS = 8L
+private const val CONTACT_URL = "https://cleartravel.itsluminous.com"
 
 @Serializable
 internal data class NominatimHit(
@@ -91,7 +92,8 @@ private suspend fun nominatimSearch(
                 Request
                     .Builder()
                     .url(url)
-                    .header("User-Agent", "ClearTravel/$appVersion (Android travel app)")
+                    // Nominatim's usage policy: an identifying UA with a way to reach the operator.
+                    .header("User-Agent", "ClearTravel/$appVersion (Android travel app; +$CONTACT_URL)")
                     .build()
             client.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@use emptyList()
