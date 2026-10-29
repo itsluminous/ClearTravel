@@ -136,6 +136,28 @@ class PlaceBackfillRunnerTest {
             assertThat(locator.calls).hasSize(1)
         }
 
+    /** The map must not flash "Finding locations…" for a run that has nothing to do (all placed, or all cooling down). */
+    @Test
+    fun `a run with nothing due publishes no progress at all`() =
+        runTest {
+            repository.items.value = listOf(unplaced(BADA), Fixtures.itineraryItem(tripId = TRIP, name = "Placed, Lucknow"))
+            val seen = mutableListOf<PlaceBackfillProgress?>()
+            val collector = launch { runner.progressFor(TRIP).collect { seen += it } }
+            yield()
+
+            runner.backfill(TRIP) // BADA tried and failed → cooldown
+            yield()
+            val afterFirst = seen.size
+            runner.backfill(TRIP) // nothing due
+            runner.backfillAll()
+            yield()
+            collector.cancel()
+
+            assertThat(seen.filterNotNull()).isNotEmpty()
+            assertThat(seen.size).isEqualTo(afterFirst)
+            assertThat(seen.last()).isNull()
+        }
+
     @Test
     fun `an item deleted or placed while the ladder runs is left alone`() =
         runTest {

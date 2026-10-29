@@ -187,7 +187,32 @@ class TripDetailViewModelTest {
             assertThat(locator.calls.map { it.second }).containsExactly(RUMI, "Nowhere, Atlantis")
         }
 
+    /** A place saved without a point while the screen is open (item form, Maps intake) is picked up too. */
+    @Test
+    fun `a place added while the screen is open is backfilled without re-trying the ones already tried`() =
+        runTest {
+            val lost = Fixtures.itineraryItem(tripId = TRIP_ID, name = "Nowhere, Atlantis", latitude = null, longitude = null)
+            itineraryRepository.items.value = listOf(lost)
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+            assertThat(locator.calls.map { it.second }).containsExactly("Nowhere, Atlantis")
+
+            val bada = Fixtures.itineraryItem(tripId = TRIP_ID, name = BADA, latitude = null, longitude = null)
+            locator.answer(BADA, 26.8696, 80.9135)
+            itineraryRepository.save(bada)
+            testScheduler.advanceUntilIdle()
+
+            assertThat(locator.calls.map { it.second }).containsExactly("Nowhere, Atlantis", BADA).inOrder()
+            assertThat(
+                itineraryRepository.items.value
+                    .first { it.id == bada.id }
+                    .latitude,
+            ).isEqualTo(26.8696)
+            assertThat(viewModel.locating.value).isNull()
+        }
+
     private companion object {
         const val RUMI = "Rumi Darwaza, 17/11 Hussainabad Road, Lucknow, Uttar Pradesh 226003"
+        const val BADA = "Bada Imambara (Main Building), Machchhi Bhavan, Lucknow, Uttar Pradesh 226003"
     }
 }

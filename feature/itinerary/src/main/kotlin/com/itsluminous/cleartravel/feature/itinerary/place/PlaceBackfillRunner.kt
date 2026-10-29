@@ -70,10 +70,11 @@ class PlaceBackfillRunner internal constructor(
     /** Backfills the unplaced items of ONE trip; returns how many were placed. */
     suspend fun backfill(tripId: String): Int {
         if (!network.isOnline()) return 0
+        val due = dueItems(itineraryRepository.observeItemsForTrip(tripId).first())
+        if (due.isEmpty()) return 0
         if (!begin(tripId)) return 0
         return try {
-            val items = itineraryRepository.observeItemsForTrip(tripId).first().filter(PlaceQueries::isUnplaced)
-            place(tripId, items)
+            place(tripId, due)
         } finally {
             end(tripId)
         }
@@ -82,7 +83,7 @@ class PlaceBackfillRunner internal constructor(
     /** Backfills every trip with unplaced items (app open); returns how many were placed. */
     suspend fun backfillAll(): Int {
         if (!network.isOnline()) return 0
-        val byTrip = itineraryRepository.getPlacesWithoutCoordinates().filter(PlaceQueries::isUnplaced).groupBy { it.tripId }
+        val byTrip = dueItems(itineraryRepository.getPlacesWithoutCoordinates()).groupBy { it.tripId }
         var placed = 0
         for ((tripId, items) in byTrip) {
             if (!begin(tripId)) continue
@@ -95,12 +96,18 @@ class PlaceBackfillRunner internal constructor(
         return placed
     }
 
+    /** Eligible items not inside a failure cooldown — decided BEFORE a run starts, so a run with nothing to do stays silent. */
+    private fun dueItems(items: List<ItineraryItem>): List<ItineraryItem> {
+        val now = clock.instant()
+        return items.filter(PlaceQueries::isUnplaced).filter { item ->
+            failedAt[item.id]?.let { Duration.between(it, now) >= RETRY_COOLDOWN } ?: true
+        }
+    }
+
     private suspend fun place(
         tripId: String,
-        candidates: List<ItineraryItem>,
+        due: List<ItineraryItem>,
     ): Int {
-        val now = clock.instant()
-        val due = candidates.filter { item -> failedAt[item.id]?.let { Duration.between(it, now) >= RETRY_COOLDOWN } ?: true }
         publish(tripId, PlaceBackfillProgress(done = 0, total = due.size))
         var placed = 0
         due.forEachIndexed { index, item ->

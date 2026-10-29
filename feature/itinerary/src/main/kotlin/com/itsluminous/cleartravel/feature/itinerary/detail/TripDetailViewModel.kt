@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
@@ -60,10 +61,6 @@ class TripDetailViewModel
         private val backfillRunner: PlaceBackfillRunner,
     ) : ViewModel() {
         private val tripId: String = checkNotNull(savedStateHandle[TRIP_ID_ARG])
-
-        init {
-            viewModelScope.launch { backfillRunner.backfill(tripId) }
-        }
 
         val trip: StateFlow<Trip?> =
             tripRepository
@@ -100,6 +97,18 @@ class TripDetailViewModel
             items
                 .map { list -> list.filter(PlaceQueries::isUnplaced) }
                 .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+        init {
+            // Opening the screen backfills this trip; a place added without a point while
+            // the screen is open (the item form, the Maps intake) kicks it again. The runner
+            // skips items it has already tried (cooldown) and a run already in progress.
+            viewModelScope.launch {
+                items
+                    .map { list -> list.filter(PlaceQueries::isUnplaced).map { it.id }.toSet() }
+                    .distinctUntilChanged()
+                    .collect { ids -> if (ids.isNotEmpty()) backfillRunner.backfill(tripId) }
+            }
+        }
 
         /**
          * Linked-journey id → display label (`12951`, `6E 2001`), live from Room for the

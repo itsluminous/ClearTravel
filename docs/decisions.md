@@ -3679,7 +3679,9 @@ follow-up; this is it, plus the backfill the already-saved trip needs.
    (`PlaceQueries.isUnplaced`): a live PLACE with no coordinates that has a Google Maps
    link OR an address-like name (two or more comma segments) — a bare `Lunch` is never
    geocoded, a wrong pin being worse than none. *Triggers*: the trip screen's ViewModel
-   on open (per trip); app-open housekeeping step 6 in `AppStartupTasks.runOnAppOpen`
+   whenever the trip's set of unplaced items changes and is non-empty — on open and
+   again when a place is saved without a point while the screen is up (item form, Maps
+   intake); a run with nothing due stays silent (no progress is published); app-open housekeeping step 6 in `AppStartupTasks.runOnAppOpen`
    (every trip, through the new work-list query); a shared-trip import
    (`ShareImportViewModel` after `SharedContentImporter.import`); and the Maps intake
    right after a place is saved without a point (decision 6). *Behaviour*: one item at a
