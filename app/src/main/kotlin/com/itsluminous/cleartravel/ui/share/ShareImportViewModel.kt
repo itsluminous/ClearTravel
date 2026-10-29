@@ -8,6 +8,7 @@ import com.itsluminous.cleartravel.core.data.share.ShareImportResult
 import com.itsluminous.cleartravel.core.data.share.ShareLinkError
 import com.itsluminous.cleartravel.core.data.share.SharedContentImporter
 import com.itsluminous.cleartravel.core.data.share.TripSharePayload
+import com.itsluminous.cleartravel.feature.itinerary.place.PlaceBackfillRunner
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -62,6 +63,7 @@ class ShareImportViewModel
     @Inject
     constructor(
         private val importer: SharedContentImporter,
+        private val placeBackfillRunner: PlaceBackfillRunner,
     ) : ViewModel() {
         private val state = MutableStateFlow<ShareImportUiState>(ShareImportUiState.Idle)
         val uiState: StateFlow<ShareImportUiState> = state.asStateFlow()
@@ -99,6 +101,8 @@ class ShareImportViewModel
                     }
                 request = null
                 state.value = ShareImportUiState.Done(result)
+                // ADR-048: imported places that came without coordinates are located in the background.
+                if (result is ShareImportResult.Trip) launch { placeBackfillRunner.backfill(result.tripId) }
             }
         }
 

@@ -7,6 +7,7 @@ import com.itsluminous.cleartravel.core.data.repository.TrainRepository
 import com.itsluminous.cleartravel.core.data.sync.BackgroundSyncStateStore
 import com.itsluminous.cleartravel.core.google.work.ScheduledBackupScheduler
 import com.itsluminous.cleartravel.feature.flights.polling.FlightPollScheduler
+import com.itsluminous.cleartravel.feature.itinerary.place.PlaceBackfillRunner
 import com.itsluminous.cleartravel.feature.trains.isPastJourney
 import com.itsluminous.cleartravel.feature.trains.reminder.TrainReminderHints
 import com.itsluminous.cleartravel.feature.trains.reminder.TrainReminderScheduler
@@ -49,6 +50,11 @@ import javax.inject.Singleton
  *    to the unique periodic reminder job (any lead → ensure the 3-hourly job, `OFF` →
  *    cancel) and rewrites the hashed train departure hints; [keepTrainRemindersFresh]
  *    keeps both current for as long as the gate is open.
+ * 6. **Place-location backfill** (ADR-048) — every live place of every trip that still
+ *    has no coordinates (Google Maps shares saved before the fix, shared-trip imports,
+ *    hand-typed addresses) goes through the location ladder, paced for Nominatim, and
+ *    is written back to Room so the trip maps fill in. Last, because it is the only
+ *    step that needs the network and may take a few seconds per item.
  */
 @Singleton
 class AppStartupTasks
@@ -60,6 +66,7 @@ class AppStartupTasks
         private val settingsRepository: SettingsRepository,
         private val scheduledBackupScheduler: ScheduledBackupScheduler,
         private val backgroundSyncStateStore: BackgroundSyncStateStore,
+        private val placeBackfillRunner: PlaceBackfillRunner,
     ) {
         suspend fun runOnAppOpen() =
             withContext(Dispatchers.IO) {
@@ -68,6 +75,7 @@ class AppStartupTasks
                 kickFlightPolling()
                 reaffirmBackupSchedule()
                 kickTrainReminders()
+                placeBackfillRunner.backfillAll()
             }
 
         /**
