@@ -65,3 +65,26 @@ fun buildTripMapContent(items: List<ItineraryItem>): TripMapContent {
     }
     return TripMapContent(markers = markers, paths = paths)
 }
+
+/** What the map pane shows once the Play/key guard has passed (ADR-048). */
+enum class TripMapPane {
+    /** No markers and the location backfill is running: "Finding locations… (n of m)". */
+    LOCATING,
+
+    /** No markers, nothing running: the no-coordinates notice (+ the unplaced list, if any). */
+    EMPTY,
+
+    /** Markers on the map; a running backfill shows as an overlay chip, a finished one as the unplaced list. */
+    MAP,
+}
+
+/** Pure pane selection for the map view: markers win, then a running backfill, then the empty notice. */
+fun tripMapPane(
+    content: TripMapContent,
+    locating: Boolean,
+): TripMapPane =
+    when {
+        !content.isEmpty -> TripMapPane.MAP
+        locating -> TripMapPane.LOCATING
+        else -> TripMapPane.EMPTY
+    }

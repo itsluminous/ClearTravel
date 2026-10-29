@@ -80,3 +80,28 @@ class MapContentTest {
         assertThat(content.isEmpty).isTrue()
     }
 }
+
+/** ADR-048: which pane the map view shows — markers, the locating notice, or the empty notice. */
+class TripMapPaneTest {
+    private val empty = TripMapContent(emptyList(), emptyList())
+    private val withMarker =
+        buildTripMapContent(
+            listOf(Fixtures.itineraryItem(latitude = 26.87, longitude = 80.91)),
+        )
+
+    @Test
+    fun `empty content while locating shows the locating pane`() {
+        assertThat(tripMapPane(empty, locating = true)).isEqualTo(TripMapPane.LOCATING)
+    }
+
+    @Test
+    fun `empty content with nothing running shows the empty notice`() {
+        assertThat(tripMapPane(empty, locating = false)).isEqualTo(TripMapPane.EMPTY)
+    }
+
+    @Test
+    fun `any marker shows the map whether or not a backfill is running`() {
+        assertThat(tripMapPane(withMarker, locating = true)).isEqualTo(TripMapPane.MAP)
+        assertThat(tripMapPane(withMarker, locating = false)).isEqualTo(TripMapPane.MAP)
+    }
+}
