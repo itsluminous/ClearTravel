@@ -58,7 +58,13 @@ optional Google account link for Calendar/Drive sync.
   a Maps key and Play services). Places come from a **place search** (OpenStreetMap
   Nominatim suggestions, platform geocoder fallback), a tap on the map, typed
   coordinates or a **shared Google Maps link** (short links resolved in the
-  background). Commute legs link to your train/flight journeys — pick an existing
+  background). A Maps share usually names the place but carries no coordinates, so
+  the app **finds the location itself**: coordinates in the link if any, a plus code
+  like `VW6G+7P3` decoded on-device, else the place text geocoded (Nominatim, platform
+  fallback) — while you keep working. Places saved earlier without a point are filled
+  in when the trip opens or the app starts (“Finding locations… (3 of 5)” on the map),
+  and anything that still cannot be found is listed with a **Pick on map** shortcut.
+  Commute legs link to your train/flight journeys — pick an existing
   one or add a new one right from the leg (you are taken to Journeys and brought back
   with it linked) and take their departure time from the journey; a journey's detail
   sheet lists the trips it is part of, one tap apart.

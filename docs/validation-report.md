@@ -1339,3 +1339,53 @@ Notes:
   Rahul's 12A when it was renamed, and the passes brought 12A/12B — same seat, different
   name → two people by design (ADR-046 decision 4). A first round with the stranger in
   `1A` gave `Seats 1A, 12A, 12B` the same way.
+
+## Google Maps shares without coordinates — place-location ladder + backfill (2026-10-29 05:55–06:20 IST, emulator Play_36_Pixel, API 36, ADR-048)
+
+Debug build (`versionName 0.0.7`) installed **OVER** the ADR-047 demo install, no `pm
+clear`; unlock `TestPass123`. All UI reads are `uiautomator dump` node texts (no
+screenshots viewed). Real network throughout (the ladder talks to Nominatim and the
+platform geocoder; the five `maps.app.goo.gl` links are the user's).
+
+**Root cause, re-verified from the Mac first** (`curl -sIL`, Android Chrome 130 UA and the
+resolver's own `Java/17` HEAD): every one of the five short links answers `302` to
+`https://www.google.com/maps/place/<full+address>/data=!4m2!3m1!1s0x399b…:0x…!18m1!1e1?utm_source=mstt_1&entry=gps…`
+— a place-id (`ftid`) URL with the NAME in the path and no `!3d!4d`, `@lat,lng`, `q=`,
+`ll=` or `center=` anywhere; the next hop is a `200` HTML page (816 KB) in which the only
+decimal coordinates are `12.7947375, 77.6503865` (the requester's Bengaluru IP in
+`APP_INITIALIZATION_STATE` and the `og:image` `staticmap?center=`) — no `26.8x`/`80.9x`
+value at all. The ADR-029 resolver therefore ran correctly and produced exactly the
+name-only items the user's share link holds.
+
+| # | Step | Evidence | Verdict |
+|---|---|---|---|
+| 0 | A `Lucknow` trip left by the interrupted run was deleted first (clean slate; the share import is id-stable, so it would have updated in place) | Trips `Tokyo / Ladakh Trek / Paris / Teosa` | — |
+| a1 | `am start -a VIEW -d cleartravel://share/trip/<blob>` (the user's link) | dialog `Add shared trip?` / `Add trip "Lucknow" (5 places) to your Trips?` → **Add** → landed on the trip: Day 1 with the five full-address names | PASS |
+| a2 | **Map** tapped ~2 s later | `Google Map` texture + chip **`Finding locations… (4 of 5)`** — no `No places on the map` text at any point | PASS |
+| a3 | logcat `PlaceBackfill` | `Placed Bada Imambara (Main Building)… at 26.8683578,80.9123714 via GEOCODE` (06:01:27), `Chota Imambada… 26.8734297,80.9042358` (:28), `Royal Cafe(Hazratganj)… 26.8481472,80.9439394` (:30), `VW6G+7P3 The Residency… 26.8606372,80.9267863` (:32), `Rumi Darwaza… 26.8712477,80.9121431` (:36) — **5/5 within 26.84–26.88 N, 80.90–80.95 E**, ~1.5–3.5 s apart (paced). Chota Imambada, which Nominatim does not know, came from the platform geocoder fallback (ADR-035); The Residency's geocode (26.86090, 80.92588 on Nominatim) agrees with its plus code `7MR2VW6G+7P3` = 26.86064, 80.92680 to ~100 m | PASS |
+| a4 | Map after the run | chip gone, no `Couldn't place` list, no empty notice; map texture only | PASS |
+| b1 | `am start -a SEND -t text/plain` with `Rumi Darwaza, 17/11 Hussainabad Road, …226003\nhttps://maps.app.goo.gl/SPre92rQxfbVNLoY7` | `Add place from Google Maps`: name line = the full address, status **`Finding the location…`** with the spinner, `Add place` ENABLED (confirm never blocked) | PASS |
+| b2 | ~4 s later, before confirming | status line **`26.87125, 80.91214`** (the in-dialog geocode answered) → `Add to existing trip` → `🏙️ Lucknow` → **Add place** | PASS |
+| b3 | Item 6 detail sheet | `Coordinates` **`26.87125, 80.91214`**, `Link` `https://maps.app.goo.gl/SPre92rQxfbVNLoY7` — saved WITH coordinates, short link kept; no `PlaceBackfill` log line (nothing to backfill) | PASS |
+| c1 | FAB → new item `Zzqxv Tower, Atlantis` (address-like, unlocatable), no location → Save → Map | **`Couldn't place these yet`** / `Zzqxv Tower, Atlantis` / **`Pick on map`**; logcat `Could not place item 040e1917… (Zzqxv Tower, Atlantis)` once; a second Map open within the run = no second attempt (cooldown) | PASS |
+| c2 | **Pick on map** | opens `Edit itinerary item` with the name field and the ADR-035 `Pick on map` / `Latitude, longitude` controls | PASS |
+| c3 | Renamed to `…Hazratganj Market, Lucknow, Uttar Pradesh`, Save, screen stays open | logcat `Placed … at 26.8541536,80.9447827 via GEOCODE` within 6 s; the unplaced list disappears — the trip screen's trigger fires on the changed unplaced set and the edit clears the cooldown (both added during this run, see Notes) | PASS |
+| — | Clean-up: Trips → `Delete trip` Lucknow → confirm | Trips `Tokyo / Ladakh Trek / Paris / Teosa` — demo data intact | PASS |
+| g1 | Full gate `ktlintCheck lintDebug testDebugUnitTest assembleDebug assembleDebugAndroidTest` → `mapscoords.log` | BUILD SUCCESSFUL, unit **1338/1338** (1295 before ADR-048) | PASS |
+| g2 | `connectedDebugAndroidTest` on **Android_16_AOSP_Medium** | **34/34** app e2e incl. the new `SharedTripLocationBackfillE2eTest` (the user's share blob → Add → 4/5 placed within seconds through the REAL ladder over the captured redirects + recorded Nominatim answers, Chota Imambada left for manual placement; 14.7 s), BUILD SUCCESSFUL in 1m 44s | PASS |
+| g3 | Shutdown | Play_36_Pixel killed after the clean-up; Android_16_AOSP_Medium killed after g2; `adb devices` empty | PASS |
+
+Notes:
+- The resumed implementation (ladder, runner, pacer, OLC, map states, intake, startup +
+  import triggers, tests, ADR) was kept as found; two gaps showed up on the device and
+  were fixed in follow-up commits: the trip screen kicked the backfill only once in
+  `init`, so a place saved from the item form while the screen was up was not tried until
+  the next open (now: trigger on the distinct, non-empty set of unplaced ids; a run with
+  nothing due publishes no progress, so the map never flashes `Finding locations…`), and
+  a failure was remembered by item id alone, so fixing a typo still waited out the 6 h
+  cooldown (now keyed to name+link).
+- Points are OSM's/the platform's idea of each place, 10–150 m from Google's pin (e.g.
+  Bada Imambara's Nominatim hit is its Naubat Khana gate); Google's own coordinates are
+  simply not available without a keyed API.
+- `adb shell am start … --es TEXT 'a, b'` needs the text quoted INSIDE the remote shell
+  (the first attempt split on the comma and started nothing).
