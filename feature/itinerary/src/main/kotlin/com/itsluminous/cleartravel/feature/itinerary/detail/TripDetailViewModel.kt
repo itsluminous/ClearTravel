@@ -13,12 +13,15 @@ import com.itsluminous.cleartravel.core.model.Trip
 import com.itsluminous.cleartravel.feature.itinerary.ItineraryMessage
 import com.itsluminous.cleartravel.feature.itinerary.TRIP_ID_ARG
 import com.itsluminous.cleartravel.feature.itinerary.logic.ItineraryDay
+import com.itsluminous.cleartravel.feature.itinerary.logic.PlaceQueries
 import com.itsluminous.cleartravel.feature.itinerary.logic.TripMapContent
 import com.itsluminous.cleartravel.feature.itinerary.logic.buildTripMapContent
 import com.itsluminous.cleartravel.feature.itinerary.logic.flightJourneyLabel
 import com.itsluminous.cleartravel.feature.itinerary.logic.groupItemsByDay
 import com.itsluminous.cleartravel.feature.itinerary.logic.reorderWithinDay
 import com.itsluminous.cleartravel.feature.itinerary.logic.trainJourneyLabel
+import com.itsluminous.cleartravel.feature.itinerary.place.PlaceBackfillProgress
+import com.itsluminous.cleartravel.feature.itinerary.place.PlaceBackfillRunner
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -38,6 +41,11 @@ import javax.inject.Inject
  * One trip's detail screen: the day-grouped timeline and the derived map content
  * (both projections of the same Room-observed item list), the human labels of the
  * journeys its commute legs link to, plus item-level actions.
+ *
+ * ADR-048: opening the screen kicks the place-location backfill for this trip
+ * ([PlaceBackfillRunner]) so places saved without coordinates (Google Maps shares,
+ * shared-trip imports) get their markers; [locating] and [unplaced] feed the map
+ * view's "Finding locations…" / "Couldn't place" states.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
@@ -49,8 +57,13 @@ class TripDetailViewModel
         private val itineraryRepository: ItineraryRepository,
         trainRepository: TrainRepository,
         flightRepository: FlightRepository,
+        private val backfillRunner: PlaceBackfillRunner,
     ) : ViewModel() {
         private val tripId: String = checkNotNull(savedStateHandle[TRIP_ID_ARG])
+
+        init {
+            viewModelScope.launch { backfillRunner.backfill(tripId) }
+        }
 
         val trip: StateFlow<Trip?> =
             tripRepository
@@ -75,6 +88,18 @@ class TripDetailViewModel
                     SharingStarted.WhileSubscribed(5_000),
                     TripMapContent(emptyList(), emptyList()),
                 )
+
+        /** ADR-048: progress of this trip's running backfill; null when none is running. */
+        val locating: StateFlow<PlaceBackfillProgress?> =
+            backfillRunner
+                .progressFor(tripId)
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), backfillRunner.progress.value[tripId])
+
+        /** ADR-048: live places still without coordinates — the map's "pick on map" list. */
+        val unplaced: StateFlow<List<ItineraryItem>> =
+            items
+                .map { list -> list.filter(PlaceQueries::isUnplaced) }
+                .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
         /**
          * Linked-journey id → display label (`12951`, `6E 2001`), live from Room for the

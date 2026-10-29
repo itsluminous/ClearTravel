@@ -12,6 +12,8 @@ import com.itsluminous.cleartravel.feature.itinerary.logic.MapsLinks
 import com.itsluminous.cleartravel.feature.itinerary.logic.MapsPlace
 import com.itsluminous.cleartravel.feature.itinerary.logic.dateForDay
 import com.itsluminous.cleartravel.feature.itinerary.logic.nextOrderInDay
+import com.itsluminous.cleartravel.feature.itinerary.place.PlaceBackfillRunner
+import com.itsluminous.cleartravel.feature.itinerary.place.PlaceLocator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +39,12 @@ data class MapsIntakeState(
     val place: MapsPlace? = null,
     /** A short link is being expanded in the background; the dialog stays usable. */
     val resolving: Boolean = false,
+    /**
+     * ADR-048: the link named the place but carried no coordinates, so the place text is
+     * being geocoded. Confirm stays enabled — a place added meanwhile is located by the
+     * backfill right after it is saved.
+     */
+    val locating: Boolean = false,
     val target: MapsIntakeTarget = MapsIntakeTarget.NEW_TRIP,
     /** Name typed for the new trip; blank falls back to the place name at confirm time. */
     val newTripName: String = "",
@@ -61,6 +69,12 @@ data class MapsIntakeState(
  * pick "new trip" or "existing trip", then write ONE PLACE item on day 1 of that trip
  * — coordinates when the link had them, the place name when present, the original
  * link kept in the item's `link` field either way.
+ *
+ * ADR-048: a link that names the place but carries no coordinates (every
+ * `maps.app.goo.gl` place share does — the redirect is `/maps/place/<name>/data=…ftid`)
+ * continues into the geocode rungs of the [PlaceLocator] ladder while the dialog stays
+ * confirmable; if the user confirms first, the item is saved without a point and the
+ * [PlaceBackfillRunner] is kicked for its trip so the point lands seconds later.
  */
 @HiltViewModel
 class MapsLinkIntakeViewModel
@@ -69,6 +83,8 @@ class MapsLinkIntakeViewModel
         private val tripRepository: TripRepository,
         private val itineraryRepository: ItineraryRepository,
         private val resolver: MapsLinkResolver,
+        private val locator: PlaceLocator,
+        private val backfillRunner: PlaceBackfillRunner,
     ) : ViewModel() {
         private val _state = MutableStateFlow(MapsIntakeState())
         val state: StateFlow<MapsIntakeState> = _state.asStateFlow()
@@ -107,24 +123,34 @@ class MapsLinkIntakeViewModel
                             )
                     }
                 }
-            if (short) {
-                resolveJob =
-                    viewModelScope.launch {
+            resolveJob =
+                viewModelScope.launch {
+                    var place = parsed
+                    if (short) {
                         val resolved = runCatching { resolver.resolve(url) }.getOrNull()
                         val refined = resolved?.let(MapsLinks::parse)
-                        _state.value =
-                            _state.value.copy(
-                                resolving = false,
-                                // Keep the short URL as the stored link; take name/coords from the expansion.
-                                place =
-                                    if (refined != null) {
-                                        parsed.copy(name = refined.name, latitude = refined.latitude, longitude = refined.longitude)
-                                    } else {
-                                        parsed
-                                    },
-                            )
+                        // Keep the short URL as the stored link; take name/coords from the expansion.
+                        if (refined !=
+                            null
+                        ) {
+                            place = parsed.copy(name = refined.name, latitude = refined.latitude, longitude = refined.longitude)
+                        }
                     }
-            }
+                    val needsGeocode = !place.hasLocation && !place.name.isNullOrBlank()
+                    _state.value = _state.value.copy(resolving = false, locating = needsGeocode, place = place)
+                    if (!needsGeocode) return@launch
+                    val located = runCatching { locator.locate(link = null, text = place.name) }.getOrNull()
+                    _state.value =
+                        _state.value.copy(
+                            locating = false,
+                            place =
+                                if (located != null) {
+                                    place.copy(latitude = located.point.latitude, longitude = located.point.longitude)
+                                } else {
+                                    place
+                                },
+                        )
+                }
         }
 
         fun setTarget(target: MapsIntakeTarget) {
@@ -149,7 +175,9 @@ class MapsLinkIntakeViewModel
             val current = _state.value
             val place = current.place ?: return
             if (!current.canConfirm(trips.value)) return
-            _state.value = current.copy(saving = true)
+            // The in-dialog geocode is abandoned: the backfill below picks the item up.
+            resolveJob?.cancel()
+            _state.value = current.copy(saving = true, locating = false)
             viewModelScope.launch {
                 val placeName = place.name?.takeIf(String::isNotBlank) ?: fallbackName
                 val tripId =
@@ -175,6 +203,8 @@ class MapsLinkIntakeViewModel
                     ),
                 )
                 _state.value = _state.value.copy(saving = false, addedToTripId = tripId)
+                // ADR-048: a place saved without coordinates is located in the background.
+                if (!place.hasLocation) viewModelScope.launch { backfillRunner.backfill(tripId) }
             }
         }
 

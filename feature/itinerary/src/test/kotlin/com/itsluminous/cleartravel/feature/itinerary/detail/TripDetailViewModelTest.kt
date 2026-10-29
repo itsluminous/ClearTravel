@@ -9,11 +9,15 @@ import com.itsluminous.cleartravel.core.testing.MainDispatcherRule
 import com.itsluminous.cleartravel.feature.itinerary.ItineraryMessage
 import com.itsluminous.cleartravel.feature.itinerary.fakes.FakeFlightRepository
 import com.itsluminous.cleartravel.feature.itinerary.fakes.FakeItineraryRepository
+import com.itsluminous.cleartravel.feature.itinerary.fakes.FakeNetworkAvailability
+import com.itsluminous.cleartravel.feature.itinerary.fakes.FakePlaceLocator
 import com.itsluminous.cleartravel.feature.itinerary.fakes.FakeTrainRepository
 import com.itsluminous.cleartravel.feature.itinerary.fakes.FakeTripRepository
+import com.itsluminous.cleartravel.feature.itinerary.place.PlaceBackfillRunner
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
+import java.time.Clock
 
 private const val TRIP_ID = "trip-1"
 
@@ -25,6 +29,9 @@ class TripDetailViewModelTest {
     private val itineraryRepository = FakeItineraryRepository()
     private val trainRepository = FakeTrainRepository()
     private val flightRepository = FakeFlightRepository()
+    private val locator = FakePlaceLocator()
+    private val network = FakeNetworkAvailability()
+    private val backfillRunner = PlaceBackfillRunner(itineraryRepository, locator, network, Clock.systemUTC(), log = {})
 
     private fun viewModel(): TripDetailViewModel =
         TripDetailViewModel(
@@ -33,6 +40,7 @@ class TripDetailViewModelTest {
             itineraryRepository = itineraryRepository,
             trainRepository = trainRepository,
             flightRepository = flightRepository,
+            backfillRunner = backfillRunner,
         )
 
     @Test
@@ -145,4 +153,41 @@ class TripDetailViewModelTest {
             assertThat(itineraryRepository.items.value).isEmpty()
             assertThat(viewModel.message.value).isEqualTo(ItineraryMessage.ITEM_DELETED)
         }
+
+    /** ADR-048: opening the screen backfills this trip's unplaced places; the map's states follow Room. */
+    @Test
+    fun `init backfills unplaced places and exposes locating progress and the leftovers`() =
+        runTest {
+            val rumi = Fixtures.itineraryItem(tripId = TRIP_ID, name = RUMI, latitude = null, longitude = null)
+            val lost = Fixtures.itineraryItem(tripId = TRIP_ID, name = "Nowhere, Atlantis", latitude = null, longitude = null)
+            val lunch = Fixtures.itineraryItem(tripId = TRIP_ID, name = "Lunch", latitude = null, longitude = null)
+            itineraryRepository.items.value = listOf(rumi, lost, lunch)
+            locator.answer(RUMI, 26.8712, 80.9122)
+
+            val viewModel = viewModel()
+            testScheduler.advanceUntilIdle()
+
+            viewModel.unplaced.test {
+                assertThat(awaitItem().map { it.name }).containsExactly("Nowhere, Atlantis")
+                cancelAndIgnoreRemainingEvents()
+            }
+            assertThat(viewModel.locating.value).isNull()
+            assertThat(
+                itineraryRepository.items.value
+                    .first { it.id == rumi.id }
+                    .latitude,
+            ).isEqualTo(26.8712)
+            viewModel.mapContent.test {
+                // WhileSubscribed: the empty seed may or may not precede the Room-derived content.
+                var content = awaitItem()
+                if (content.isEmpty) content = awaitItem()
+                assertThat(content.markers.map { it.item.id }).containsExactly(rumi.id)
+                cancelAndIgnoreRemainingEvents()
+            }
+            assertThat(locator.calls.map { it.second }).containsExactly(RUMI, "Nowhere, Atlantis")
+        }
+
+    private companion object {
+        const val RUMI = "Rumi Darwaza, 17/11 Hussainabad Road, Lucknow, Uttar Pradesh 226003"
+    }
 }

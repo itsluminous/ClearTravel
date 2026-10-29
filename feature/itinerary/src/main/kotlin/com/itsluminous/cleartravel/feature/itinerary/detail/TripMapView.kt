@@ -4,18 +4,28 @@ import android.Manifest
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.LocationSearching
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.TravelExplore
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -37,6 +47,7 @@ import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MarkerComposable
 import com.google.maps.android.compose.MarkerState
 import com.google.maps.android.compose.rememberCameraPositionState
+import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.EmptyState
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.model.ItineraryItem
@@ -46,20 +57,32 @@ import com.itsluminous.cleartravel.feature.itinerary.hasMapsApiKey
 import com.itsluminous.cleartravel.feature.itinerary.hasPlayServices
 import com.itsluminous.cleartravel.feature.itinerary.logic.MapUnavailableReason
 import com.itsluminous.cleartravel.feature.itinerary.logic.TripMapContent
+import com.itsluminous.cleartravel.feature.itinerary.logic.TripMapPane
 import com.itsluminous.cleartravel.feature.itinerary.logic.dayColorArgb
 import com.itsluminous.cleartravel.feature.itinerary.logic.mapUnavailableReason
+import com.itsluminous.cleartravel.feature.itinerary.logic.tripMapPane
+import com.itsluminous.cleartravel.feature.itinerary.place.PlaceBackfillProgress
 
 /**
  * Map toggle of the trip screen. Renders the GoogleMap ONLY when the readiness
  * guard passes ([mapUnavailableReason]); otherwise it degrades to an inline notice
  * so the offline-first timeline stays fully usable. Markers are numbered per day
  * and colored by the stable day palette; polylines connect each day's items.
+ *
+ * ADR-048: while the place-location backfill runs ([locating]) an empty map shows
+ * "Finding locations… (n of m)" instead of the bare no-coordinates notice, and a
+ * populated map carries the same line as a small overlay; places still without a
+ * point once the run is over ([unplaced]) are listed with a "Pick on map" action
+ * that opens the item form (where the location picker lives).
  */
 @Composable
 internal fun TripMapView(
     content: TripMapContent,
     onMarkerClick: (ItineraryItem) -> Unit,
     modifier: Modifier = Modifier,
+    locating: PlaceBackfillProgress? = null,
+    unplaced: List<ItineraryItem> = emptyList(),
+    onPickLocation: (ItineraryItem) -> Unit = {},
 ) {
     val context = LocalContext.current
     val unavailableReason =
@@ -80,14 +103,98 @@ internal fun TripMapView(
                     ),
                 modifier = modifier,
             )
-        content.isEmpty ->
+        tripMapPane(content, locating != null) == TripMapPane.LOCATING ->
             EmptyState(
-                icon = Icons.Filled.Map,
-                title = stringResource(R.string.itinerary_map_empty_title),
-                message = stringResource(R.string.itinerary_map_empty_message),
+                icon = Icons.Filled.TravelExplore,
+                title = locatingLabel(checkNotNull(locating)),
+                message = stringResource(R.string.itinerary_map_locating_message),
                 modifier = modifier,
             )
-        else -> ReadyMap(content = content, onMarkerClick = onMarkerClick, modifier = modifier)
+        tripMapPane(content, locating != null) == TripMapPane.EMPTY ->
+            Column(modifier = modifier.fillMaxSize()) {
+                EmptyState(
+                    icon = Icons.Filled.Map,
+                    title = stringResource(R.string.itinerary_map_empty_title),
+                    message = stringResource(R.string.itinerary_map_empty_message),
+                    modifier = Modifier.weight(1f),
+                )
+                UnplacedList(unplaced = unplaced, onPickLocation = onPickLocation)
+            }
+        else ->
+            Column(modifier = modifier.fillMaxSize()) {
+                Box(modifier = Modifier.weight(1f)) {
+                    ReadyMap(content = content, onMarkerClick = onMarkerClick, modifier = Modifier.fillMaxSize())
+                    if (locating != null) {
+                        LocatingChip(progress = locating, modifier = Modifier.align(Alignment.TopStart).padding(12.dp))
+                    }
+                }
+                if (locating == null) UnplacedList(unplaced = unplaced, onPickLocation = onPickLocation)
+            }
+    }
+}
+
+@Composable
+private fun locatingLabel(progress: PlaceBackfillProgress): String =
+    if (progress.total == 0) {
+        stringResource(R.string.itinerary_map_locating_title)
+    } else {
+        stringResource(R.string.itinerary_map_locating_progress, progress.done, progress.total)
+    }
+
+@Composable
+private fun LocatingChip(
+    progress: PlaceBackfillProgress,
+    modifier: Modifier = Modifier,
+) {
+    Surface(modifier = modifier, shape = MaterialTheme.shapes.large, tonalElevation = 4.dp) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+            AutoShrinkText(
+                text = locatingLabel(progress),
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
+    }
+}
+
+/** ADR-048: the places the ladder could not place, each one tap from the location picker. */
+@Composable
+private fun UnplacedList(
+    unplaced: List<ItineraryItem>,
+    onPickLocation: (ItineraryItem) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (unplaced.isEmpty()) return
+    Surface(modifier = modifier.fillMaxWidth(), tonalElevation = 2.dp) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            AutoShrinkText(
+                text = stringResource(R.string.itinerary_map_unplaced_title),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            LazyColumn(modifier = Modifier.heightIn(max = 160.dp)) {
+                items(unplaced, key = { it.id }) { item ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    ) {
+                        AutoShrinkText(
+                            text = item.name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            minScale = 0.8f,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { onPickLocation(item) }) {
+                            AutoShrinkText(stringResource(R.string.itinerary_map_unplaced_pick))
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

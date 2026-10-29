@@ -93,6 +93,8 @@ internal fun TripDetailScreen(
     val mapContent by viewModel.mapContent.collectAsStateWithLifecycle()
     val journeyLabels by viewModel.journeyLabels.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val locating by viewModel.locating.collectAsStateWithLifecycle()
+    val unplaced by viewModel.unplaced.collectAsStateWithLifecycle()
 
     var selectedView by rememberSaveable { mutableStateOf(VIEW_TIMELINE) }
     var sheetItem by remember { mutableStateOf<ItineraryItem?>(null) }
@@ -202,6 +204,10 @@ internal fun TripDetailScreen(
                     TripMapView(
                         content = mapContent,
                         onMarkerClick = { sheetItem = it },
+                        locating = locating,
+                        unplaced = unplaced,
+                        // The item form hosts the location picker (ADR-035).
+                        onPickLocation = { item -> onEditItem(item.tripId, item.id) },
                     )
             }
         }

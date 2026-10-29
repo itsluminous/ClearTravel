@@ -163,10 +163,11 @@ private fun PlaceSummary(
             state.resolving -> stringResource(R.string.itinerary_maps_resolving)
             place != null && place.hasLocation ->
                 stringResource(R.string.itinerary_maps_coordinates, place.latitude ?: 0.0, place.longitude ?: 0.0)
+            state.locating -> stringResource(R.string.itinerary_maps_locating)
             else -> stringResource(R.string.itinerary_maps_no_coordinates)
         }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
-        if (state.resolving) {
+        if (state.resolving || state.locating) {
             CircularProgressIndicator(modifier = Modifier.size(16.dp).padding(end = 8.dp), strokeWidth = 2.dp)
         }
         Text(

@@ -79,6 +79,12 @@
     <string name="itinerary_map_unavailable_play">The map needs Google Play services, which is unavailable on this device. The timeline keeps working offline.</string>
     <string name="itinerary_map_empty_title">No places on the map</string>
     <string name="itinerary_map_empty_message">Add coordinates to your places to see numbered day-wise markers here.</string>
+    <!-- ADR-048: place-location backfill on the map view -->
+    <string name="itinerary_map_locating_title">Finding locations…</string>
+    <string name="itinerary_map_locating_progress">Finding locations… (%1$d of %2$d)</string>
+    <string name="itinerary_map_locating_message">Looking up the places that have no coordinates yet. Markers appear as each one is found.</string>
+    <string name="itinerary_map_unplaced_title">Couldn\'t place these yet</string>
+    <string name="itinerary_map_unplaced_pick">Pick on map</string>
     <string name="itinerary_enable_my_location">Show my location on the map</string>
 
     <!-- Item detail sheet -->
@@ -140,7 +146,8 @@
     <string name="itinerary_maps_unknown_place">Shared place</string>
     <string name="itinerary_maps_resolving">Reading the link…</string>
     <string name="itinerary_maps_coordinates">%1$.5f, %2$.5f</string>
-    <string name="itinerary_maps_no_coordinates">No coordinates in this link - the link itself is kept on the place.</string>
+    <string name="itinerary_maps_locating">Finding the location…</string>
+    <string name="itinerary_maps_no_coordinates">No coordinates yet - the link is kept on the place and Clear Travel keeps looking for its location after you add it.</string>
     <string name="itinerary_maps_target_new_trip">Create new trip</string>
     <string name="itinerary_maps_target_existing_trip">Add to existing trip</string>
     <string name="itinerary_maps_no_trips">No trips yet - create one above.</string>
