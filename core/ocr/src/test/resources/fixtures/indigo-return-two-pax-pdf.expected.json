@@ -1,0 +1,35 @@
+{
+  "flights": [
+    {
+      "passengerName": { "value": "HARI SHANKAR SINGH", "confidence": "MEDIUM" },
+      "pnr": { "value": "0C9ISJ", "confidence": "HIGH" },
+      "carrier": { "value": "6E", "confidence": "MEDIUM" },
+      "flightNumber": { "value": "432", "confidence": "MEDIUM" },
+      "fromAirport": { "value": "PAT", "confidence": "MEDIUM" },
+      "toAirport": { "value": "HYD", "confidence": "MEDIUM" },
+      "flightDate": { "value": "2026-11-10", "confidence": "MEDIUM" },
+      "depTime": { "value": "12:50", "confidence": "MEDIUM" },
+      "arrTime": { "value": "15:00", "confidence": "MEDIUM" },
+      "passengers": [
+        { "name": { "value": "HARI SHANKAR SINGH", "confidence": "MEDIUM" } },
+        { "name": { "value": "RAM NATH SINGH", "confidence": "MEDIUM" } }
+      ]
+    },
+    {
+      "passengerName": { "value": "HARI SHANKAR SINGH", "confidence": "MEDIUM" },
+      "pnr": { "value": "0C9ISJ", "confidence": "HIGH" },
+      "carrier": { "value": "6E", "confidence": "MEDIUM" },
+      "flightNumber": { "value": "6223", "confidence": "MEDIUM" },
+      "fromAirport": { "value": "HYD", "confidence": "MEDIUM" },
+      "toAirport": { "value": "PAT", "confidence": "MEDIUM" },
+      "flightDate": { "value": "2026-11-15", "confidence": "MEDIUM" },
+      "depTime": { "value": "15:40", "confidence": "MEDIUM" },
+      "arrTime": { "value": "17:35", "confidence": "MEDIUM" },
+      "passengers": [
+        { "name": { "value": "HARI SHANKAR SINGH", "confidence": "MEDIUM" } },
+        { "name": { "value": "RAM NATH SINGH", "confidence": "MEDIUM" } }
+      ]
+    }
+  ],
+  "source": "OCR_TEXT"
+}

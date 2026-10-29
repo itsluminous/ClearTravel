@@ -1,6 +1,7 @@
 package com.itsluminous.cleartravel.core.ocr.extract
 
 import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
+import com.itsluminous.cleartravel.core.ocr.extract.FlightSegments.flightKey
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedField
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedFlight
 import com.itsluminous.cleartravel.core.ocr.model.ExtractedPassenger
@@ -60,21 +61,29 @@ internal class FlightDocumentExtractor(
         }
 
     fun extract(text: String): List<ExtractedFlight> {
-        val upper = text.uppercase()
+        val upper = FlightDocumentPages.withoutProsePages(text).uppercase()
         val segmentation = segmenter.segment(upper)
         val preambleText = segmentation.preamble.joinToString("\n")
-        val shared = extractFields(preambleText)
+        // Passenger tables (`Passenger Information` blocks, `Name  Seat  Meal` tables)
+        // list the booking's travellers, wherever the page break put them: their names
+        // are shared by every segment, like the preamble's (ADR-047).
+        val tableNames =
+            (listOf(segmentation.preamble) + segmentation.segments + listOf(segmentation.tail))
+                .flatMap { lines -> tableNames(lines.joinToString("\n")) }
+                .distinctBy { it.value }
+        val shared = extractFields(preambleText).withTableNames(tableNames)
 
         val segments =
             if (segmentation.segments.isEmpty()) {
                 // No flight token anywhere: the whole document is one (possibly empty) segment.
-                listOf(extractFields(upper))
+                listOf(extractFields(upper).withTableNames(tableNames))
             } else {
-                segmentation.segments.map { lines ->
-                    extractFields(lines.joinToString("\n")).inheritShared(shared)
-                }
+                segmentation.segments
+                    .map { lines -> extractFields(lines.joinToString("\n")) }
+                    .dropIdentityOnlyNoise()
+                    .map { it.inheritShared(shared) }
             }
-        val deduped = FlightSegments.dedupe(segments).dropIdentityOnlyNoise()
+        val deduped = FlightSegments.dedupe(segments).settleLocatorReadings(upper)
         val attached = attachSeatTable(deduped, segmentation.tail)
         val completed =
             if (attached.size == 1 && segmentation.segments.isNotEmpty()) {
@@ -95,23 +104,65 @@ internal class FlightDocumentExtractor(
     /**
      * In a multi-flight document a segment that carries NOTHING but a carrier + number
      * (no date, no route, no PNR, no seat) is a stray token — an OCR'd currency sign
-     * before an amount, a fare-table cell — not a flight; a document with a single
-     * segment keeps it so a sparse one-liner still prefills the form.
+     * before an amount, a fare-table cell, an example flight quoted by the fine print —
+     * not a flight. Only MEDIUM-or-better evidence counts: a LOW city pair (`policies
+     * to ensure`) or a LOW bare locator is exactly what prose produces around such a
+     * token. Judged on the segment's OWN text, before the shared header fields are
+     * inherited (every segment would otherwise carry the booking's locator). A later
+     * mention of a flight that IS informative elsewhere is kept so the dedupe can fold
+     * its times, terminals or cabin in. A document with a single segment keeps it so a
+     * sparse one-liner still prefills the form.
      */
     private fun List<ExtractedFlight>.dropIdentityOnlyNoise(): List<ExtractedFlight> {
         if (size <= 1) return this
-        val informative =
-            filter {
-                it.flightDate.isPresent ||
-                    it.fromAirport.isPresent ||
-                    it.toAirport.isPresent ||
-                    it.seat.isPresent ||
-                    (it.pnr.isPresent && it.pnr.confidence != ExtractionConfidence.LOW)
-            }
-        return if (informative.isEmpty()) this else informative
+
+        fun ExtractedField.solid() = isPresent && confidence != ExtractionConfidence.LOW
+
+        fun ExtractedFlight.informative() =
+            flightDate.isPresent || fromAirport.solid() || toAirport.solid() || seat.isPresent || pnr.solid()
+        val informativeKeys = filter { it.informative() }.mapNotNull { it.flightKey() }.toSet()
+        val kept = filter { it.informative() || it.flightKey() in informativeKeys }
+        return if (kept.isEmpty()) this else kept
     }
 
     // ---- per-text field extraction ------------------------------------------------
+
+    /**
+     * A booking's locator is printed in the header of EVERY page, and OCR reads it a
+     * little differently each time (`0C9ISJ` on one page, `OC9ISJ` on the next —
+     * O/0, I/1, S/5, B/8 are the usual confusions). When the labeled readings across
+     * the document disagree only by such look-alike characters, every segment takes
+     * the reading printed MOST OFTEN; two genuinely different locators (an OTA
+     * itinerary with an airline PNR per leg) never influence each other, and a single
+     * reading is kept as it was read — characters are never "corrected" on their own.
+     */
+    private fun List<ExtractedFlight>.settleLocatorReadings(upper: String): List<ExtractedFlight> {
+        val counts =
+            (LABELED_AIRLINE_PNR.findAll(upper) + BARE_LABELED_PNR.findAll(upper))
+                .map { it.groupValues[1] }
+                .groupingBy { it }
+                .eachCount()
+        if (counts.size < 2) return this
+        return map { flight ->
+            val value = flight.pnr.value ?: return@map flight
+            val own = counts[value] ?: 0
+            val majority =
+                counts.entries
+                    .filter { (reading, count) -> count > own && lookAlike(reading, value) }
+                    .maxByOrNull { it.value } ?: return@map flight
+            flight.copy(pnr = flight.pnr.copy(value = majority.key))
+        }
+    }
+
+    /** Same length and, at every position, the same character or two from one OCR confusion set. */
+    private fun lookAlike(
+        a: String,
+        b: String,
+    ): Boolean =
+        a.length == b.length &&
+            a.indices.all { i ->
+                a[i] == b[i] || OCR_CONFUSIONS.any { set -> a[i] in set && b[i] in set }
+            }
 
     private fun extractFields(text: String): ExtractedFlight {
         if (text.isBlank()) return ExtractedFlight.EMPTY
@@ -135,7 +186,7 @@ internal class FlightDocumentExtractor(
             passengers =
                 extractPassengers(
                     names = extractNames(text, lines),
-                    seat = extractSeat(text),
+                    seat = extractSeat(lines, token?.carrier),
                     sequenceNumber = if (profile == Profile.BOARDING_PASS) extractSequence(text) else ExtractedField.EMPTY,
                 ),
         )
@@ -178,10 +229,20 @@ internal class FlightDocumentExtractor(
                 else -> passengers
             }
         return copy(
-            pnr = pnr.orElse(shared.pnr),
+            // A labeled locator in the header beats a bare six-character token found
+            // inside the segment (`02HOUR` of a travel-time line); equal confidence
+            // keeps the segment's own (a per-leg airline PNR next to an OTA booking id).
+            pnr = if (shared.pnr.isPresent && shared.pnr.confidence < pnr.confidence) shared.pnr else pnr.orElse(shared.pnr),
             cabinClass = cabinClass.orElse(shared.cabinClass),
             passengers = inherited,
         )
+    }
+
+    /** The preamble's fields with [names] (document-level passenger tables) appended to its passengers. */
+    private fun ExtractedFlight.withTableNames(names: List<ExtractedField>): ExtractedFlight {
+        if (names.isEmpty()) return this
+        val incoming = names.map { ExtractedPassenger(name = it) }
+        return copy(passengers = ExtractedPassenger.merge(passengers, incoming))
     }
 
     /**
@@ -198,27 +259,69 @@ internal class FlightDocumentExtractor(
         labeledName.find(text)?.let {
             return listOf(ExtractedField.of(displayName(it.groupValues[1]), ExtractionConfidence.HIGH))
         }
-        SLASH_NAME.find(text)?.let {
+        // A BCBP-style `SHARMA/RAHUL MR` fills its cell on its own; `PNR/BOOKING
+        // REFERENCE …` and `CHECK-IN/BAG DROP …` never do.
+        lines.asSequence().flatMap { it.cells() }.firstNotNullOfOrNull { SLASH_NAME_CELL.matchEntire(it) }?.let {
             return listOf(ExtractedField.of(displayName(it.groupValues[1]), ExtractionConfidence.MEDIUM))
         }
-        val header = lines.indexOfFirst { it.startsWith("NAME") && it.cells().size >= 2 }
-        if (header >= 0) {
-            fun nameCell(line: String): String? {
-                val cells = line.cells()
-                return cells.firstOrNull()?.takeIf { cells.size >= 2 && PLAIN_NAME.matches(it) }
-            }
-            val below = lines.drop(header + 1)
-            val contiguous =
-                below
-                    .asSequence()
-                    .map(::nameCell)
-                    .takeWhile { it != null }
-                    .filterNotNull()
-                    .toList()
-            val names = contiguous.ifEmpty { listOfNotNull(below.firstNotNullOfOrNull(::nameCell)) }
-            return names.distinct().map { ExtractedField.of(it, ExtractionConfidence.MEDIUM) }
-        }
         return emptyList()
+    }
+
+    /**
+     * The names a passenger table prints (ADR-047), in order — these describe the
+     * BOOKING, so [extract] shares them with every segment. Two layouts:
+     *
+     * - a `Name  Seat  Meal  Status` row header: every contiguous row below whose first
+     *   cell is a plain name (falling back to the first such row anywhere below);
+     * - a `Passenger Information` / `Traveller Details` block header on a row of its
+     *   own: every contiguous row below that OPENS with a name — the leading run of
+     *   words before the passenger's type, gender or title (`hari shankar singh Adult |
+     *   Male`), read across cell breaks because OCR splits long names.
+     */
+    private fun tableNames(text: String): List<ExtractedField> {
+        val lines = text.lines()
+        val rowHeader = lines.indexOfFirst { it.startsWith("NAME") && it.cells().size >= 2 }
+        val blockHeader = lines.indexOfFirst { PASSENGER_BLOCK_HEADER.matches(it) }
+        val header = listOf(rowHeader, blockHeader).filter { it >= 0 }.minOrNull() ?: return emptyList()
+        val nameOf: (String) -> String? =
+            if (header == rowHeader) {
+                { line ->
+                    val cells = line.cells()
+                    cells.firstOrNull()?.takeIf { cells.size >= 2 && PLAIN_NAME.matches(it) }
+                }
+            } else {
+                ::leadingName
+            }
+        val below = lines.drop(header + 1)
+        val contiguous =
+            below
+                .asSequence()
+                .map(nameOf)
+                .takeWhile { it != null }
+                .filterNotNull()
+                .toList()
+        val names =
+            contiguous.ifEmpty {
+                if (header == rowHeader) listOfNotNull(below.firstNotNullOfOrNull(nameOf)) else emptyList()
+            }
+        return names.distinct().map { ExtractedField.of(it, ExtractionConfidence.MEDIUM) }
+    }
+
+    /**
+     * `HARI SHANKAR SINGH ADULT | MALE|` → `HARI SHANKAR SINGH`: a leading title is
+     * dropped, then two to four alphabetic words up to the first non-name word (a
+     * passenger type, gender, status, label or anything with digits/punctuation).
+     */
+    private fun leadingName(line: String): String? {
+        val words =
+            line
+                .cells()
+                .joinToString(" ")
+                .split(' ')
+                .filter { it.isNotEmpty() }
+        val body = words.dropWhile { it.trimEnd('.') in TITLES }
+        val run = body.takeWhile { NAME_WORD.matches(it) && it !in PASSENGER_ROW_STOPWORDS }
+        return run.takeIf { it.size in 2..4 }?.joinToString(" ")
     }
 
     /** `MR ARJUN NAIR` -> `ARJUN NAIR`; `SHARMA/RAHUL MR` -> `RAHUL SHARMA`. */
@@ -247,7 +350,9 @@ internal class FlightDocumentExtractor(
         LABELED_AIRLINE_PNR.find(text)?.let {
             return ExtractedField.of(it.groupValues[1], ExtractionConfidence.HIGH)
         }
-        // Unlabeled-by-separator `PNR R87T5G` (needs a digit so `PNR STATUS` never matches).
+        // Unlabeled-by-separator `PNR R87T5G`, `PNR/Booking Reference OC9ISJ`: the value
+        // needs a digit or must end its cell, so `PNR STATUS` / `BOOKING REFERENCE
+        // NUMBER:` never match.
         BARE_LABELED_PNR.find(text)?.let {
             return ExtractedField.of(it.groupValues[1], ExtractionConfidence.HIGH)
         }
@@ -275,6 +380,9 @@ internal class FlightDocumentExtractor(
         PAREN_ROUTE.find(text)?.let { m ->
             return Route(field(m.groupValues[1], ExtractionConfidence.MEDIUM), field(m.groupValues[2], ExtractionConfidence.MEDIUM))
         }
+        // `PAT-Jay Prakash Narayan International Airport  HYD-Rajiv Gandhi International
+        // Airport` — one row, a `CODE-Airport name` cell per end (airline e-tickets).
+        codeNamePair(text)?.let { return it }
         ARROW_ROUTE.find(text)?.let { m ->
             if (m.groupValues[1] !in iataStopwords && m.groupValues[2] !in iataStopwords) {
                 return Route(field(m.groupValues[1], ExtractionConfidence.MEDIUM), field(m.groupValues[2], ExtractionConfidence.MEDIUM))
@@ -294,6 +402,21 @@ internal class FlightDocumentExtractor(
             return Route(field(m.groupValues[1], ExtractionConfidence.LOW), field(m.groupValues[2], ExtractionConfidence.LOW))
         }
         return Route(ExtractedField.EMPTY, ExtractedField.EMPTY)
+    }
+
+    /** The first row holding two `CODE-Airport name` cells, read as departure then arrival. */
+    private fun codeNamePair(text: String): Route? {
+        for (line in text.lines()) {
+            val codes =
+                line
+                    .cells()
+                    .mapNotNull { CODE_NAME_CELL.matchEntire(it)?.groupValues?.get(1) }
+                    .filter { it !in iataStopwords }
+            if (codes.size >= 2 && codes[0] != codes[1]) {
+                return Route(field(codes[0], ExtractionConfidence.MEDIUM), field(codes[1], ExtractionConfidence.MEDIUM))
+            }
+        }
+        return null
     }
 
     private data class TimeStop(
@@ -317,7 +440,29 @@ internal class FlightDocumentExtractor(
         val stops = timeStops(text)
         if (dep == null && stops.isNotEmpty()) dep = field(stops[0].time, ExtractionConfidence.MEDIUM)
         if (arr == null && stops.size >= 2) arr = field(stops[1].time, ExtractionConfidence.MEDIUM)
+        if (dep == null && arr == null) {
+            // `12:50, 10 Nov 2026  15:00, 10 Nov 2026` — a row of two dated clock times
+            // under the departure and arrival columns.
+            val dated = datedTimes(text)
+            if (dated.size >= 2) {
+                dep = field(dated[0], ExtractionConfidence.MEDIUM)
+                arr = field(dated[1], ExtractionConfidence.MEDIUM)
+            }
+        }
         return (dep ?: ExtractedField.EMPTY) to (arr ?: ExtractedField.EMPTY)
+    }
+
+    /** The clock times of the first row that prints at least two `time, date` / `date, time` stamps. */
+    private fun datedTimes(text: String): List<String> {
+        for (line in text.lines()) {
+            val times =
+                DATED_TIME
+                    .findAll(line)
+                    .mapNotNull { normalizeTime(it.groupValues[1].ifEmpty { it.groupValues[2] }) }
+                    .toList()
+            if (times.size >= 2) return times
+        }
+        return emptyList()
     }
 
     /** `8:30`, `08:30 AM`, `1:05 PM` -> `HH:mm`; null when not a clock time. */
@@ -417,7 +562,8 @@ internal class FlightDocumentExtractor(
         // prefix, or the route header's own line) earns MEDIUM; anywhere else LOW.
         for (line in lines) {
             val iso = OcrDates.parseToIso(line) ?: continue
-            val structural = WEEKDAY.containsMatchIn(line) || ROUTE_LINE.containsMatchIn(line)
+            val structural =
+                WEEKDAY.containsMatchIn(line) || ROUTE_LINE.containsMatchIn(line) || DATED_TIME.findAll(line).count() >= 2
             return field(iso, if (structural) ExtractionConfidence.MEDIUM else ExtractionConfidence.LOW)
         }
         return ExtractedField.EMPTY
@@ -429,10 +575,37 @@ internal class FlightDocumentExtractor(
         return ExtractedField.EMPTY
     }
 
-    private fun extractSeat(text: String): ExtractedField {
-        LABELED_SEAT.find(text)?.let { return field(it.groupValues[1], ExtractionConfidence.HIGH) }
+    /**
+     * `Seat 12A` / `Seat: 34C` in one cell, or a `Seat` label cell followed by a cell
+     * holding nothing but the seat (HIGH); on a boarding pass a bare `12A` (LOW). A
+     * column header `Seat  6E Add-ons` is neither: the value cell carries more than a
+     * seat, and a bare candidate equal to the document's airline code ([carrier]) or
+     * sitting inside a flight token (`6E 432`) is the airline, not row 6 seat E.
+     */
+    private fun extractSeat(
+        lines: List<String>,
+        carrier: String?,
+    ): ExtractedField {
+        for (line in lines) {
+            val cells = line.cells()
+            cells.forEachIndexed { index, cell ->
+                LABELED_SEAT_IN_CELL.find(cell)?.let { return field(it.groupValues[1], ExtractionConfidence.HIGH) }
+                if (SEAT_LABEL_CELL.matches(cell)) {
+                    cells.getOrNull(index + 1)?.let { next ->
+                        SEAT_VALUE_CELL.matchEntire(next)?.let { return field(it.groupValues[1], ExtractionConfidence.HIGH) }
+                    }
+                }
+            }
+        }
         if (profile == Profile.BOARDING_PASS) {
-            BARE_SEAT.find(text)?.let { return field(it.groupValues[1], ExtractionConfidence.LOW) }
+            for (line in lines) {
+                val tokenRanges = tokens.findAll(line).map { it.range }
+                BARE_SEAT
+                    .findAll(line)
+                    .firstOrNull { m ->
+                        m.groupValues[1] != carrier && tokenRanges.none { it.first <= m.range.last && m.range.first <= it.last }
+                    }?.let { return field(it.groupValues[1], ExtractionConfidence.LOW) }
+            }
         }
         return ExtractedField.EMPTY
     }
@@ -519,23 +692,71 @@ internal class FlightDocumentExtractor(
             """((?:MR|MRS|MS|MSTR|MISS|DR)\.?[ ]+[A-Z]+(?:[ ]+[A-Z]+)*|""" +
                 """[A-Z]{2,25}/[A-Z]{2,25}(?:[ ]+[A-Z]{1,10})?|[A-Z]+(?:[ ]+[A-Z]+)+)"""
 
-        /** `SHARMA/RAHUL MR` — but never a URL path segment (`.COM/PROMOS`). */
-        val SLASH_NAME = Regex("""(?<![/.:])\b([A-Z]{2,25}/[A-Z]{2,25}(?:[ ]+MRS?|[ ]+MS)?)\b""")
+        /** `SHARMA/RAHUL MR` filling a whole cell — never `PNR/BOOKING REFERENCE …` or a URL path. */
+        val SLASH_NAME_CELL = Regex("""([A-Z]{2,25}/[A-Z]{2,25}(?:[ ]+MRS?|[ ]+MS)?)""")
         val PLAIN_NAME = Regex("""[A-Z]{2,}(?: [A-Z]{2,}){1,3}""")
-        val LABELED_AIRLINE_PNR =
-            Regex(
-                """(?:AIRLINE[ ]+PNR|PNR|BOOKING[ ]*REF(?:ERENCE)?|CONFIRMATION|RECORD[ ]*LOCATOR)""" +
-                    """\s*\)?\s*(?:NO\.?|NUMBER)?\s*\(?(?:PNR)?\)?\s*[:#\-]\s*([A-Z0-9]{6})\b""",
+        val NAME_WORD = Regex("""[A-Z]{2,}""")
+
+        /** `Passenger Information`, `Traveller Details`, `Passengers` — a block header on a row of its own. */
+        val PASSENGER_BLOCK_HEADER =
+            Regex("""(?:PASSENGER|TRAVELLER|TRAVELER|GUEST)S?(?:[ ]+(?:INFORMATION|DETAILS?|NAMES?|LIST))?[ ]*:?""")
+
+        /** Words that end a passenger row's name: type, gender, status, column labels. */
+        val PASSENGER_ROW_STOPWORDS =
+            setOf(
+                "ADULT",
+                "CHILD",
+                "INFANT",
+                "MALE",
+                "FEMALE",
+                "CONFIRMED",
+                "CANCELLED",
+                "WAITLISTED",
+                "SEAT",
+                "MEAL",
+                "STATUS",
+                "SECTOR",
+                "TICKET",
+                "PNR",
+                "AGE",
+                "GENDER",
+                "TYPE",
+                "YRS",
+                "YEARS",
             )
-        val BARE_LABELED_PNR = Regex("""(?:AIRLINE[ ]+PNR|\bPNR)\s+((?=[A-Z0-9]*\d)[A-Z0-9]{6})\b""")
+        const val PNR_LABELS = """(?:AIRLINE[ ]+PNR|PNR|BOOKING[ ]*REF(?:ERENCE)?|CONFIRMATION|RECORD[ ]*LOCATOR)"""
+        const val PNR_LABEL_CHAIN = PNR_LABELS + """(?:\s*/\s*""" + PNR_LABELS + """)?\s*\)?\s*(?:NO\.?|NUMBER)?\s*\(?(?:PNR)?\)?"""
+        val LABELED_AIRLINE_PNR = Regex(PNR_LABEL_CHAIN + """\s*[:#\-]\s*([A-Z0-9]{6})\b""")
+
+        /** Whitespace-separated label: the value carries a digit or ends its cell (`BOOKING REFERENCE NUMBER:` never qualifies). */
+        val BARE_LABELED_PNR = Regex("""\b""" + PNR_LABEL_CHAIN + """\s((?=[A-Z0-9]*\d)[A-Z0-9]{6}|[A-Z]{6}(?=\s\s|\s*$))\b""")
+
+        /** Characters OCR swaps for one another in upper-case alphanumerics. */
+        val OCR_CONFUSIONS = listOf("O0QD", "I1L", "S5", "B8", "Z2", "G6")
         val LABELED_OTA_REF =
             Regex("""(?:BOOKING[ ]+ID|TRIP[ ]+ID|ORDER[ ]+ID|REFERENCE[ ]+ID)\s*[:#\-]\s*([A-Z]{0,4}\s?-?\s?\d{6,16})\b""")
-        val BARE_PNR = Regex("""\b(?=[A-Z0-9]*[A-Z])(?=[A-Z0-9]*\d)([A-Z0-9]{6})\b""")
+
+        /** Six alphanumerics mixing letters and digits — but not a quantity (`02HOUR`, `10MINS`, `100KGS`). */
+        val BARE_PNR =
+            Regex("""\b(?!\d{1,3}(?:HOUR|HOURS|HRS|HR|MIN|MINS|KGS|KG|DAYS|PCS)\b)(?=[A-Z0-9]*[A-Z])(?=[A-Z0-9]*\d)([A-Z0-9]{6})\b""")
         val LABELED_ROUTE =
             Regex("""FROM\s*[:\-]?\s*[A-Z ]*\(?([A-Z]{3})\)?\s+TO\s*[:\-]?\s*[A-Z ]*\(?([A-Z]{3})\)?""")
         val PAREN_ROUTE =
             Regex("""\(([A-Z]{3})\)\s*(?:->|→|—|–|-|\bTO\b)\s*[A-Z ]*\(([A-Z]{3})\)""")
-        val ARROW_ROUTE = Regex("""\b([A-Z]{3})\s*(?:->|→|—|–|-)\s*([A-Z]{3})\b""")
+        val ARROW_ROUTE = Regex("""\b([A-Z]{3})\s*(?:->|→|—|–|-)\s*([A-Z]{3})\b${FlightSegmenter.CODE_PAIR_GUARD}""")
+
+        /** `PAT-Jay Prakash Narayan International Airport` — a code and the airport's name in one cell. */
+        val CODE_NAME_CELL = Regex("""([A-Z]{3})\s*[-–—:]\s*[A-Z][A-Z .,'()&]{3,}""")
+
+        /** `10 Nov 2026`, `10-11-2026` — the date half of a [DATED_TIME] stamp (non-capturing). */
+        const val STAMP_DATE = """(?:\d{1,2}\s*[-/. ]?\s*[A-Z]{3,9}\s*[-/. ,]?\s*\d{2,4}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})"""
+
+        /** `12:50, 10 Nov 2026` or `10 Nov 2026, 12:50` — a clock time stamped with its date. */
+        val DATED_TIME =
+            Regex(
+                """\b(\d{1,2}:\d{2}(?:\s*[AP]M)?)\s*[,.]?\s*$STAMP_DATE\b""" +
+                    """|\b$STAMP_DATE\s*[,.]?\s*(\d{1,2}:\d{2}(?:\s*[AP]M)?)\b""",
+            )
         val CITY_ARROW_ROUTE = Regex("""\b([A-Z]{4,15})\s*(?:->|→|—|–|\+|\s-\s)\s*([A-Z]{4,15})\b""")
         val CITY_ROUTE = Regex("""\b([A-Z]{4,15}(?:[ ][A-Z]{2,15})?)[ ]+TO[ ]+([A-Z]{4,15}(?:[ ][A-Z]{2,15})?)\b""")
         val ROUTE_LINE = Regex("""\b[A-Z]{3,}\s*(?:→|->|—|–|\+|\s-\s)\s*[A-Z]{3,}\b|\([A-Z]{3}\)""")
@@ -562,7 +783,9 @@ internal class FlightDocumentExtractor(
         val LABELED_CABIN =
             Regex("""(?:CABIN[ ]+CLASS|TRAVEL[ ]+CLASS|CABIN|CLASS)\s*[:\-]\s*(PREMIUM[ ]+ECONOMY|ECONOMY|BUSINESS|FIRST)\b""")
         val BARE_CABIN = Regex("""\b(PREMIUM[ ]+ECONOMY|ECONOMY|BUSINESS[ ]+CLASS|FIRST[ ]+CLASS)\b""")
-        val LABELED_SEAT = Regex("""\bSEAT\s*(?:NO\.?)?\s*[:\-]?\s*(\d{1,3}[A-K])\b""")
+        val LABELED_SEAT_IN_CELL = Regex("""\bSEAT\s*(?:NO\.?)?\s*[:\-]?\s*(\d{1,3}[A-K])\b""")
+        val SEAT_LABEL_CELL = Regex("""(?:[A-Z ]+ )?SEAT\s*(?:NO\.?)?\s*[:\-]?""")
+        val SEAT_VALUE_CELL = Regex("""(\d{1,3}[A-K])[.,;]?""")
         val BARE_SEAT = Regex("""\b(\d{1,2}[A-F])\b""")
         val LABELED_SEQ = Regex("""SEQ(?:UENCE)?\s*(?:NO\.?)?\s*[:\-]?\s*(\d{1,5})\b""")
         val SEAT_TABLE_ROW = Regex("""\b([A-Z]{3})\s*(?:-|–|—|->|→)\s*([A-Z]{3})\b.*?\b(\d{1,3}[A-K])\b""")

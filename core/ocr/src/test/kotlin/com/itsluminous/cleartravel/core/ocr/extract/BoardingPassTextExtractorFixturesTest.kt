@@ -73,6 +73,20 @@ class BoardingPassTextExtractorFallbackTest {
     }
 
     @Test
+    fun `a booking confirmation handed to the pass importer still yields every leg and passenger`() {
+        // ADR-045 amended: the IndiGo per-passenger print through the BOARDING_PASS profile.
+        val result = extractor.extract(FixtureLoader.read("indigo-return-two-pax-pdf.txt"))
+
+        assertThat(result.flights.map { it.flightNumber.value }).containsExactly("432", "6223").inOrder()
+        assertThat(result.flights.map { it.flightDate.value }).containsExactly("2026-11-10", "2026-11-15").inOrder()
+        for (flight in result.flights) {
+            assertThat(flight.passengers.map { it.name.value }).containsExactly("HARI SHANKAR SINGH", "RAM NATH SINGH").inOrder()
+            // No bare `6E` seat from the `Seat  6E Add-ons` header or the flight token.
+            assertThat(flight.passengers.none { it.seat.isPresent }).isTrue()
+        }
+    }
+
+    @Test
     fun `two pages for the same flight are one segment`() {
         val page = FixtureLoader.read("boarding-pass-1.txt")
         val result = extractor.extract(page + "\n\n" + page)

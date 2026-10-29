@@ -126,22 +126,33 @@ internal class FlightSegmenter(
 
     companion object {
         /**
-         * `PNR: X3C9GI`, `Airline PNR R87T5G` — the per-segment record locator. With a
-         * separator any 6 alphanumerics qualify; without one the value must contain a
-         * digit, so `PNR STATUS` is never a locator.
+         * `PNR: X3C9GI`, `Airline PNR R87T5G`, `PNR/Booking Reference OC9ISJ` — the
+         * per-segment record locator: the label (or a slash-joined pair of labels)
+         * followed by a separator and any 6 alphanumerics, or by whitespace and a value
+         * that contains a digit or ends its cell, so `PNR STATUS` and
+         * `BOOKING REFERENCE NUMBER:` are never locators.
          */
         val LABELED_PNR_IN_LINE =
             Regex(
-                """(?:AIRLINE\s+PNR|\bPNR)\s*(?:NO\.?|NUMBER)?\s*""" +
-                    """(?:[:#\-]\s*([A-Z0-9]{6})|((?=[A-Z0-9]*\d)[A-Z0-9]{6}))\b""",
+                """(?:AIRLINE\s+PNR|\bPNR|\bBOOKING\s*REF(?:ERENCE)?|\bRECORD\s*LOCATOR)""" +
+                    """(?:\s*/\s*(?:PNR|BOOKING\s*REF(?:ERENCE)?|RECORD\s*LOCATOR))?""" +
+                    """\s*\)?\s*(?:NO\.?|NUMBER)?\s*\(?(?:PNR)?\)?\s*""" +
+                    """(?:[:#\-]\s*([A-Z0-9]{6})|\s((?=[A-Z0-9]*\d)[A-Z0-9]{6}|[A-Z]{6}(?=\s\s|\s*$)))\b""",
             )
+
+        /**
+         * `XXX-YYY` — but not `PAT-Jay Prakash Narayan International Airport`, where the
+         * right side opens an airport NAME (three or more unpunctuated words follow);
+         * `DEL - GOI Date: …` and `BLR - HYD Travel Date: …` stay pairs.
+         */
+        const val CODE_PAIR_GUARD = """(?![ ][A-Z]{2,}[ ][A-Z]{2,}[ ][A-Z]{2,})"""
 
         private val CITY_ARROW = Regex("""\b[A-Z]{3,}\s*(?:→|->|—|–|\+|\s-\s)\s*[A-Z]{3,}\b""")
         private val PAREN_ROUTE = Regex("""\([A-Z]{3}\)\s*(?:→|->|—|–|-|\bTO\b)\s*[A-Z ]*\([A-Z]{3}\)""")
-        private val CODE_PAIR = Regex("""\b[A-Z]{3}\s*(?:->|→|—|–|-)\s*[A-Z]{3}\b""")
+        private val CODE_PAIR = Regex("""\b[A-Z]{3}\s*(?:->|→|—|–|-)\s*[A-Z]{3}\b$CODE_PAIR_GUARD""")
         private val IATA_TIME_BLOCK = Regex("""\b[A-Z]{3}\s+\d{1,2}:\d{2}\b|\b\d{1,2}:\d{2}\s+[A-Z]{3}\b""")
         private val LEG_LABEL =
-            Regex("""^(?:ONWARD|RETURN|OUTBOUND|INBOUND|DEPARTING|RETURNING)\b|^(?:FLIGHT|SEGMENT|LEG|SECTOR)\s*\d\b""")
+            Regex("""^(?:ONWARD|RETURN(?:ING|ED)?|OUTBOUND|INBOUND|DEPARTING)\b|^(?:FLIGHT|SEGMENT|LEG|SECTOR)\s*\d\b""")
         private val PASS_HEADER = Regex("""\bBOARDING\s+PASS\b""")
         private val LABELED_ROUTE = Regex("""\bFROM\s*[:\-]?\s*[A-Z ]*\(?[A-Z]{3}\)?\s+TO\b""")
 

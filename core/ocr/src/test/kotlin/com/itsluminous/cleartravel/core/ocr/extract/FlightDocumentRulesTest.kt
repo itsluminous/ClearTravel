@@ -88,6 +88,17 @@ class FlightTokensTest {
         assertThat(keys("Total Amount Paid RS 4520")).isEmpty()
         assertThat(keys("ON 29 Oct")).isEmpty()
     }
+
+    @Test
+    fun `a currency sign OCR'd as a letter tight against its amount is not a flight`() {
+        assertThat(keys("Aviation Security Fee  T944")).isEmpty()
+        assertThat(keys("Total fare  Z40650")).isEmpty()
+        assertThat(keys("GST for Bihar  T780")).isEmpty()
+        // A real carrier keeps a space or dash before its number.
+        assertThat(keys("6E 432 . A320")).containsExactly("6E432")
+        assertThat(keys("6E 6223. A320")).containsExactly("6E6223")
+        assertThat(keys("IX-2019")).containsExactly("IX2019")
+    }
 }
 
 class FlightSegmentsTest {

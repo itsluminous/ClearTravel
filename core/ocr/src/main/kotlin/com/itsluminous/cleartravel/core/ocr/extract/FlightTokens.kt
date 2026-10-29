@@ -27,8 +27,10 @@ internal data class FlightToken(
  *    document also prints a code and it disagrees with the alias (OCR `lX-1542`), the
  *    alias wins — names survive OCR far better than two-letter codes.
  * 3. **Bare** — `6E 6114`, `AI 0503`, `IX-2019` → MEDIUM, filtered against the
- *    stop-word list (`ON 29`, `RS 4520`), unit suffixes (`2h 35m`, `15 Kgs`) and
- *    aircraft type names (`A320`, `B737`).
+ *    stop-word list (`ON 29`, `RS 4520`), unit suffixes (`2h 35m`, `15 Kgs`), aircraft
+ *    type names (`A320`, `B737`) and amounts whose currency sign OCR turned into a
+ *    letter (`T944`, `Z40650` — a letter+digit carrier never prints tight against
+ *    its number).
  */
 internal class FlightTokens(
     val rules: FlightDocumentRules = FlightDocumentRules.BUNDLED,
@@ -63,7 +65,10 @@ internal class FlightTokens(
             val digits = m.groupValues[2]
             val separated = m.value.length > carrier.length + digits.length
             val aircraft = !separated && AIRCRAFT_PREFIX.matches(carrier) && digits.length == 2
-            if (carrier !in stopwords && !aircraft && found.none { it.range.overlaps(m.range) }) {
+            // `T944`, `Z40650` — a currency sign OCR'd as a letter in front of an amount:
+            // a letter+digit carrier never prints tight against its number.
+            val amount = !separated && AMOUNT_PREFIX.matches(carrier)
+            if (carrier !in stopwords && !aircraft && !amount && found.none { it.range.overlaps(m.range) }) {
                 found += FlightToken(carrier, strip(digits), ExtractionConfidence.MEDIUM, m.range)
             }
         }
@@ -90,5 +95,6 @@ internal class FlightTokens(
             Regex("""FLIGHT\s*(?:NO\.?|NUMBER)?\s*[:\-]?\s*([A-Z][A-Z0-9]|\d[A-Z])\s*-?\s*(\d{1,4})\b$UNIT_GUARD""")
         val BARE = Regex("""\b([A-Z][A-Z0-9]|\d[A-Z])[ ]?-?[ ]?(\d{2,4})\b$UNIT_GUARD""")
         val AIRCRAFT_PREFIX = Regex("""[AB]\d""")
+        val AMOUNT_PREFIX = Regex("""[A-Z]\d""")
     }
 }

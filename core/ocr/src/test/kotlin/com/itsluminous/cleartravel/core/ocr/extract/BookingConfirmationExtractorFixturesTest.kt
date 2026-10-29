@@ -18,7 +18,11 @@ import org.junit.runners.Parameterized
  * `blr-lko-confirmation-pdf` the ML Kit text of a real 3-page MakeMyTrip e-ticket
  * (both legs on page 1, baggage/fare pages repeating the flights without dates),
  * `blr-lko-confirmation-two-pax` the same OTA itinerary booked for TWO travellers —
- * a second seat-fare / meal row per leg → every segment carries two passengers (ADR-047).
+ * a second seat-fare / meal row per leg → every segment carries two passengers (ADR-047),
+ * `indigo-return-two-pax-pdf` the ML Kit text of a real 9-page IndiGo "Modify Itinerary"
+ * print — a page PAIR per passenger (header + `Passenger Information` + DEPARTING leg,
+ * then the RETURNED leg), a fare page and four pages of conditions → two segments, both
+ * passengers on each, the repeated per-passenger pages folded (ADR-045 amended).
  */
 @RunWith(Parameterized::class)
 class BookingConfirmationExtractorFixturesTest(
@@ -49,6 +53,7 @@ class BookingConfirmationExtractorFixturesTest(
                 "blr-lko-confirmation",
                 "blr-lko-confirmation-pdf",
                 "blr-lko-confirmation-two-pax",
+                "indigo-return-two-pax-pdf",
             )
     }
 }
@@ -392,4 +397,184 @@ class BookingConfirmationExtractorBehaviorTest {
         val noRoute = flights("6E 6114 Travel Date: 05-11-2026").single()
         assertThat(noRoute.hasMinimumFields).isFalse()
     }
+
+    // ---- ADR-045 amended (2026-10-29): airline prints that repeat the itinerary per passenger ----
+
+    /** One IndiGo "Modify Itinerary" page pair for [name]: the departing leg, then the return. */
+    private fun indigoPages(
+        name: String,
+        pnr: String = "OC9ISJ",
+    ) = """
+        24/10/2026, 21:11  Modify ltinerary
+        IndiGo  *Date of booking 24th October 2026 21:10
+        PNR/Booking Reference $pnr  Confirmed  Payment Status Complete
+        Passenger Information
+        $name Adult | Male|
+        Sector  Seat  6E Add-ons
+        PAT-HYD
+        HYD-PAT
+        DEPARTING  Saver fare
+        6E 432 . A320
+        Check-in/Bag Drop Closes 11:50
+        Travel time 02Hour 10min
+        Patna  Hyderabad
+        PAT-Jay Prakash Narayan lInternational Airport  HYD-Rajiv Gandhi lInternational Airport
+        12:50, 10 Nov 2026  15:00, 10 Nov 2026
+
+        24/10/2026, 21:11  Modify ltinerary
+        IndiGo  *Date of booking 24th October 2026 21:10
+        PNR/Booking Reference $pnr  Confirmed  Payment Status Complete
+        RETURNED Saver fare
+        6E 6223. A320
+        Check-in/Bag Drop Closes 14:40
+        Hyderabad  Travel time 01Hour 55min  Patna
+        HYD-Rajiv Gandhi International Airport  PAT-Jay Prakash Narayan International Airport
+        15:40, 15 Nov 2026  17:35, 15 Nov 2026
+        """.trimIndent()
+
+    @Test
+    fun `a page pair per passenger folds into one segment per leg with every passenger`() {
+        val result = flights(indigoPages("hari shankar singh") + "\n\n" + indigoPages("ram nath  singh"))
+
+        assertThat(result.map { it.flightKeyForTest() }).containsExactly("6E432", "6E6223").inOrder()
+        assertThat(result.map { it.flightDate.value }).containsExactly("2026-11-10", "2026-11-15").inOrder()
+        for (segment in result) {
+            assertThat(segment.passengers.map { it.name.value })
+                .containsExactly("HARI SHANKAR SINGH", "RAM NATH SINGH")
+                .inOrder()
+            assertThat(segment.pnr.value).isEqualTo("OC9ISJ")
+            assertThat(segment.pnr.confidence).isEqualTo(ExtractionConfidence.HIGH)
+        }
+    }
+
+    @Test
+    fun `a passenger information block names the row and drops the type and gender tail`() {
+        val result = flights(indigoPages("Mr. hari shankar singh")).first()
+
+        assertThat(result.passengers.map { it.name.value }).containsExactly("HARI SHANKAR SINGH")
+        // `Seat  6E Add-ons` is a column header, `6E` the airline: nobody sits in 6E.
+        assertThat(
+            result.passengers
+                .single()
+                .seat.isPresent,
+        ).isFalse()
+    }
+
+    @Test
+    fun `departing and returned legs read their dated time row and code-name airports`() {
+        val (onward, back) = flights(indigoPages("hari shankar singh"))
+
+        assertThat(onward.fromAirport.value).isEqualTo("PAT")
+        assertThat(onward.toAirport.value).isEqualTo("HYD")
+        assertThat(onward.depTime.value).isEqualTo("12:50")
+        assertThat(onward.arrTime.value).isEqualTo("15:00")
+        assertThat(onward.flightDate.value).isEqualTo("2026-11-10")
+        assertThat(onward.flightDate.confidence).isEqualTo(ExtractionConfidence.MEDIUM)
+        assertThat(back.fromAirport.value).isEqualTo("HYD")
+        assertThat(back.toAirport.value).isEqualTo("PAT")
+        assertThat(back.depTime.value).isEqualTo("15:40")
+        assertThat(back.arrTime.value).isEqualTo("17:35")
+        // `6E 432 . A320` / `6E 6223. A320`: the aircraft after the dot is not part of the number.
+        assertThat(listOf(onward, back).map { it.flightNumber.value }).containsExactly("432", "6223").inOrder()
+    }
+
+    @Test
+    fun `a travel-time quantity is never a locator`() {
+        val result =
+            flights(
+                """
+                6E 432 PAT-HYD 10 Nov 2026
+                Travel time 02Hour 10min
+                """,
+            ).single()
+
+        assertThat(result.pnr.isPresent).isFalse()
+    }
+
+    @Test
+    fun `a slash-joined label pair reads the locator and the header PNR beats a bare token`() {
+        val labeled = flights("6E 432 PAT-HYD 10 Nov 2026\nPNR/Booking Reference OC9ISJ  Confirmed").single()
+        assertThat(labeled.pnr.value).isEqualTo("OC9ISJ")
+        assertThat(labeled.pnr.confidence).isEqualTo(ExtractionConfidence.HIGH)
+
+        val two =
+            flights(
+                """
+                PNR/Booking Reference OC9ISJ  Confirmed
+                DEPARTING 6E 432 PAT-HYD 10 Nov 2026 ref A1B2C3 printed in the body
+                RETURNED 6E 6223 HYD-PAT 15 Nov 2026
+                """,
+            )
+        assertThat(two.map { it.pnr.value }).containsExactly("OC9ISJ", "OC9ISJ")
+    }
+
+    @Test
+    fun `locator readings that differ by look-alike characters settle on the majority`() {
+        val result =
+            flights(
+                indigoPages("hari shankar singh", pnr = "0C9ISJ") + "\n\n" +
+                    indigoPages("ram nath singh", pnr = "OC9ISJ") + "\n\n" +
+                    indigoPages("sita devi", pnr = "OC9ISJ"),
+            )
+
+        assertThat(result).hasSize(2)
+        assertThat(result.map { it.pnr.value }).containsExactly("OC9ISJ", "OC9ISJ")
+    }
+
+    @Test
+    fun `genuinely different locators are never voted away`() {
+        val result =
+            flights(
+                """
+                Bengaluru → Lucknow Thu 29 Oct 2026  Airline PNR: R87T5G
+                BLR 10:30  To  LKO 13:05
+                Air India Express 2019
+                Lucknow → Bengaluru Sat 31 Oct 2026  Airline PNR: D2FE9V
+                LKO 20:30  To  BLR 23:00
+                Air India Express 1542
+                Baggage  Airline PNR: D2FE9V  15 Kgs
+                """,
+            )
+
+        assertThat(result.map { it.pnr.value }).containsExactly("R87T5G", "D2FE9V").inOrder()
+    }
+
+    @Test
+    fun `a single OCR reading of a locator is kept as read`() {
+        val result = flights("PNR: 0C9ISJ\n6E 432 PAT-HYD 10 Nov 2026").single()
+
+        assertThat(result.pnr.value).isEqualTo("0C9ISJ")
+    }
+
+    @Test
+    fun `conditions pages quoting example flights add no segments`() {
+        val prose =
+            FixtureLoader
+                .read("indigo-return-two-pax-pdf.txt")
+                .split("\n\n")
+                .filter { FlightDocumentPages.isProsePage(it) }
+        assertThat(prose).hasSize(4) // GST notes + T&C, power banks + fog advisory, terminals, delay/cancellation
+
+        val result = flights(indigoPages("hari shankar singh") + "\n\n" + prose.joinToString("\n\n"))
+        assertThat(result.map { it.flightKeyForTest() }).containsExactly("6E432", "6E6223").inOrder()
+    }
+
+    @Test
+    fun `an OCR'd currency sign before an amount is not a flight`() {
+        val result =
+            flights(
+                """
+                6E 432 PAT-HYD 10 Nov 2026
+                6E 6223 HYD-PAT 15 Nov 2026
+                Flight summary
+                Airfare Charge  T29300
+                Aviation Security Fee  T944
+                Total fare  Z40650
+                """,
+            )
+
+        assertThat(result.map { it.flightKeyForTest() }).containsExactly("6E432", "6E6223").inOrder()
+    }
+
+    private fun ExtractedFlight.flightKeyForTest(): String = carrier.value + flightNumber.value
 }
