@@ -3689,7 +3689,7 @@ follow-up; this is it, plus the backfill the already-saved trip needs.
    repository bumps `updatedAt`, ADR-002) so the Room-observing map fills in marker by
    marker; an item deleted or placed meanwhile is left alone; a trip already running is
    not started twice; an item the ladder could not place is not retried for 6 h within
-   the process; no network → nothing attempted or remembered. `progress` (trip id →
+   the process unless its name or link changes (an edit is the user's own retry); no network → nothing attempted or remembered. `progress` (trip id →
    done/total) drives the map view; `PlaceBackfill` logcat lines record each placement.
 5. **Map view states (`tripMapPane`)**: markers win; an empty map while the trip's
    backfill runs shows "Finding locations… (n of m)" instead of the bare no-coordinates

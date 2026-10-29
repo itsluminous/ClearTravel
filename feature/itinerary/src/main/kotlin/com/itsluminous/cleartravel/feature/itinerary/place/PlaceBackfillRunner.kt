@@ -36,7 +36,7 @@ data class PlaceBackfillProgress(
  * Idempotent and conservative: an item that is deleted or placed by the time the
  * ladder answers is left alone; an item the ladder could not place is remembered
  * for [RETRY_COOLDOWN] so a map opened five times does not fire the same failing
- * queries five times; a trip already being backfilled is not started twice; no
+ * queries five times (an edit to its name or link clears that at once); a trip already being backfilled is not started twice; no
  * network → nothing is attempted or remembered. Callers run it in their own scope
  * (the trip screen's ViewModel, the app-open housekeeping), never on the UI thread.
  */
@@ -59,7 +59,9 @@ class PlaceBackfillRunner internal constructor(
 
     private val mutex = Mutex()
     private val active = mutableSetOf<String>()
-    private val failedAt = mutableMapOf<String, Instant>()
+
+    /** Item id → (when the ladder last failed on it, the name+link it failed WITH): an edit retries at once. */
+    private val failedAt = mutableMapOf<String, Pair<Instant, String>>()
     private val _progress = MutableStateFlow<Map<String, PlaceBackfillProgress>>(emptyMap())
 
     /** Trip id → progress of its running backfill; absent once the run ends. */
@@ -100,7 +102,8 @@ class PlaceBackfillRunner internal constructor(
     private fun dueItems(items: List<ItineraryItem>): List<ItineraryItem> {
         val now = clock.instant()
         return items.filter(PlaceQueries::isUnplaced).filter { item ->
-            failedAt[item.id]?.let { Duration.between(it, now) >= RETRY_COOLDOWN } ?: true
+            val failure = failedAt[item.id] ?: return@filter true
+            failure.second != fingerprint(item) || Duration.between(failure.first, now) >= RETRY_COOLDOWN
         }
     }
 
@@ -120,7 +123,7 @@ class PlaceBackfillRunner internal constructor(
     private suspend fun placeOne(item: ItineraryItem): Boolean {
         val located = locator.locate(link = item.link, text = item.name)
         if (located == null) {
-            failedAt[item.id] = clock.instant()
+            failedAt[item.id] = clock.instant() to fingerprint(item)
             log("Could not place item ${item.id} (${item.name})")
             return false
         }
@@ -135,6 +138,9 @@ class PlaceBackfillRunner internal constructor(
         log("Placed ${fresh.name} at ${located.point.latitude},${located.point.longitude} via ${located.source}")
         return true
     }
+
+    /** What the ladder actually consumed; a changed name or link makes a remembered failure stale. */
+    private fun fingerprint(item: ItineraryItem): String = "${item.name}|${item.link}"
 
     private suspend fun begin(tripId: String): Boolean =
         mutex.withLock {

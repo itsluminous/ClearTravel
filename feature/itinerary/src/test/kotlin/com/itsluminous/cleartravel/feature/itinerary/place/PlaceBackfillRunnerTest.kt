@@ -109,6 +109,23 @@ class PlaceBackfillRunnerTest {
             assertThat(locator.calls).hasSize(2)
         }
 
+    /** Fixing a typo is the user's own retry: a renamed (or re-linked) item is tried again at once. */
+    @Test
+    fun `editing a failed item's name or link retries it before the cooldown`() =
+        runTest {
+            val typo = unplaced("Rumi Darwazza, Lucknow")
+            repository.items.value = listOf(typo)
+            assertThat(runner.backfill(TRIP)).isEqualTo(0)
+            assertThat(runner.backfill(TRIP)).isEqualTo(0)
+            assertThat(locator.calls).hasSize(1)
+
+            repository.save(typo.copy(name = "Rumi Darwaza, Lucknow"))
+            locator.answer("Rumi Darwaza, Lucknow", 26.8712, 80.9122)
+
+            assertThat(runner.backfill(TRIP)).isEqualTo(1)
+            assertThat(locator.calls.map { it.second }).containsExactly("Rumi Darwazza, Lucknow", "Rumi Darwaza, Lucknow").inOrder()
+        }
+
     @Test
     fun `offline does nothing and remembers nothing`() =
         runTest {
