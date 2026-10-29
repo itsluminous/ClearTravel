@@ -23,6 +23,7 @@ import com.itsluminous.cleartravel.core.ocr.pipeline.BitmapPreprocessor
 import com.itsluminous.cleartravel.core.ocr.pipeline.OcrTextRecognizer
 import com.itsluminous.cleartravel.core.ocr.pipeline.PdfPageRasterizer
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
@@ -37,10 +38,11 @@ import javax.inject.Singleton
  * result (blank form + file attached), never an exception.
  *
  * ADR-045: flight documents are read PAGE BY PAGE (up to
- * [PdfPageRasterizer.DEFAULT_MAX_PAGES]) — each page tries the BCBP barcode lane first
- * and falls back to OCR text; barcode legs and the text of all OCR'd pages (joined, so a
- * shared PNR in a header applies to every page) are merged into ONE list of flight
- * segments deduped by the ADR-025 identity.
+ * [PdfPageRasterizer.DEFAULT_MAX_PAGES]), ONE page in memory at a time — each page tries
+ * the BCBP barcode lane first and falls back to OCR text, then its bitmaps are recycled;
+ * barcode legs and the text of all OCR'd pages (joined, so a shared PNR in a header
+ * applies to every page) are merged into ONE list of flight segments deduped by the
+ * ADR-025 identity.
  */
 @Singleton
 class OcrPrefillService
@@ -56,11 +58,12 @@ class OcrPrefillService
         private val boardingPassTextExtractor: BoardingPassTextExtractor,
         private val bookingConfirmationExtractor: BookingConfirmationExtractor,
     ) {
-        /** Train-ticket import: OCR the PDF/image at [uri] and extract IRCTC fields. */
+        /** Train-ticket import: OCR the first page of the PDF/image at [uri] and extract IRCTC fields. */
         suspend fun prefillTrainTicket(uri: Uri): TrainTicketExtraction =
             withContext(Dispatchers.IO) {
-                val bitmap = loadPages(uri, maxPages = 1).firstOrNull() ?: return@withContext TrainTicketExtraction.EMPTY
-                val text = textRecognizer.recognize(preprocessor.preprocess(bitmap))
+                val text =
+                    readPages(uri, maxPages = 1) { page -> recognizeText(page) }.firstOrNull()
+                        ?: return@withContext TrainTicketExtraction.EMPTY
                 irctcTicketExtractor.extract(text)
             }
 
@@ -109,10 +112,9 @@ class OcrPrefillService
             uri: Uri,
             extractText: (String) -> List<ExtractedFlight>,
         ): DocumentRead {
-            val pages = loadPages(uri)
             val barcodeFlights = mutableListOf<ExtractedFlight>()
             val texts = mutableListOf<String>()
-            for (page in pages) {
+            readPages(uri) { page ->
                 val legs =
                     barcodeDecoder
                         .decode(page)
@@ -122,7 +124,7 @@ class OcrPrefillService
                 if (legs.isNotEmpty()) {
                     barcodeFlights += legs
                 } else {
-                    texts += textRecognizer.recognize(preprocessor.preprocess(page))
+                    texts += recognizeText(page)
                 }
             }
             val textFlights = if (texts.isEmpty()) emptyList() else extractText(texts.joinToString("\n\n"))
@@ -132,21 +134,44 @@ class OcrPrefillService
             )
         }
 
-        private fun loadPages(
+        /** Preprocess + ML Kit over one page; the preprocessed copy is recycled right after. */
+        private suspend fun recognizeText(page: Bitmap): String {
+            val processed = preprocessor.preprocess(page)
+            return try {
+                textRecognizer.recognize(processed)
+            } finally {
+                processed.recycle()
+            }
+        }
+
+        /**
+         * Runs [consume] over the pages of the PDF (streamed, at most [maxPages]) or the
+         * single decoded image at [uri]; every page bitmap is recycled after [consume]
+         * returns. Unreadable input yields an empty list, never an exception — only a
+         * cancellation propagates.
+         */
+        private suspend fun <T> readPages(
             uri: Uri,
             maxPages: Int = PdfPageRasterizer.DEFAULT_MAX_PAGES,
-        ): List<Bitmap> =
+            consume: suspend (Bitmap) -> T,
+        ): List<T> =
             runCatching {
                 if (isPdf(uri)) {
                     context.contentResolver.openFileDescriptor(uri, "r")?.use {
-                        rasterizer.rasterizeAll(it, maxPages = maxPages)
+                        rasterizer.readPages(it, maxPages = maxPages, consume = consume)
                     } ?: emptyList()
                 } else {
-                    context.contentResolver.openInputStream(uri)?.use {
-                        listOfNotNull(BitmapFactory.decodeStream(it))
-                    } ?: emptyList()
+                    val bitmap =
+                        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }
+                            ?: return@runCatching emptyList()
+                    try {
+                        listOf(consume(bitmap))
+                    } finally {
+                        bitmap.recycle()
+                    }
                 }
-            }.getOrDefault(emptyList())
+            }.onFailure { if (it is CancellationException) throw it }
+                .getOrDefault(emptyList())
 
         private fun isPdf(uri: Uri): Boolean =
             context.contentResolver.getType(uri) == "application/pdf" ||

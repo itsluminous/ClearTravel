@@ -87,21 +87,26 @@ class OcrCaptureHarnessTest {
         val client = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
         val recognizer = OcrTextRecognizer(client)
         val preprocessor = BitmapPreprocessor()
-        val pages: List<Bitmap> =
+
+        fun capture(
+            index: Int,
+            bitmap: Bitmap,
+        ): String {
+            val text = runBlocking { recognizer.recognize(preprocessor.preprocess(bitmap)) }
+            Log.i(TAG, "===== PAGE ${index + 1} RAW OCR TEXT BEGIN (${text.length} chars) =====")
+            text.lines().forEachIndexed { l, line -> Log.i(TAG, "P%d|L%03d|%s".format(index + 1, l, line)) }
+            Log.i(TAG, "===== PAGE ${index + 1} RAW OCR TEXT END =====")
+            return text
+        }
+        val texts: List<String> =
             if (pdf.exists()) {
+                // Streamed exactly as OcrPrefillService reads a PDF: one page bitmap at a time.
+                var index = 0
                 context.contentResolver.openFileDescriptor(Uri.fromFile(pdf), "r")!!.use {
-                    PdfPageRasterizer().rasterizeAll(it)
+                    runBlocking { PdfPageRasterizer().readPages(it) { bitmap -> capture(index++, bitmap) } }
                 }
             } else {
-                listOf(BitmapFactory.decodeFile(image!!.absolutePath))
-            }
-        val texts =
-            pages.mapIndexed { index, bitmap ->
-                val text = runBlocking { recognizer.recognize(preprocessor.preprocess(bitmap)) }
-                Log.i(TAG, "===== PAGE ${index + 1} RAW OCR TEXT BEGIN (${text.length} chars) =====")
-                text.lines().forEachIndexed { l, line -> Log.i(TAG, "P%d|L%03d|%s".format(index + 1, l, line)) }
-                Log.i(TAG, "===== PAGE ${index + 1} RAW OCR TEXT END =====")
-                text
+                listOf(capture(0, BitmapFactory.decodeFile(image!!.absolutePath)))
             }
         Log.i(TAG, "BOOKING EXTRACTION: ${BookingConfirmationExtractor().extract(texts.joinToString("\n\n"))}")
     }

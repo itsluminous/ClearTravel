@@ -30,17 +30,32 @@ class PdfPageRasterizer
             }
 
         /**
-         * Renders the first [maxPages] pages (ADR-045: a confirmation lists its flights
-         * across pages and a "boarding pass" PDF may hold one pass per page). The cap
-         * bounds OCR time on long itineraries; pages past it are ignored.
+         * Streams the first [maxPages] pages through [consume] ONE AT A TIME (ADR-045
+         * amended): each page is rendered, handed to [consume], and recycled before the
+         * next is rendered, so a long itinerary never holds more than one page bitmap
+         * (a 2048-px page is ~24 MB in ARGB_8888; airline prints that repeat the
+         * itinerary per passenger run to a dozen pages and more). A page that fails to
+         * render is skipped, not fatal — the remaining pages are still read. The cap
+         * bounds OCR TIME on long terms-and-conditions dumps; pages past it are ignored.
          */
-        fun rasterizeAll(
+        suspend fun <T> readPages(
             fileDescriptor: ParcelFileDescriptor,
             maxPages: Int = DEFAULT_MAX_PAGES,
             targetWidthPx: Int = DEFAULT_TARGET_WIDTH_PX,
-        ): List<Bitmap> =
+            consume: suspend (Bitmap) -> T,
+        ): List<T> =
             PdfRenderer(fileDescriptor).use { renderer ->
-                (0 until renderer.pageCount.coerceAtMost(maxPages)).map { renderer.renderPage(it, targetWidthPx) }
+                val count = renderer.pageCount.coerceAtMost(maxPages)
+                val results = ArrayList<T>(count)
+                for (index in 0 until count) {
+                    val bitmap = runCatching { renderer.renderPage(index, targetWidthPx) }.getOrNull() ?: continue
+                    try {
+                        results += consume(bitmap)
+                    } finally {
+                        bitmap.recycle()
+                    }
+                }
+                results
             }
 
         private fun PdfRenderer.renderPage(
@@ -64,7 +79,12 @@ class PdfPageRasterizer
         companion object {
             private const val DEFAULT_TARGET_WIDTH_PX = 2048
 
-            /** Pages OCR'd per PDF at most — enough for any itinerary, bounded for long T&C dumps. */
-            const val DEFAULT_MAX_PAGES = 8
+            /**
+             * Pages OCR'd per PDF at most. Pages are streamed, so this bounds TIME, not
+             * memory: an airline "Modify Itinerary" print repeats both legs on a page
+             * pair PER PASSENGER before its fare and conditions pages (a two-traveller
+             * return trip is 9 pages), so the old cap of 8 silently dropped pages.
+             */
+            const val DEFAULT_MAX_PAGES = 24
         }
     }
