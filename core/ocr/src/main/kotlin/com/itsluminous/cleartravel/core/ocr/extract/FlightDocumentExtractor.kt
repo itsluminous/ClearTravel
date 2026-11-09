@@ -127,8 +127,13 @@ internal class FlightDocumentExtractor(
         fun ExtractedField.solid() = isPresent && confidence != ExtractionConfidence.LOW
 
         fun ExtractedFlight.informative() =
-            flightDate.isPresent || fromAirport.solid() || toAirport.solid() || depTime.isPresent || arrTime.isPresent ||
-                seat.isPresent || pnr.solid()
+            flightDate.isPresent ||
+                fromAirport.solid() ||
+                toAirport.solid() ||
+                depTime.isPresent ||
+                arrTime.isPresent ||
+                seat.isPresent ||
+                pnr.solid()
         val informativeKeys = filter { it.informative() }.mapNotNull { it.flightKey() }.toSet()
         val kept = filter { it.informative() || it.flightKey() in informativeKeys }
         return if (kept.isEmpty()) this else kept
@@ -556,7 +561,11 @@ internal class FlightDocumentExtractor(
         return VerticalLeg(departure = endpoints[0], arrival = endpoints[1])
     }
 
-    private fun String.plusDays(days: Int): String = java.time.LocalDate.parse(this).plusDays(days.toLong()).toString()
+    private fun String.plusDays(days: Int): String =
+        java.time.LocalDate
+            .parse(this)
+            .plusDays(days.toLong())
+            .toString()
 
     /** The clock times of the first row that prints at least two `time, date` / `date, time` stamps. */
     private fun datedTimes(text: String): List<String> {
@@ -850,7 +859,9 @@ internal class FlightDocumentExtractor(
 
         /** `Agency confirmation number:  8IUT7P` / `Agency reference 8IUT7PO` (OCR may glue a stray character) — MEDIUM (ADR-050). */
         val LABELED_AGENCY_REF =
-            Regex("""\bAGENCY\s+(?:CONFIRMATION|REFERENCE|BOOKING|RECORD\s+LOCATOR)\s*(?:NO\.?|NUMBER|ID)?\s*[:#\-]?\s*([A-Z0-9]{6,12})\b""")
+            Regex(
+                """\bAGENCY\s+(?:CONFIRMATION|REFERENCE|BOOKING|RECORD\s+LOCATOR)\s*(?:NO\.?|NUMBER|ID)?\s*[:#\-]?\s*([A-Z0-9]{6,12})\b""",
+            )
 
         /** Characters OCR swaps for one another in upper-case alphanumerics. */
         val OCR_CONFUSIONS = listOf("O0QD", "I1L", "S5", "B8", "Z2", "G6")

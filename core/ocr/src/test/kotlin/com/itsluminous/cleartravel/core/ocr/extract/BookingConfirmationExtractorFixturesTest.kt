@@ -630,7 +630,9 @@ class BookingConfirmationExtractorBehaviorTest {
             )
 
         assertThat(result.map { it.flightKeyForTest() }).containsExactly("AS22", "AI116", "AI2853").inOrder()
-        assertThat(result.map { "${it.fromAirport.value}-${it.toAirport.value}" }).containsExactly("SEA-JFK", "JFK-BOM", "BOM-BLR").inOrder()
+        assertThat(
+            result.map { "${it.fromAirport.value}-${it.toAirport.value}" },
+        ).containsExactly("SEA-JFK", "JFK-BOM", "BOM-BLR").inOrder()
         assertThat(result.map { it.depTime.value }).containsExactly("23:05", "10:05", "15:35").inOrder()
         assertThat(result.map { it.arrTime.value }).containsExactly("07:24", "11:10", "17:25").inOrder()
         assertThat(result.map { it.flightDate.value }).containsExactly("2026-11-21", "2026-11-22", "2026-11-23").inOrder()

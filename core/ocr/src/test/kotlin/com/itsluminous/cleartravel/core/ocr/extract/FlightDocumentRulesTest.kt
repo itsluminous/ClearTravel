@@ -42,7 +42,29 @@ class FlightDocumentRulesTest {
         assertThat(rules.airlineByAlias("ALASKA AIRLINES / AS22")).isEqualTo("AS")
         assertThat(rules.airlineByAlias("KLM ROYAL DUTCH AIRLINES KL 880")).isEqualTo("KL")
         assertThat(rules.airlineByAlias("KLM / KL6033")).isEqualTo("KL")
-        for (code in listOf("AS", "KL", "DL", "UA", "AA", "B6", "WN", "AC", "BA", "LH", "AF", "VS", "EK", "QR", "EY", "SQ", "TK", "LX", "CX", "JL", "NH")) {
+        for (code in listOf(
+            "AS",
+            "KL",
+            "DL",
+            "UA",
+            "AA",
+            "B6",
+            "WN",
+            "AC",
+            "BA",
+            "LH",
+            "AF",
+            "VS",
+            "EK",
+            "QR",
+            "EY",
+            "SQ",
+            "TK",
+            "LX",
+            "CX",
+            "JL",
+            "NH",
+        )) {
             assertThat(rules.airlines).containsKey(code)
         }
         // Codes that double as words are stop-worded, so prose never reads as a flight.

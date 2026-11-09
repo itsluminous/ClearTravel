@@ -83,7 +83,10 @@ internal class FlightSegmenter(
             // again further down (`AS22` in a trip view's header) is a summary mention
             // and stays in the preamble instead of opening the first segment early.
             val summaryMention =
-                current == null && !inTail && kinds.isEmpty() && lineTokens.size == 1 &&
+                current == null &&
+                    !inTail &&
+                    kinds.isEmpty() &&
+                    lineTokens.size == 1 &&
                     lineTokens.single().range.let { it.first == 0 && it.last == line.lastIndex } &&
                     lines.drop(index + 1).any { later -> tokens.findAll(later).any { it.key == lineTokens.single().key } }
             val linePnr = LABELED_PNR_IN_LINE.find(line)?.let { it.groupValues[1].ifEmpty { it.groupValues[2] } }

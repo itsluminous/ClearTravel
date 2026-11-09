@@ -52,7 +52,10 @@ internal class FlightTokens(
     }
 
     private val stopwords: Set<String> = rules.flightCodeStopwords.map { it.uppercase() }.toSet()
-    private val knownCodes: Set<String> = rules.airlines.keys.map { it.uppercase() }.toSet()
+    private val knownCodes: Set<String> =
+        rules.airlines.keys
+            .map { it.uppercase() }
+            .toSet()
 
     /** All tokens in [line] (upper-cased), in text order, overlaps resolved. */
     fun findAll(line: String): List<FlightToken> {
