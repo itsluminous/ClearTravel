@@ -41,7 +41,7 @@ class LayoutE2eTest {
 
     @Test
     fun journeysSegment_isDockedAtBottom_andSwitchesSegments() {
-        composeRule.onNodeWithText(composeRule.string(R.string.nav_journeys)).performClick()
+        composeRule.openJourneys()
         composeRule.waitForText(composeRule.string(TrainsR.string.trains_filter_active))
 
         composeRule.assertDockedAboveNavBar(JOURNEYS_SEGMENT_TEST_TAG)
@@ -66,7 +66,7 @@ class LayoutE2eTest {
             archivedText = composeRule.string(ItineraryR.string.itinerary_filter_archived),
         )
 
-        composeRule.onNodeWithText(composeRule.string(R.string.nav_journeys)).performClick()
+        composeRule.openJourneys()
         composeRule.waitForText(composeRule.string(TrainsR.string.trains_filter_active))
         composeRule.assertFullWidthFilterRow(
             activeText = composeRule.string(TrainsR.string.trains_filter_active),

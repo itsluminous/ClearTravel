@@ -66,7 +66,7 @@ class SeatMapE2eTest {
 
     @Test
     fun seatIcon_opensSeatMapWithStripAndHighlightedBerth() {
-        composeRule.onNodeWithText(composeRule.string(R.string.nav_journeys)).performClick()
+        composeRule.openJourneys()
         composeRule.waitForText(TRAIN_NUMBER, substring = true)
 
         composeRule

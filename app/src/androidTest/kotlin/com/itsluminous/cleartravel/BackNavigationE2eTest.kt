@@ -134,7 +134,7 @@ class BackNavigationE2eTest {
     }
 
     private fun openTrainsList() {
-        composeRule.onNodeWithText(composeRule.string(R.string.nav_journeys)).performClick()
+        composeRule.openJourneys()
         composeRule.waitForText(TRAIN_NUMBER)
     }
 

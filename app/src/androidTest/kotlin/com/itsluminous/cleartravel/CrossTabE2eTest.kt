@@ -77,7 +77,7 @@ class CrossTabE2eTest {
     @Test
     fun linkedTicketSheet_showsPartOfRow_andOpensTheTrip_thenLegSheetOpensTheTicket() {
         // Journeys → Trains (default segment) → the seeded card → detail sheet.
-        composeRule.onNodeWithText(composeRule.string(R.string.nav_journeys)).performClick()
+        composeRule.openJourneys()
         composeRule.waitForText(TRAIN_NUMBER)
         composeRule.onNodeWithText(TRAIN_NUMBER).performClick()
         composeRule.waitForText(PNR)

@@ -59,7 +59,7 @@ class FlightsE2eTest {
     @Test
     fun addFlightManually_detailSheetShowsRoute() {
         // Journeys tab → Flights segment.
-        composeRule.onNodeWithText(composeRule.string(R.string.nav_journeys)).performClick()
+        composeRule.openJourneys()
         composeRule.onNodeWithText(composeRule.string(R.string.journeys_segment_flights)).performClick()
 
         // FAB → Enter manually.
@@ -113,7 +113,7 @@ class FlightsE2eTest {
     /** ADR-025: a second journey with the same airline + number + date is refused — notice shown, one card stays. */
     @Test
     fun addSameFlightTwice_isRefusedWithNotice_andKeepsOneCard() {
-        composeRule.onNodeWithText(composeRule.string(R.string.nav_journeys)).performClick()
+        composeRule.openJourneys()
         composeRule.onNodeWithText(composeRule.string(R.string.journeys_segment_flights)).performClick()
 
         // Second pass types the zero-padded number: "0777" must be recognised as "777".
@@ -161,7 +161,7 @@ class FlightsE2eTest {
      */
     @Test
     fun boardingPassMarkerOnCard_opensViewer() {
-        composeRule.onNodeWithText(composeRule.string(R.string.nav_journeys)).performClick()
+        composeRule.openJourneys()
         composeRule.onNodeWithText(composeRule.string(R.string.journeys_segment_flights)).performClick()
         composeRule.waitForText("$PASS_AIRLINE $PASS_FLIGHT_NUMBER")
 

@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.compose.composable
 import com.itsluminous.cleartravel.R
@@ -51,9 +52,12 @@ const val JOURNEYS_SEGMENT_TEST_TAG = "journeys_segment"
  * feature's detail hook, and reports consumption via [onDeepLinkConsumed]. ADR-028:
  * a deep link carrying an add request puts the segment into pick mode and the
  * outcome comes back through [onJourneyAddDone]; a "Part of" row tapped in a detail
- * sheet is reported through [onOpenTrip].
+ * sheet is reported through [onOpenTrip]. [defaultSegment] (ADR-049) decides, once per
+ * process, which segment the tab opens on when neither a saved manual pick nor a
+ * landing has chosen one.
  */
 fun NavGraphBuilder.journeysGraph(
+    defaultSegment: JourneysDefaultSegmentViewModel,
     deepLink: JourneysDeepLink? = null,
     onDeepLinkConsumed: () -> Unit = {},
     onJourneyAddDone: (JourneyAddResult) -> Unit = {},
@@ -61,6 +65,7 @@ fun NavGraphBuilder.journeysGraph(
 ) {
     composable(JOURNEYS_ROUTE) {
         JourneysScreen(
+            defaultSegment = defaultSegment,
             deepLink = deepLink,
             onDeepLinkConsumed = onDeepLinkConsumed,
             onJourneyAddDone = onJourneyAddDone,
@@ -69,20 +74,24 @@ fun NavGraphBuilder.journeysGraph(
     }
 }
 
-private enum class JourneysSegment {
-    TRAINS,
-    FLIGHTS,
-}
-
 @Composable
 private fun JourneysScreen(
+    defaultSegment: JourneysDefaultSegmentViewModel,
     deepLink: JourneysDeepLink?,
     onDeepLinkConsumed: () -> Unit,
     onJourneyAddDone: (JourneyAddResult) -> Unit,
     onOpenTrip: (tripId: String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var segment by rememberSaveable { mutableStateOf(JourneysSegment.TRAINS) }
+    // ADR-049: the segment EXPLICITLY chosen this session — a tap on the segmented
+    // control or a landing (deep link, PNR link, notification, share intake, batch
+    // import, ADR-028 add request). Saveable, so it survives tab switches and process
+    // death; null means nothing has chosen yet and the once-per-process default below
+    // applies (Trains, or Flights for a user with flights but no train ticket).
+    var chosenSegment by rememberSaveable { mutableStateOf<JourneysSegment?>(null) }
+    LaunchedEffect(Unit) { defaultSegment.decideOnce() }
+    val decidedDefault by defaultSegment.defaultSegment.collectAsStateWithLifecycle()
+    val segment = chosenSegment ?: decidedDefault
     // ADR-029: the per-segment landings a deep link asks for. Deliberately NOT
     // saveable (they used to be, and were never cleared — so every tab revisit or
     // segment toggle replayed the last landing and auto-opened a detail sheet). A
@@ -98,8 +107,8 @@ private fun JourneysScreen(
     LaunchedEffect(deepLink) {
         if (deepLink != null) {
             when (deepLink.target) {
-                DeepLinkContract.TARGET_TRAIN -> segment = JourneysSegment.TRAINS
-                DeepLinkContract.TARGET_FLIGHT -> segment = JourneysSegment.FLIGHTS
+                DeepLinkContract.TARGET_TRAIN -> chosenSegment = JourneysSegment.TRAINS
+                DeepLinkContract.TARGET_FLIGHT -> chosenSegment = JourneysSegment.FLIGHTS
             }
             landings.land(deepLink)
             addRequest = deepLink.addRequest
@@ -111,6 +120,12 @@ private fun JourneysScreen(
     // NavigationBar, so the Trains|Flights switch is in thumb reach next to the tab
     // bar (user steering); the segment content takes the rest of the height.
     Column(modifier = modifier.fillMaxSize()) {
+        // Undecided (the default's one-shot Room read is still in flight): hold the
+        // content AND the segmented row rather than flash Trains and then jump.
+        if (segment == null) {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f))
+            return@Column
+        }
         Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
             when (segment) {
                 JourneysSegment.TRAINS -> {
@@ -165,7 +180,7 @@ private fun JourneysScreen(
             JourneysSegment.entries.forEachIndexed { index, entry ->
                 SegmentedButton(
                     selected = segment == entry,
-                    onClick = { segment = entry },
+                    onClick = { chosenSegment = entry },
                     shape =
                         SegmentedButtonDefaults.itemShape(
                             index = index,

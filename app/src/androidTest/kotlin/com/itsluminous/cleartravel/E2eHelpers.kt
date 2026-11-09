@@ -9,6 +9,7 @@ import androidx.compose.ui.test.getBoundsInRoot
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -18,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
 import com.itsluminous.cleartravel.core.notifications.NotificationPermissions
+import com.itsluminous.cleartravel.ui.JOURNEYS_SEGMENT_TEST_TAG
 import com.itsluminous.cleartravel.core.designsystem.R as DesignR
 
 /** Shared plumbing for the e2e suite. */
@@ -73,6 +75,19 @@ fun AndroidComposeTestRule<*, MainActivity>.waitForText(
         onAllNodesWithText(text, substring = substring)
             .fetchSemanticsNodes()
             .isNotEmpty()
+    }
+}
+
+/**
+ * Taps the Journeys tab and waits for its Trains|Flights segmented row. ADR-049: the
+ * tab holds its content until the once-per-process default segment is read from Room
+ * (an async read Compose's idling does not track), so a test must not reach for a
+ * segment or a FAB before the row exists.
+ */
+fun AndroidComposeTestRule<*, MainActivity>.openJourneys() {
+    onNodeWithText(string(R.string.nav_journeys)).performClick()
+    waitUntil(timeoutMillis = E2e.WAIT_TIMEOUT_MILLIS) {
+        onAllNodesWithTag(JOURNEYS_SEGMENT_TEST_TAG).fetchSemanticsNodes().isNotEmpty()
     }
 }
 

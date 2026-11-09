@@ -3807,3 +3807,53 @@ REAL ladder over the captured redirects and Nominatim's recorded answers
 "Retry" on the unplaced list that clears the cooldown; reading Google's `cid` through
 a key-less endpoint if one ever exists; persisting the "could not place" marker across
 processes.
+
+## ADR-049 — Journeys tab default segment: Flights for a flights-only user (2026-11-09)
+
+**Context.** The Journeys tab always opened on Trains. A user with no train ticket and
+several flights met an empty Trains list on every visit and had to switch segments each
+time ("if someone has no trains added in their journey but have flight added, then
+opening journey tab should default to flight").
+
+**Decision.**
+1. **The rule** (`JourneysDefaultSegmentRule.decide`, app module, pure): the tab opens on
+   **Trains, unchanged, unless the user has ZERO live train tickets AND at least one
+   live flight — then Flights.** Live = non-tombstoned; **active and archived are
+   counted together** for both kinds, so a user whose only trains are archived still
+   "has trains" and keeps the Trains default (archiving is tidying, not leaving the
+   railways), and an archived flight alone is enough for the Flights default. An empty
+   app (no trains, no flights) stays on Trains exactly as before.
+2. **Decided ONCE per process, from the first Room emission.** `JourneysDefaultSegment
+   ViewModel` (activity-scoped `by viewModels()` in `MainActivity`, passed through
+   `ClearTravelApp` → `journeysGraph`) runs the decision the first time the Journeys
+   tab composes (`decideOnce()`, a `LaunchedEffect(Unit)` inside the app-lock gate, so
+   Room is never touched before the vault is open) as a suspend `first()` over
+   `combine(trains.observeActive, trains.observeArchived, flights.observeActive,
+   flights.observeArchived)`. It is never re-evaluated: adding the first train later in
+   the session must not yank the user off the Flights list they are reading, and a
+   failed read falls back to Trains rather than leaving the tab blank. Rotation, tab
+   switches and the external-entry round trips that re-create the shell's NavHost keep
+   the same ViewModel, hence the same answer.
+3. **No flicker.** The tab holds BOTH the segment content and the Trains|Flights row
+   until the decision is known (a local in-memory-fast Room read) instead of flashing
+   Trains and jumping. The e2e helper `openJourneys()` therefore waits for the segment
+   row before touching anything in the tab.
+4. **Explicit choices win.** The saved segment state became nullable
+   (`chosenSegment: JourneysSegment?`, `rememberSaveable`): null means "nothing chose
+   yet, apply the default"; a tap on the segmented control or ANY landing (notification
+   deep link, PNR link, share intake, external entry outcome, ADR-045 batch import,
+   ADR-028 cross-tab add request) sets it, and it then wins for the rest of the session
+   and across process death exactly as before. The decision only ever fills the gap.
+5. **Boundaries kept.** The decision lives in the app shell — the one place both
+   features are composed — on the existing `core:data` repository reads; no feature
+   module learns about the other, no repository method or schema was added.
+
+**Consequences.** A flights-only traveller lands on their flights; everyone else sees no
+change. Costs: one extra Room read on the tab's first open per process; a user who adds
+their first train mid-session sees Flights until they tap Trains or restart (by design).
+Tests: `JourneysDefaultSegmentRuleTest` (3), `JourneysDefaultSegmentViewModelTest` (8:
+flights-only, train + flights, archived-only trains, archived flight, tombstoned trains /
+flights ignored, empty app, one-shot), e2e `JourneysDefaultSegmentE2eTest` (flights-only
+→ Flights selected + card visible and a train saved afterwards leaves it on Flights; a
+train + flight → Trains; an archived train + flight → Trains); the existing e2e tab taps
+go through `openJourneys()`.

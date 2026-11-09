@@ -70,10 +70,12 @@ private val topLevelDestinations =
  * inside the tabs — a linked journey tapped in an itinerary sheet
  * ([onOpenJourney]), a "Part of" row tapped in a journey sheet ([onOpenTrip]), a
  * finished journey-add pick ([onJourneyAddDone]) — are reported up to the activity,
- * which turns them into the next pending landing.
+ * which turns them into the next pending landing. [journeysDefaultSegment] (ADR-049) is
+ * the activity-scoped holder of the Journeys tab's once-per-process default segment.
  */
 @Composable
 fun ClearTravelApp(
+    journeysDefaultSegment: JourneysDefaultSegmentViewModel,
     modifier: Modifier = Modifier,
     journeysDeepLink: JourneysDeepLink? = null,
     onJourneysDeepLinkConsumed: () -> Unit = {},
@@ -159,6 +161,7 @@ fun ClearTravelApp(
                     onOpenJourney = onOpenJourney,
                 )
                 journeysGraph(
+                    defaultSegment = journeysDefaultSegment,
                     deepLink = journeysDeepLink,
                     onDeepLinkConsumed = onJourneysDeepLinkConsumed,
                     onJourneyAddDone = onJourneyAddDone,

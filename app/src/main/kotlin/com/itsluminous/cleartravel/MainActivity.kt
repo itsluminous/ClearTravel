@@ -50,6 +50,7 @@ import com.itsluminous.cleartravel.startup.AppStartupTasks
 import com.itsluminous.cleartravel.ui.ClearTravelApp
 import com.itsluminous.cleartravel.ui.JourneyPickCoordinator
 import com.itsluminous.cleartravel.ui.JourneysDeepLink
+import com.itsluminous.cleartravel.ui.JourneysDefaultSegmentViewModel
 import com.itsluminous.cleartravel.ui.PnrLinkRoute
 import com.itsluminous.cleartravel.ui.PnrLinkViewModel
 import com.itsluminous.cleartravel.ui.ThemeViewModel
@@ -158,6 +159,9 @@ class MainActivity : FragmentActivity() {
         val pickCoordinator: JourneyPickCoordinator by viewModels()
         val shareImportViewModel: ShareImportViewModel by viewModels()
         val pnrLinkViewModel: PnrLinkViewModel by viewModels()
+        // ADR-049: activity-scoped so the Journeys tab's default segment is decided once
+        // per process; it reads Room only when the tab first composes (inside the gate).
+        val journeysDefaultSegment: JourneysDefaultSegmentViewModel by viewModels()
         setContent {
             val themeMode by themeViewModel.themeMode.collectAsStateWithLifecycle()
             // ADR-028: an itinerary leg asked for a new journey → land on Journeys in
@@ -190,6 +194,7 @@ class MainActivity : FragmentActivity() {
                             pickCoordinator,
                             shareImportViewModel,
                             pnrLinkViewModel,
+                            journeysDefaultSegment,
                         )
                     }
                 }
@@ -206,6 +211,7 @@ class MainActivity : FragmentActivity() {
         pickCoordinator: JourneyPickCoordinator,
         shareImportViewModel: ShareImportViewModel,
         pnrLinkViewModel: PnrLinkViewModel,
+        journeysDefaultSegment: JourneysDefaultSegmentViewModel,
     ) {
         // Runs only once the gate is open (password set, storage prepared, first-run
         // wizard finished): the system permission dialog must never sit over the
@@ -261,6 +267,7 @@ class MainActivity : FragmentActivity() {
                 }
             null ->
                 ClearTravelApp(
+                    journeysDefaultSegment = journeysDefaultSegment,
                     journeysDeepLink = pendingDeepLink.value,
                     onJourneysDeepLinkConsumed = { pendingDeepLink.value = null },
                     tripsLanding = pendingTripsLanding.value,

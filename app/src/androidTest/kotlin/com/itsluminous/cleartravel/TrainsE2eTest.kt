@@ -41,7 +41,7 @@ class TrainsE2eTest {
     @Test
     fun addTicketManually_detailSheetShowsPnr() {
         // Journeys tab; the Trains segment is the default.
-        composeRule.onNodeWithText(composeRule.string(R.string.nav_journeys)).performClick()
+        composeRule.openJourneys()
 
         // FAB → Manual entry.
         composeRule
@@ -73,7 +73,7 @@ class TrainsE2eTest {
     /** ADR-024: a second ticket with the same PNR is refused — notice shown, one card stays. */
     @Test
     fun addSamePnrTwice_isRefusedWithNotice_andKeepsOneCard() {
-        composeRule.onNodeWithText(composeRule.string(R.string.nav_journeys)).performClick()
+        composeRule.openJourneys()
 
         repeat(2) {
             composeRule
