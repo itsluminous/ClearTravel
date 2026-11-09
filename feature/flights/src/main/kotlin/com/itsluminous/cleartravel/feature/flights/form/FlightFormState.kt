@@ -18,6 +18,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.temporal.ChronoUnit
 
 /** Which form fields can carry an OCR/barcode confidence marker. */
 enum class FlightField {
@@ -122,6 +123,13 @@ data class FlightFormState(
     val arrAirport: String = "",
     val depTimeText: String = "",
     val arrTimeText: String = "",
+    /**
+     * Calendar days the arrival lies after the departure (ADR-050): 1 for an overnight
+     * leg whose document stamped the arrival `+1d`, 0 otherwise. Not a visible field —
+     * it rides along from an import or a stored journey so [toJourney] dates the
+     * arrival instant on the right day even after the user edits the departure date.
+     */
+    val arrivalDayOffset: Int = 0,
     val confidences: Map<FlightField, ExtractionConfidence> = emptyMap(),
     val prefillSource: BoardingPassSource = BoardingPassSource.NONE,
     /** Picked boarding-pass file, stored on save as PASSENGER ROW 1's pass (ADR-046). */
@@ -184,8 +192,8 @@ data class FlightFormState(
         fun fromJourney(
             journey: FlightJourney,
             passengers: List<FlightPassenger> = emptyList(),
+            zone: ZoneId = ZoneId.systemDefault(),
         ): FlightFormState {
-            val zone = ZoneId.systemDefault()
             val rows =
                 passengers.sortedBy { it.sortOrder }.map(PassengerFormRow::fromPassenger).ifEmpty {
                     listOf(PassengerFormRow(seat = journey.seat, existingPassPath = journey.boardingPassPath))
@@ -212,7 +220,20 @@ data class FlightFormState(
                         ?.toLocalTime()
                         ?.format(TIME_FORMAT)
                         .orEmpty(),
+                arrivalDayOffset = dayOffset(journey.schedDep?.atZone(zone)?.toLocalDate(), journey.schedArr?.atZone(zone)?.toLocalDate()),
             )
+        }
+
+        /** Days from [departure] to [arrival], clamped at zero; 0 when either is unknown (ADR-050). */
+        private fun dayOffset(
+            departure: LocalDate?,
+            arrival: LocalDate?,
+        ): Int {
+            if (departure == null || arrival == null) return 0
+            return ChronoUnit.DAYS
+                .between(departure, arrival)
+                .toInt()
+                .coerceAtLeast(0)
         }
 
         /**
@@ -298,6 +319,11 @@ data class FlightFormState(
                         .uppercase(),
                 depTimeText = timeText(flight.depTime),
                 arrTimeText = timeText(flight.arrTime),
+                arrivalDayOffset =
+                    dayOffset(
+                        flight.flightDate.value?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+                        flight.arrivalDate.value?.let { runCatching { LocalDate.parse(it) }.getOrNull() },
+                    ),
                 depTerminal = flight.depTerminal.value.orEmpty(),
                 arrTerminal = flight.arrTerminal.value.orEmpty(),
                 confidences =
@@ -449,11 +475,14 @@ data class FlightFormState(
     ): FlightJourney {
         val date = parseDate(dateText)
 
-        fun instant(timeText: String): Instant? =
+        fun instant(
+            timeText: String,
+            dayOffset: Int = 0,
+        ): Instant? =
             if (date == null) {
                 null
             } else {
-                parseTime(timeText)?.atDate(date)?.atZone(zone)?.toInstant()
+                parseTime(timeText)?.atDate(date.plusDays(dayOffset.toLong()))?.atZone(zone)?.toInstant()
             }
 
         return FlightJourney(
@@ -466,7 +495,7 @@ data class FlightFormState(
             depAirport = airportOrEmpty(depAirport),
             arrAirport = airportOrEmpty(arrAirport),
             schedDep = instant(depTimeText),
-            schedArr = instant(arrTimeText),
+            schedArr = instant(arrTimeText, arrivalDayOffset),
             depTerminal = depTerminal.trim(),
             arrTerminal = arrTerminal.trim(),
             checkInUrl = checkInUrl,

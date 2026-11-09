@@ -127,6 +127,46 @@ class FlightFormStateTest {
         assertThat(journey.checkInUrl).isEqualTo("https://example.test/checkin")
     }
 
+    // ---- ADR-050: an overnight arrival keeps its own day ----------------------------
+
+    @Test
+    fun `an extracted arrival date a day after departure dates the arrival instant on the next day`() {
+        val zone = ZoneId.of("America/Los_Angeles")
+        val flight =
+            ExtractedFlight(
+                carrier = ExtractedField.of("AS", ExtractionConfidence.MEDIUM),
+                flightNumber = ExtractedField.of("22", ExtractionConfidence.MEDIUM),
+                flightDate = ExtractedField.of("2026-11-21", ExtractionConfidence.MEDIUM),
+                arrivalDate = ExtractedField.of("2026-11-22", ExtractionConfidence.MEDIUM),
+                depTime = ExtractedField.of("23:05", ExtractionConfidence.MEDIUM),
+                arrTime = ExtractedField.of("07:24", ExtractionConfidence.MEDIUM),
+            )
+
+        val state = FlightFormState.fromFlight(flight)
+        assertThat(state.arrivalDayOffset).isEqualTo(1)
+
+        val journey = state.toJourney(checkInUrl = null, zone = zone)
+        assertThat(journey.schedDep).isEqualTo(ZonedDateTime.of(2026, 11, 21, 23, 5, 0, 0, zone).toInstant())
+        assertThat(journey.schedArr).isEqualTo(ZonedDateTime.of(2026, 11, 22, 7, 24, 0, 0, zone).toInstant())
+
+        // The offset follows an edited departure date and survives a round trip through the journey.
+        val moved = state.copy(dateText = "2026-12-01").toJourney(checkInUrl = null, zone = zone)
+        assertThat(moved.schedArr).isEqualTo(ZonedDateTime.of(2026, 12, 2, 7, 24, 0, 0, zone).toInstant())
+        assertThat(FlightFormState.fromJourney(journey, zone = zone).arrivalDayOffset).isEqualTo(1)
+    }
+
+    @Test
+    fun `a same-day or missing arrival date leaves the arrival on the departure day`() {
+        val sameDay =
+            ExtractedFlight(
+                flightDate = ExtractedField.of("2026-11-11", ExtractionConfidence.MEDIUM),
+                arrivalDate = ExtractedField.of("2026-11-11", ExtractionConfidence.MEDIUM),
+            )
+        assertThat(FlightFormState.fromFlight(sameDay).arrivalDayOffset).isEqualTo(0)
+        assertThat(FlightFormState.fromFlight(ExtractedFlight.EMPTY).arrivalDayOffset).isEqualTo(0)
+        assertThat(FlightFormState.fromJourney(Fixtures.flightJourney()).arrivalDayOffset).isEqualTo(0)
+    }
+
     @Test
     fun `fromJourney round-trips the editable fields - a flight without passenger rows edits its mirror seat as row 1`() {
         val source = Fixtures.flightJourney(seat = "12F", cabinClass = "Business", boardingPassPath = "/p/legacy.pdf")
