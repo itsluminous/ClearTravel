@@ -19,9 +19,12 @@ object OcrDates {
     /** `2026-06-12` — unambiguous, so it is tried first. */
     private val ISO = Regex("""\b(\d{4})-(\d{2})-(\d{2})\b""")
 
-    /** `20SEP25`, `15-Aug-2025`, `20 SEP` (year resolved nearest to [today]). */
+    /**
+     * `20SEP25`, `15-Aug-2025`, `20 SEP` (year resolved nearest to [today]). The month
+     * may open with a `0`: OCR reads the O of `Oct` as a zero (`29 -0ct- 2026`, ADR-050).
+     */
     private val DAY_MONTH_NAME =
-        Regex("""\b(\d{1,2})\s*[-/. ]?\s*([A-Za-z]{3})[a-z]*\.?\s*[-/. ,]?\s*(\d{2,4})?\b""")
+        Regex("""\b(\d{1,2})\s*[-/. ]?\s*([A-Za-z0][A-Za-z]{2})[a-z]*\.?\s*[-/. ,]?\s*(\d{2,4})?\b""")
 
     /** `Jun 12, 2026`, `June 12 2026` — month-first prose (airline emails). */
     private val MONTH_NAME_DAY =
@@ -42,7 +45,7 @@ object OcrDates {
         }
         for (m in DAY_MONTH_NAME.findAll(raw)) {
             val day = m.groupValues[1].toIntOrNull() ?: continue
-            val month = MONTHS.indexOf(m.groupValues[2].uppercase()) + 1
+            val month = MONTHS.indexOf(m.groupValues[2].uppercase().replaceFirst('0', 'O')) + 1
             if (month == 0) continue
             val date =
                 m.groupValues[3].toIntOrNull()?.let { toDate(day, month, normalizeYear(it)) }

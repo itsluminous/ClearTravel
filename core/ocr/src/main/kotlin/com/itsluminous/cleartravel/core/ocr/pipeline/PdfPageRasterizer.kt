@@ -77,7 +77,8 @@ class PdfPageRasterizer
             }
 
         companion object {
-            private const val DEFAULT_TARGET_WIDTH_PX = 2048
+            /** Shared with [BitmapPreprocessor.MIN_WORKING_WIDTH_PX]: images are lifted to the same width pages render at. */
+            const val DEFAULT_TARGET_WIDTH_PX = BitmapPreprocessor.MIN_WORKING_WIDTH_PX
 
             /**
              * Pages OCR'd per PDF at most. Pages are streamed, so this bounds TIME, not

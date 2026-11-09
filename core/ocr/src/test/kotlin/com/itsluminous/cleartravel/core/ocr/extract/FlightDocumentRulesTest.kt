@@ -38,6 +38,18 @@ class FlightDocumentRulesTest {
     }
 
     @Test
+    fun `the ADR-050 carriers resolve by name`() {
+        assertThat(rules.airlineByAlias("ALASKA AIRLINES / AS22")).isEqualTo("AS")
+        assertThat(rules.airlineByAlias("KLM ROYAL DUTCH AIRLINES KL 880")).isEqualTo("KL")
+        assertThat(rules.airlineByAlias("KLM / KL6033")).isEqualTo("KL")
+        for (code in listOf("AS", "KL", "DL", "UA", "AA", "B6", "WN", "AC", "BA", "LH", "AF", "VS", "EK", "QR", "EY", "SQ", "TK", "LX", "CX", "JL", "NH")) {
+            assertThat(rules.airlines).containsKey(code)
+        }
+        // Codes that double as words are stop-worded, so prose never reads as a flight.
+        assertThat(rules.flightCodeStopwords).containsAtLeast("AS", "VS")
+    }
+
+    @Test
     fun `airline table matches the feature-flights SMS rules asset`() {
         val smsAsset =
             listOf(
@@ -87,6 +99,44 @@ class FlightTokensTest {
         assertThat(keys("Boeing 737 Max 8 Airbus A320")).isEmpty()
         assertThat(keys("Total Amount Paid RS 4520")).isEmpty()
         assertThat(keys("ON 29 Oct")).isEmpty()
+    }
+
+    // ---- ADR-050 ------------------------------------------------------------------
+
+    @Test
+    fun `a stop-worded code that is a known airline counts in a flight cell but not in prose`() {
+        assertThat(keys("AS22")).containsExactly("AS22")
+        assertThat(keys("AS 22")).containsExactly("AS22")
+        assertThat(keys("Airline/Flight #  AS 22  Booked")).containsExactly("AS22")
+        assertThat(keys("Airline/Flight #  Alaska Airlines / AS22 Booked")).containsExactly("AS22")
+        assertThat(keys("Virgin Atlantic / VS 2023")).containsExactly("VS2023")
+        // Prose keeps every stop-word guard.
+        assertThat(keys("such as 22 passengers")).isEmpty()
+        assertThat(keys("Baggage allowance as 23 kg per piece")).isEmpty()
+        assertThat(keys("Boarding closes at 22 minutes")).isEmpty()
+        assertThat(keys("Price went up by 22 vs 2024 levels")).isEmpty()
+        // A stop-word that is NOT an airline never passes, however it prints.
+        assertThat(keys("ON22")).isEmpty()
+        assertThat(keys("TO 2026")).isEmpty()
+    }
+
+    @Test
+    fun `an airline name joined to its code by a slash pipe or hash reads as one flight`() {
+        assertThat(keys("Alaska Airlines / AS22")).containsExactly("AS22")
+        assertThat(keys("Alaska Airlines/ AS22")).containsExactly("AS22")
+        assertThat(keys("Air India | AI116")).containsExactly("AI116")
+        assertThat(keys("KLM/KL6033")).containsExactly("KL6033")
+        assertThat(keys("KLM / KL880")).containsExactly("KL880")
+        assertThat(keys("Delta # DL1234")).containsExactly("DL1234")
+        // The two-cell airline header of a trip view names airlines without flights.
+        assertThat(keys("Alaska Airlines  Air India")).isEmpty()
+        assertThat(keys("KLM  KLM")).isEmpty()
+    }
+
+    @Test
+    fun `an OCR'd lowercase L in a code defers to the airline name beside it`() {
+        assertThat(keys("Air India / Al116")).containsExactly("AI116")
+        assertThat(keys("Air India /Al2853 Booked")).containsExactly("AI2853")
     }
 
     @Test

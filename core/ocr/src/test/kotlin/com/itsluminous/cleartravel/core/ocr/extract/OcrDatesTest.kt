@@ -75,4 +75,14 @@ class OcrDatesTest {
     fun `garbage returns null`() {
         assertThat(OcrDates.parseToIso("the quick brown fox 42", today)).isNull()
     }
+
+    /** ADR-050: ML Kit reads the O of `Oct` as a zero on upscaled screenshots. */
+    @Test
+    fun `a month whose O was read as a zero still parses`() {
+        assertThat(OcrDates.parseToIso("29 -0ct- 2026")).isEqualTo("2026-10-29")
+        assertThat(OcrDates.parseToIso("Thu 29 -0ct- 2026  Confirmed PNR R87T5G")).isEqualTo("2026-10-29")
+        assertThat(OcrDates.parseToIso("29 -0CT- 2026")).isEqualTo("2026-10-29")
+        // A zero that is not a month letter stays unparsed.
+        assertThat(OcrDates.parseToIso("29 000 2026")).isNull()
+    }
 }

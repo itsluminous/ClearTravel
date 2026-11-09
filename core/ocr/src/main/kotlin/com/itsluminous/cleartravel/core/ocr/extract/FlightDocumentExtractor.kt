@@ -25,6 +25,13 @@ import com.itsluminous.cleartravel.core.ocr.pipeline.OcrLayout
  * passengers of a second mention — a stacked page with two passes for the same flight
  * is one segment with two passengers.
  *
+ * ADR-050 (agency / corporate trip views): a segment whose rows pair a dated time with
+ * an `(IATA) Airport name` row twice reads route, departure and arrival times, the
+ * departure date AND the arrival's own date (`+1d` overnight legs) from those two
+ * endpoints; an `Agency confirmation` is a booking handle (MEDIUM), the `Airline
+ * confirmation` the locator (HIGH); and a document printing exactly ONE airline locator
+ * shares it with every segment that has none of its own.
+ *
  * Confidence ladder (ADR-009): labeled → HIGH, structural → MEDIUM, weak → LOW.
  */
 internal class FlightDocumentExtractor(
@@ -83,7 +90,7 @@ internal class FlightDocumentExtractor(
                     .dropIdentityOnlyNoise()
                     .map { it.inheritShared(shared) }
             }
-        val deduped = FlightSegments.dedupe(segments).settleLocatorReadings(upper)
+        val deduped = FlightSegments.dedupe(segments).settleLocatorReadings(upper).shareSingleLocator(upper)
         val attached = attachSeatTable(deduped, segmentation.tail)
         val completed =
             if (attached.size == 1 && segmentation.segments.isNotEmpty()) {
@@ -105,9 +112,10 @@ internal class FlightDocumentExtractor(
      * In a multi-flight document a segment that carries NOTHING but a carrier + number
      * (no date, no route, no PNR, no seat) is a stray token — an OCR'd currency sign
      * before an amount, a fare-table cell, an example flight quoted by the fine print —
-     * not a flight. Only MEDIUM-or-better evidence counts: a LOW city pair (`policies
-     * to ensure`) or a LOW bare locator is exactly what prose produces around such a
-     * token. Judged on the segment's OWN text, before the shared header fields are
+     * not a flight. A leg with a route OR a departure/arrival time is never noise
+     * (ADR-050). Only MEDIUM-or-better evidence counts for the route and locator: a LOW
+     * city pair (`policies to ensure`) or a LOW bare locator is exactly what prose
+     * produces around such a token. Judged on the segment's OWN text, before the shared header fields are
      * inherited (every segment would otherwise carry the booking's locator). A later
      * mention of a flight that IS informative elsewhere is kept so the dedupe can fold
      * its times, terminals or cabin in. A document with a single segment keeps it so a
@@ -119,7 +127,8 @@ internal class FlightDocumentExtractor(
         fun ExtractedField.solid() = isPresent && confidence != ExtractionConfidence.LOW
 
         fun ExtractedFlight.informative() =
-            flightDate.isPresent || fromAirport.solid() || toAirport.solid() || seat.isPresent || pnr.solid()
+            flightDate.isPresent || fromAirport.solid() || toAirport.solid() || depTime.isPresent || arrTime.isPresent ||
+                seat.isPresent || pnr.solid()
         val informativeKeys = filter { it.informative() }.mapNotNull { it.flightKey() }.toSet()
         val kept = filter { it.informative() || it.flightKey() in informativeKeys }
         return if (kept.isEmpty()) this else kept
@@ -154,6 +163,34 @@ internal class FlightDocumentExtractor(
         }
     }
 
+    /**
+     * ADR-050: a document that prints exactly ONE airline locator (every labeled
+     * reading the same, or look-alikes of one another) describes one booking, so every
+     * segment lacking a HIGH locator of its own takes it — an agency trip view prints
+     * `Airline confirmation HVLYKH` once in its header, above three legs, and the header
+     * may already have been swallowed by the first leg's segment; a segment holding an
+     * agency reference (MEDIUM) is upgraded. Two genuinely different locators (an OTA
+     * itinerary with an airline PNR per leg) are left alone.
+     */
+    private fun List<ExtractedFlight>.shareSingleLocator(upper: String): List<ExtractedFlight> {
+        val counts =
+            (LABELED_AIRLINE_PNR.findAll(upper) + BARE_LABELED_PNR.findAll(upper))
+                .map { it.groupValues[1] }
+                .groupingBy { it }
+                .eachCount()
+        if (counts.isEmpty()) return this
+        val readings = counts.keys.toList()
+        if (readings.any { a -> readings.any { b -> !lookAlike(a, b) } }) return this
+        val locator = counts.entries.maxBy { it.value }.key
+        return map { flight ->
+            if (flight.pnr.isPresent && flight.pnr.confidence == ExtractionConfidence.HIGH) {
+                flight
+            } else {
+                flight.copy(pnr = ExtractedField.of(locator, ExtractionConfidence.HIGH))
+            }
+        }
+    }
+
     /** Same length and, at every position, the same character or two from one OCR confusion set. */
     private fun lookAlike(
         a: String,
@@ -168,8 +205,9 @@ internal class FlightDocumentExtractor(
         if (text.isBlank()) return ExtractedFlight.EMPTY
         val lines = text.lines()
         val token = tokens.first(text)
-        val route = extractRoute(text)
-        val times = extractTimes(text)
+        val leg = verticalLeg(lines)
+        val route = extractRoute(text, leg)
+        val times = extractTimes(text, leg)
         val terminals = extractTerminals(lines, route)
         return ExtractedFlight(
             pnr = extractPnr(text),
@@ -177,12 +215,13 @@ internal class FlightDocumentExtractor(
             flightNumber = token?.let { ExtractedField.of(it.number, it.confidence) } ?: ExtractedField.EMPTY,
             fromAirport = route.from,
             toAirport = route.to,
-            flightDate = extractDate(text, lines),
+            flightDate = extractDate(text, lines, leg),
             depTime = times.first,
             arrTime = times.second,
             depTerminal = terminals.first,
             arrTerminal = terminals.second,
             cabinClass = extractCabin(text),
+            arrivalDate = leg?.arrival?.date?.let { field(it, ExtractionConfidence.MEDIUM) } ?: ExtractedField.EMPTY,
             passengers =
                 extractPassengers(
                     names = extractNames(text, lines),
@@ -361,6 +400,12 @@ internal class FlightDocumentExtractor(
         LABELED_OTA_REF.find(text)?.let {
             return ExtractedField.of(it.groupValues[1].replace(" ", ""), ExtractionConfidence.MEDIUM)
         }
+        // An agency's own confirmation number (corporate / agency trip views, ADR-050) is
+        // the booking handle, not the airline's locator -> MEDIUM, so a labeled airline
+        // confirmation anywhere in the document outranks it.
+        LABELED_AGENCY_REF.find(text)?.let {
+            return ExtractedField.of(it.groupValues[1], ExtractionConfidence.MEDIUM)
+        }
         BARE_PNR.find(text)?.let {
             return ExtractedField.of(it.groupValues[1], ExtractionConfidence.LOW)
         }
@@ -372,9 +417,16 @@ internal class FlightDocumentExtractor(
         val to: ExtractedField,
     )
 
-    private fun extractRoute(text: String): Route {
+    private fun extractRoute(
+        text: String,
+        leg: VerticalLeg?,
+    ): Route {
         LABELED_ROUTE.find(text)?.let { m ->
             return Route(field(m.groupValues[1], ExtractionConfidence.HIGH), field(m.groupValues[2], ExtractionConfidence.HIGH))
+        }
+        // ADR-050: two stacked `time • date` / `(IATA) Airport` endpoint pairs.
+        if (leg != null) {
+            return Route(field(leg.departure.airport, ExtractionConfidence.MEDIUM), field(leg.arrival.airport, ExtractionConfidence.MEDIUM))
         }
         // `NEW DELHI (DEL) → MUMBAI (BOM)` — parenthesized IATA pair.
         PAREN_ROUTE.find(text)?.let { m ->
@@ -434,9 +486,17 @@ internal class FlightDocumentExtractor(
                 if (airport in iataStopwords) null else normalizeTime(time)?.let { TimeStop(airport, it) }
             }.toList()
 
-    private fun extractTimes(text: String): Pair<ExtractedField, ExtractedField> {
+    private fun extractTimes(
+        text: String,
+        leg: VerticalLeg?,
+    ): Pair<ExtractedField, ExtractedField> {
         var dep = LABELED_DEP_TIME.find(text)?.let { normalizeTime(it.groupValues[1]) }?.let { field(it, ExtractionConfidence.HIGH) }
         var arr = LABELED_ARR_TIME.find(text)?.let { normalizeTime(it.groupValues[1]) }?.let { field(it, ExtractionConfidence.HIGH) }
+        if (leg != null) {
+            // ADR-050: the endpoint rows' own clock times.
+            if (dep == null) dep = field(leg.departure.time, ExtractionConfidence.MEDIUM)
+            if (arr == null) arr = field(leg.arrival.time, ExtractionConfidence.MEDIUM)
+        }
         val stops = timeStops(text)
         if (dep == null && stops.isNotEmpty()) dep = field(stops[0].time, ExtractionConfidence.MEDIUM)
         if (arr == null && stops.size >= 2) arr = field(stops[1].time, ExtractionConfidence.MEDIUM)
@@ -451,6 +511,52 @@ internal class FlightDocumentExtractor(
         }
         return (dep ?: ExtractedField.EMPTY) to (arr ?: ExtractedField.EMPTY)
     }
+
+    /** One endpoint of a vertical leg block (ADR-050): the airport row plus the dated time row beside it. */
+    private data class Endpoint(
+        val airport: String,
+        /** `HH:mm`. */
+        val time: String,
+        /** ISO date, or null when the stamp's date did not parse. */
+        val date: String?,
+    )
+
+    private data class VerticalLeg(
+        val departure: Endpoint,
+        val arrival: Endpoint,
+    )
+
+    /**
+     * ADR-050: the agency trip-view layout — each endpoint is a `time • date` row with
+     * an `(IATA) Airport name` row directly below (or above) it; the first two endpoints
+     * of a segment are its departure and arrival. An arrival stamped `+1d` without a
+     * readable date of its own is the departure date plus the marker. Layover rows
+     * (`Layover 2h 41m • New York (JFK)`), travel times and CO₂ lines pair with nothing
+     * and are ignored. Null unless the segment holds two endpoints.
+     */
+    private fun verticalLeg(lines: List<String>): VerticalLeg? {
+        val endpoints = mutableListOf<Endpoint>()
+        val used = mutableSetOf<Int>()
+        for ((index, line) in lines.withIndex()) {
+            val stamp = FlightSegmenter.ENDPOINT_TIME_ROW.matchEntire(line.trim()) ?: continue
+            val airportRow =
+                listOf(index + 1, index - 1)
+                    .filter { it in lines.indices && it !in used }
+                    .firstOrNull { FlightSegmenter.AIRPORT_ROW.matches(lines[it].trim()) } ?: continue
+            val airport = FlightSegmenter.AIRPORT_ROW.matchEntire(lines[airportRow].trim())!!.groupValues[1]
+            if (airport in iataStopwords) continue
+            val time = normalizeTime(stamp.groupValues[1]) ?: continue
+            used += airportRow
+            val date = stamp.groupValues[2].takeIf { it.isNotEmpty() }?.let { OcrDates.parseToIso(it) }
+            val marker = stamp.groupValues[3].takeIf { it.isNotEmpty() }?.let { if (it == "I" || it == "L") 1 else it.toInt() }
+            endpoints += Endpoint(airport, time, date ?: endpoints.firstOrNull()?.date?.plusDays(marker ?: 0))
+            if (endpoints.size == 2) break
+        }
+        if (endpoints.size < 2) return null
+        return VerticalLeg(departure = endpoints[0], arrival = endpoints[1])
+    }
+
+    private fun String.plusDays(days: Int): String = java.time.LocalDate.parse(this).plusDays(days.toLong()).toString()
 
     /** The clock times of the first row that prints at least two `time, date` / `date, time` stamps. */
     private fun datedTimes(text: String): List<String> {
@@ -554,10 +660,13 @@ internal class FlightDocumentExtractor(
     private fun extractDate(
         text: String,
         lines: List<String>,
+        leg: VerticalLeg?,
     ): ExtractedField {
         for (m in LABELED_DATE.findAll(text)) {
             OcrDates.parseToIso(m.groupValues[1])?.let { return field(it, ExtractionConfidence.HIGH) }
         }
+        // ADR-050: the departure endpoint's own stamp.
+        leg?.departure?.date?.let { return field(it, ExtractionConfidence.MEDIUM) }
         // Unlabeled: the first date in the segment. Structural placement (a weekday
         // prefix, or the route header's own line) earns MEDIUM; anywhere else LOW.
         for (line in lines) {
@@ -726,10 +835,22 @@ internal class FlightDocumentExtractor(
             )
         const val PNR_LABELS = """(?:AIRLINE[ ]+PNR|PNR|BOOKING[ ]*REF(?:ERENCE)?|CONFIRMATION|RECORD[ ]*LOCATOR)"""
         const val PNR_LABEL_CHAIN = PNR_LABELS + """(?:\s*/\s*""" + PNR_LABELS + """)?\s*\)?\s*(?:NO\.?|NUMBER)?\s*\(?(?:PNR)?\)?"""
-        val LABELED_AIRLINE_PNR = Regex(PNR_LABEL_CHAIN + """\s*[:#\-]\s*([A-Z0-9]{6})\b""")
 
-        /** Whitespace-separated label: the value carries a digit or ends its cell (`BOOKING REFERENCE NUMBER:` never qualifies). */
-        val BARE_LABELED_PNR = Regex("""\b""" + PNR_LABEL_CHAIN + """\s((?=[A-Z0-9]*\d)[A-Z0-9]{6}|[A-Z]{6}(?=\s\s|\s*$))\b""")
+        /** `Agency confirmation number: 8IUT7P` is the agency's handle, never the airline locator (ADR-050). */
+        const val NOT_AGENCY = """(?<!AGENCY[ ])"""
+        val LABELED_AIRLINE_PNR = Regex(NOT_AGENCY + PNR_LABEL_CHAIN + """\s*[:#\-]\s*([A-Z0-9]{6})\b""")
+
+        /**
+         * Whitespace-separated label: the value carries a digit or ends its cell or ROW
+         * (`BOOKING REFERENCE NUMBER:` never qualifies; `Airline confirmation  HVLYKH` at
+         * the end of a header row inside a multi-line text does, ADR-050).
+         */
+        val BARE_LABELED_PNR =
+            Regex("""\b""" + NOT_AGENCY + PNR_LABEL_CHAIN + """\s((?=[A-Z0-9]*\d)[A-Z0-9]{6}|[A-Z]{6}(?=\s\s|[ \t]*(?:\r?\n|$)))\b""")
+
+        /** `Agency confirmation number:  8IUT7P` / `Agency reference 8IUT7PO` (OCR may glue a stray character) — MEDIUM (ADR-050). */
+        val LABELED_AGENCY_REF =
+            Regex("""\bAGENCY\s+(?:CONFIRMATION|REFERENCE|BOOKING|RECORD\s+LOCATOR)\s*(?:NO\.?|NUMBER|ID)?\s*[:#\-]?\s*([A-Z0-9]{6,12})\b""")
 
         /** Characters OCR swaps for one another in upper-case alphanumerics. */
         val OCR_CONFUSIONS = listOf("O0QD", "I1L", "S5", "B8", "Z2", "G6")
@@ -748,8 +869,8 @@ internal class FlightDocumentExtractor(
         /** `PAT-Jay Prakash Narayan International Airport` — a code and the airport's name in one cell. */
         val CODE_NAME_CELL = Regex("""([A-Z]{3})\s*[-–—:]\s*[A-Z][A-Z .,'()&]{3,}""")
 
-        /** `10 Nov 2026`, `10-11-2026` — the date half of a [DATED_TIME] stamp (non-capturing). */
-        const val STAMP_DATE = """(?:\d{1,2}\s*[-/. ]?\s*[A-Z]{3,9}\s*[-/. ,]?\s*\d{2,4}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})"""
+        /** The date half of a [DATED_TIME] stamp (shared with the segmenter's endpoint row, ADR-050). */
+        const val STAMP_DATE = FlightSegmenter.STAMP_DATE
 
         /** `12:50, 10 Nov 2026` or `10 Nov 2026, 12:50` — a clock time stamped with its date. */
         val DATED_TIME =

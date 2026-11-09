@@ -1,0 +1,38 @@
+{
+  "flights": [
+    {
+      "pnr": { "value": "HVLYKH", "confidence": "HIGH" },
+      "carrier": { "value": "AS", "confidence": "MEDIUM" },
+      "flightNumber": { "value": "22", "confidence": "MEDIUM" },
+      "fromAirport": { "value": "SEA", "confidence": "MEDIUM" },
+      "toAirport": { "value": "JFK", "confidence": "MEDIUM" },
+      "flightDate": { "value": "2026-11-21", "confidence": "MEDIUM" },
+      "depTime": { "value": "23:05", "confidence": "MEDIUM" },
+      "arrTime": { "value": "07:24", "confidence": "MEDIUM" },
+      "arrivalDate": { "value": "2026-11-22", "confidence": "MEDIUM" }
+    },
+    {
+      "pnr": { "value": "HVLYKH", "confidence": "HIGH" },
+      "carrier": { "value": "AI", "confidence": "MEDIUM" },
+      "flightNumber": { "value": "116", "confidence": "MEDIUM" },
+      "fromAirport": { "value": "JFK", "confidence": "MEDIUM" },
+      "toAirport": { "value": "BOM", "confidence": "MEDIUM" },
+      "flightDate": { "value": "2026-11-22", "confidence": "MEDIUM" },
+      "depTime": { "value": "10:05", "confidence": "MEDIUM" },
+      "arrTime": { "value": "11:10", "confidence": "MEDIUM" },
+      "arrivalDate": { "value": "2026-11-23", "confidence": "MEDIUM" }
+    },
+    {
+      "pnr": { "value": "HVLYKH", "confidence": "HIGH" },
+      "carrier": { "value": "AI", "confidence": "MEDIUM" },
+      "flightNumber": { "value": "2853", "confidence": "MEDIUM" },
+      "fromAirport": { "value": "BOM", "confidence": "MEDIUM" },
+      "toAirport": { "value": "BLR", "confidence": "MEDIUM" },
+      "flightDate": { "value": "2026-11-23", "confidence": "MEDIUM" },
+      "depTime": { "value": "15:35", "confidence": "MEDIUM" },
+      "arrTime": { "value": "17:25", "confidence": "MEDIUM" },
+      "arrivalDate": { "value": "2026-11-23", "confidence": "MEDIUM" }
+    }
+  ],
+  "source": "OCR_TEXT"
+}

@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "notes": "ADR-045 flight-document rules for core:ocr: airline aliases -> IATA code (confirmations print 'Air India Express 2019' without the code; longest alias wins, matched case-insensitively on OCR text; a printed code next to an alias is overridden by the alias when they disagree, e.g. OCR 'lX-1542'), plus the stop-word lists that keep look-alikes from passing as codes. The airline table is kept identical to feature:flights assets/airline-sms-rules.json by FlightDocumentRulesTest.",
+  "version": 2,
+  "notes": "ADR-045 flight-document rules for core:ocr: airline aliases -> IATA code (confirmations print 'Air India Express 2019' without the code; longest alias wins, matched case-insensitively on OCR text; a printed code next to an alias is overridden by the alias when they disagree, e.g. OCR 'lX-1542'), plus the stop-word lists that keep look-alikes from passing as codes. ADR-050: a stop-worded code (AS, VS) still counts as an airline when it is a known code printed tight against or alone with its number ('AS22', an 'Airline/Flight #' cell), and an airline name may be joined to its code by '/', '|' or '#' ('Alaska Airlines / AS22'). The airline table is kept identical to feature:flights assets/airline-sms-rules.json by FlightDocumentRulesTest.",
   "airlines": {
     "QP": {
       "name": "Akasa Air",
@@ -149,6 +149,79 @@
       "aliases": [
         "United Airlines"
       ]
+    },
+    "AS": {
+      "name": "Alaska Airlines",
+      "aliases": [
+        "Alaska Airlines",
+        "Alaska"
+      ]
+    },
+    "KL": {
+      "name": "KLM",
+      "aliases": [
+        "KLM Royal Dutch Airlines",
+        "KLM"
+      ]
+    },
+    "B6": {
+      "name": "JetBlue",
+      "aliases": [
+        "JetBlue Airways",
+        "JetBlue",
+        "Jet Blue"
+      ]
+    },
+    "WN": {
+      "name": "Southwest Airlines",
+      "aliases": [
+        "Southwest Airlines",
+        "Southwest"
+      ]
+    },
+    "AC": {
+      "name": "Air Canada",
+      "aliases": [
+        "Air Canada"
+      ]
+    },
+    "AF": {
+      "name": "Air France",
+      "aliases": [
+        "Air France"
+      ]
+    },
+    "VS": {
+      "name": "Virgin Atlantic",
+      "aliases": [
+        "Virgin Atlantic"
+      ]
+    },
+    "TK": {
+      "name": "Turkish Airlines",
+      "aliases": [
+        "Turkish Airlines"
+      ]
+    },
+    "LX": {
+      "name": "Swiss",
+      "aliases": [
+        "Swiss International Air Lines",
+        "Swiss"
+      ]
+    },
+    "JL": {
+      "name": "Japan Airlines",
+      "aliases": [
+        "Japan Airlines"
+      ]
+    },
+    "NH": {
+      "name": "ANA",
+      "aliases": [
+        "All Nippon Airways",
+        "ANA"
+      ]
     }
   },
   "flightCodeStopwords": [
@@ -185,7 +258,8 @@
     "ND",
     "RD",
     "TH",
-    "OK"
+    "OK",
+    "VS"
   ],
   "iataStopwords": [
     "PNR",

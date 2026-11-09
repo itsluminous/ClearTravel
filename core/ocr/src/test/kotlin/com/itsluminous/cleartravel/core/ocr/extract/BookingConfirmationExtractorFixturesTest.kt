@@ -23,6 +23,12 @@ import org.junit.runners.Parameterized
  * print — a page PAIR per passenger (header + `Passenger Information` + DEPARTING leg,
  * then the RETURNED leg), a fare page and four pages of conditions → two segments, both
  * passengers on each, the repeated per-passenger pages folded (ADR-045 amended).
+ * `agency-trip-connecting-3-legs` / `-2-legs` are the ML Kit text of two agency
+ * trip-view screenshots (ADR-050): connecting one-way itineraries printed as vertical
+ * leg blocks — `11:05 PM • 21 Nov 2026` over `(SEA) Seattle-Tacoma …`, an
+ * `Airline/Flight #  Alaska Airlines / AS22` cell per leg, layover rows between legs, an
+ * agency AND an airline confirmation in the header, no passengers or terminals →
+ * three (SEA→JFK→BOM→BLR, overnight arrivals dated) and two (BLR→AMS→SEA) segments.
  */
 @RunWith(Parameterized::class)
 class BookingConfirmationExtractorFixturesTest(
@@ -54,6 +60,8 @@ class BookingConfirmationExtractorFixturesTest(
                 "blr-lko-confirmation-pdf",
                 "blr-lko-confirmation-two-pax",
                 "indigo-return-two-pax-pdf",
+                "agency-trip-connecting-3-legs",
+                "agency-trip-connecting-2-legs",
             )
     }
 }
@@ -574,6 +582,212 @@ class BookingConfirmationExtractorBehaviorTest {
             )
 
         assertThat(result.map { it.flightKeyForTest() }).containsExactly("6E432", "6E6223").inOrder()
+    }
+
+    // ---- ADR-050: connecting legs in an agency / corporate trip view ----------------
+
+    /** One vertical leg block as the trip view prints it; [arrivalStamp] defaults to a same-day arrival. */
+    private fun legBlock(
+        depTime: String,
+        depDate: String,
+        depAirport: String,
+        arrTime: String,
+        arrAirport: String,
+        airlineCell: String,
+        arrivalStamp: String = "$arrTime • $depDate",
+    ) = """
+        $depTime • $depDate
+        ($depAirport) Some International Airport
+        Travel time: 5h 19m
+        $arrivalStamp
+        ($arrAirport) Another International Airport
+        Seat
+        Airline/Flight #  $airlineCell Booked
+        """.trimIndent()
+
+    private val header =
+        """
+        Bengaluru, IN
+        Sat, 21 Nov 2026 - Mon, 23 Nov 2026
+        Agency confirmation number:  8IUT7P
+        Alaska Airlines  Air India
+        AS22
+        One-way trip
+        Airline confirmation  HVLYKH
+        CO, emissions  1885.08 kg
+        """.trimIndent()
+
+    @Test
+    fun `stacked endpoint rows read route times and per-leg dates, each leg a segment`() {
+        val result =
+            flights(
+                header + "\n" +
+                    legBlock("11:05 PM", "21 Nov 2026", "SEA", "7:24 AM", "JFK", "Alaska Airlines / AS22", "7:24 AM • 22 Nov 2026 +1d") +
+                    "\nLayover 2h 41m • New York (JFK)\n" +
+                    legBlock("10:05 AM", "22 Nov 2026", "JFK", "11:10 AM", "BOM", "Air India / AI116", "11:10 AM 23 Nov 2026*1d") +
+                    "\nLayover 4h 25m • Mumbai (BOM)\n" +
+                    legBlock("3:35 PM", "23 Nov 2026", "BOM", "5:25 PM", "BLR", "Air India / AI2853"),
+            )
+
+        assertThat(result.map { it.flightKeyForTest() }).containsExactly("AS22", "AI116", "AI2853").inOrder()
+        assertThat(result.map { "${it.fromAirport.value}-${it.toAirport.value}" }).containsExactly("SEA-JFK", "JFK-BOM", "BOM-BLR").inOrder()
+        assertThat(result.map { it.depTime.value }).containsExactly("23:05", "10:05", "15:35").inOrder()
+        assertThat(result.map { it.arrTime.value }).containsExactly("07:24", "11:10", "17:25").inOrder()
+        assertThat(result.map { it.flightDate.value }).containsExactly("2026-11-21", "2026-11-22", "2026-11-23").inOrder()
+        // Overnight arrivals carry their own date (+1d), a same-day arrival its departure date.
+        assertThat(result.map { it.arrivalDate.value }).containsExactly("2026-11-22", "2026-11-23", "2026-11-23").inOrder()
+        assertThat(result.map { it.flightDate.confidence }.distinct()).containsExactly(ExtractionConfidence.MEDIUM)
+        // No passenger, seat, cabin or terminal is invented.
+        assertThat(result.flatMap { it.passengers }).isEmpty()
+        assertThat(result.none { it.depTerminal.isPresent || it.arrTerminal.isPresent || it.cabinClass.isPresent }).isTrue()
+    }
+
+    @Test
+    fun `a header that names another leg's flight does not steal the first leg`() {
+        val result =
+            flights(
+                header.replace("AS22", "AI116") + "\n" +
+                    legBlock("11:05 PM", "21 Nov 2026", "SEA", "7:24 AM", "JFK", "Alaska Airlines / AS22") +
+                    "\nLayover 2h 41m • New York (JFK)\n" +
+                    legBlock("10:05 AM", "22 Nov 2026", "JFK", "11:10 AM", "BOM", "Air India / AI116"),
+            )
+
+        assertThat(result.map { it.flightKeyForTest() }).containsExactly("AS22", "AI116").inOrder()
+        assertThat(result.map { "${it.fromAirport.value}-${it.toAirport.value}" }).containsExactly("SEA-JFK", "JFK-BOM").inOrder()
+    }
+
+    @Test
+    fun `a plus-one-day marker without its own readable date adds a day to the departure date`() {
+        val result =
+            flights(
+                """
+                11:05 PM • 21 Nov 2026
+                (SEA) Seattle-Tacoma International Airport
+                7:24 AM +1d
+                (JFK) John F. Kennedy International Airport
+                Airline/Flight #  Alaska Airlines / AS22 Booked
+                """,
+            ).single()
+
+        assertThat(result.flightDate.value).isEqualTo("2026-11-21")
+        assertThat(result.arrivalDate.value).isEqualTo("2026-11-22")
+    }
+
+    @Test
+    fun `every separator between a stamp's time and date is accepted`() {
+        for (separator in listOf(" • ", "• ", " . ", ". ", ", ", " | ", " - ", " ")) {
+            val result =
+                flights(
+                    """
+                    2:25 AM${separator}11 Nov 2026
+                    (BLR) Kempegowda International Airport
+                    8:30 AM${separator}11 Nov 2026
+                    (AMS) Amsterdam Airport Schiphol
+                    Airline/Flight #  KLM / KL880 Booked
+                    """,
+                ).single()
+            assertThat(result.depTime.value).isEqualTo("02:25")
+            assertThat(result.arrTime.value).isEqualTo("08:30")
+            assertThat(result.flightDate.value).isEqualTo("2026-11-11")
+            assertThat(result.fromAirport.value).isEqualTo("BLR")
+            assertThat(result.toAirport.value).isEqualTo("AMS")
+        }
+    }
+
+    @Test
+    fun `layover duration and emission rows are never flights times or locators`() {
+        val result =
+            flights(
+                header.replace("Alaska Airlines  Air India\nAS22", "KLM  KLM\nKL880") + "\n" +
+                    legBlock("2:25 AM", "11 Nov 2026", "BLR", "8:30 AM", "AMS", "KLM / KL880") +
+                    "\n2 Layover 1h 45m • Amsterdam (AMS)\nCO, emissions  169711 kg\nTravel time: 10h 32m\n" +
+                    legBlock("10:15 AM", "11 Nov 2026", "AMS", "11:47 AM", "SEA", "KLM / KL6033"),
+            )
+
+        assertThat(result.map { it.flightKeyForTest() }).containsExactly("KL880", "KL6033").inOrder()
+        assertThat(result.map { it.toAirport.value }).containsExactly("AMS", "SEA").inOrder()
+        assertThat(result.map { it.arrTime.value }).containsExactly("08:30", "11:47").inOrder()
+        assertThat(result.map { it.pnr.value }).containsExactly("HVLYKH", "HVLYKH")
+    }
+
+    @Test
+    fun `the airline confirmation beats the agency confirmation for every leg`() {
+        val result =
+            flights(
+                header + "\n" +
+                    legBlock("11:05 PM", "21 Nov 2026", "SEA", "7:24 AM", "JFK", "Alaska Airlines / AS22") +
+                    "\n" +
+                    legBlock("10:05 AM", "22 Nov 2026", "JFK", "11:10 AM", "BOM", "Air India / AI116"),
+            )
+
+        assertThat(result.map { it.pnr.value }).containsExactly("HVLYKH", "HVLYKH")
+        assertThat(result.map { it.pnr.confidence }.distinct()).containsExactly(ExtractionConfidence.HIGH)
+    }
+
+    @Test
+    fun `the agency confirmation is kept at medium confidence when it is the only locator`() {
+        val result =
+            flights(
+                """
+                Seattle, WA
+                Agency confirmation number:  7E3AR5
+                KLM  KLM
+                One-way trip
+                """ + "\n" +
+                    legBlock("2:25 AM", "11 Nov 2026", "BLR", "8:30 AM", "AMS", "KLM / KL880") + "\n" +
+                    legBlock("10:15 AM", "11 Nov 2026", "AMS", "11:47 AM", "SEA", "KLM / KL6033"),
+            )
+
+        assertThat(result.map { it.pnr.value }).containsExactly("7E3AR5", "7E3AR5")
+        assertThat(result.map { it.pnr.confidence }.distinct()).containsExactly(ExtractionConfidence.MEDIUM)
+    }
+
+    @Test
+    fun `a single airline locator is shared with legs that have none but never overrides a leg's own`() {
+        val shared =
+            flights(
+                """
+                Onward 6E 2001 DEL - GOI Date: 10-01-2027
+                Return 6E 2002 GOI - DEL Date: 17-01-2027
+                Airline confirmation  HVLYKH
+                """,
+            )
+        assertThat(shared.map { it.pnr.value }).containsExactly("HVLYKH", "HVLYKH")
+
+        val perLeg =
+            flights(
+                """
+                Onward 6E 2001 DEL - GOI Date: 10-01-2027 PNR: A1B2C3
+                Return 6E 2002 GOI - DEL Date: 17-01-2027 PNR: D4E5F6
+                """,
+            )
+        assertThat(perLeg.map { it.pnr.value }).containsExactly("A1B2C3", "D4E5F6").inOrder()
+    }
+
+    @Test
+    fun `a leg with a route or times is never dropped as identity-only noise`() {
+        val result =
+            flights(
+                """
+                PNR: A1B2C3
+                Onward 6E 2001 DEL - GOI Date: 10-01-2027
+                Return 6E 2002  Departure 08:30  Arrival 10:05
+                """,
+            )
+
+        assertThat(result.map { it.flightKeyForTest() }).containsExactly("6E2001", "6E2002").inOrder()
+        assertThat(result[1].depTime.value).isEqualTo("08:30")
+    }
+
+    @Test
+    fun `an OCR'd lowercase L inside a code next to the airline name resolves through the alias`() {
+        val result =
+            flights(
+                legBlock("10:05 AM", "22 Nov 2026", "JFK", "11:10 AM", "BOM", "Air India / Al116"),
+            ).single()
+
+        assertThat(result.carrier.value).isEqualTo("AI")
+        assertThat(result.flightNumber.value).isEqualTo("116")
     }
 
     private fun ExtractedFlight.flightKeyForTest(): String = carrier.value + flightNumber.value

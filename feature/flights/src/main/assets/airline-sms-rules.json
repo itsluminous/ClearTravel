@@ -36,11 +36,22 @@
     "UL": { "name": "SriLankan Airlines", "aliases": ["SriLankan Airlines", "SriLankan"] },
     "DL": { "name": "Delta Air Lines", "aliases": ["Delta Air Lines", "Delta"] },
     "AA": { "name": "American Airlines", "aliases": ["American Airlines"] },
-    "UA": { "name": "United Airlines", "aliases": ["United Airlines"] }
+    "UA": { "name": "United Airlines", "aliases": ["United Airlines"] },
+    "AS": { "name": "Alaska Airlines", "aliases": ["Alaska Airlines", "Alaska"] },
+    "KL": { "name": "KLM", "aliases": ["KLM Royal Dutch Airlines", "KLM"] },
+    "B6": { "name": "JetBlue", "aliases": ["JetBlue Airways", "JetBlue", "Jet Blue"] },
+    "WN": { "name": "Southwest Airlines", "aliases": ["Southwest Airlines", "Southwest"] },
+    "AC": { "name": "Air Canada", "aliases": ["Air Canada"] },
+    "AF": { "name": "Air France", "aliases": ["Air France"] },
+    "VS": { "name": "Virgin Atlantic", "aliases": ["Virgin Atlantic"] },
+    "TK": { "name": "Turkish Airlines", "aliases": ["Turkish Airlines"] },
+    "LX": { "name": "Swiss", "aliases": ["Swiss International Air Lines", "Swiss"] },
+    "JL": { "name": "Japan Airlines", "aliases": ["Japan Airlines"] },
+    "NH": { "name": "ANA", "aliases": ["All Nippon Airways", "ANA"] }
   },
   "flightCodeStopwords": [
     "ON", "AT", "TO", "IN", "BY", "OF", "NO", "IS", "OR", "RS", "PM", "AM", "GO", "UP", "US", "IT", "AS",
-    "BE", "DO", "IF", "WE", "AN", "MY", "SO", "ID", "HR", "KM", "PP", "TT", "ST", "ND", "RD", "TH", "OK"
+    "BE", "DO", "IF", "WE", "AN", "MY", "SO", "ID", "HR", "KM", "PP", "TT", "ST", "ND", "RD", "TH", "OK", "VS"
   ],
   "iataStopwords": [
     "PNR", "SMS", "AIR", "INR", "USD", "GST", "ETA", "ETD", "DEP", "ARR", "STD", "STA", "TBA", "AND", "THE",

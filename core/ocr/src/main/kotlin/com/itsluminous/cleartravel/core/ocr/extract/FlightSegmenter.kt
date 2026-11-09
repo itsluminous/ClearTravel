@@ -25,12 +25,22 @@ package com.itsluminous.cleartravel.core.ocr.extract
  *   tail (the fare table's `Bengaluru(BLR) to Lucknow(LKO)` rows).
  * - A segment that ends with no flight token of its own is a continuation of the
  *   previous one (a false header) and is merged back into it.
+ * - ADR-050: an agency trip view prints each leg as a VERTICAL block — a dated time
+ *   row (`11:05 PM • 21 Nov 2026`) over an `(SEA) Seattle-Tacoma …` airport row for the
+ *   departure, the same pair for the arrival, then `Airline/Flight #  Alaska Airlines /
+ *   AS22`; a `Layover 2h 41m • New York (JFK)` row sits between legs. The dated time row
+ *   is a PAIRED header kind: a leg's own two rows extend its segment, and only a third
+ *   one, once the segment has its flight token, opens the next leg's segment (the
+ *   header's own `AS22` mention may have opened the first segment before the leg).
  */
 internal class FlightSegmenter(
     private val tokens: FlightTokens,
     private val headerKinds: List<Regex>,
     private val stopHeaders: Regex,
 ) {
+    /** Header kinds a leg prints TWICE (departure and arrival endpoint rows): a repeat splits only after a pair. */
+    private val pairedKinds: Set<Int> = headerKinds.indices.filter { headerKinds[it] === ENDPOINT_TIME_ROW }.toSet()
+
     private data class OpenSegment(
         val lines: MutableList<String>,
         /** Opened by a header inside the tail: real only once a flight token follows. */
@@ -51,7 +61,7 @@ internal class FlightSegmenter(
         val tail = mutableListOf<String>()
         var current: MutableList<String>? = null
         var currentTentative = false
-        val currentKinds = mutableSetOf<Int>()
+        val currentKinds = mutableMapOf<Int, Int>()
         var currentFlight: String? = null
         var currentPnr: String? = null
         var lastPnr: String? = null
@@ -66,15 +76,25 @@ internal class FlightSegmenter(
             currentPnr = null
         }
 
-        for (line in lines) {
+        for ((index, line) in lines.withIndex()) {
             val lineTokens = tokens.findAll(line)
             val kinds = headerKinds.indices.filter { headerKinds[it].containsMatchIn(line) }
+            // ADR-050: a row that is nothing but a flight code the document describes
+            // again further down (`AS22` in a trip view's header) is a summary mention
+            // and stays in the preamble instead of opening the first segment early.
+            val summaryMention =
+                current == null && !inTail && kinds.isEmpty() && lineTokens.size == 1 &&
+                    lineTokens.single().range.let { it.first == 0 && it.last == line.lastIndex } &&
+                    lines.drop(index + 1).any { later -> tokens.findAll(later).any { it.key == lineTokens.single().key } }
             val linePnr = LABELED_PNR_IN_LINE.find(line)?.let { it.groupValues[1].ifEmpty { it.groupValues[2] } }
             val knownPnr = currentPnr ?: lastPnr
             val distinctFlight = currentFlight != null && lineTokens.any { it.key != currentFlight }
             val distinctPnr = currentFlight != null && linePnr != null && knownPnr != null && linePnr != knownPnr
-            val repeatedHeader = currentFlight != null && kinds.any { it in currentKinds }
-            val opensFirst = current == null && !inTail && (kinds.isNotEmpty() || lineTokens.isNotEmpty())
+            // A header kind seen before in this segment — for a PAIRED kind (an endpoint
+            // row, ADR-050) only once the segment already holds a complete pair.
+            val repeatedHeader =
+                currentFlight != null && kinds.any { (currentKinds[it] ?: 0) >= if (it in pairedKinds) 2 else 1 }
+            val opensFirst = current == null && !inTail && (kinds.isNotEmpty() || lineTokens.isNotEmpty()) && !summaryMention
             val opensFromTail = inTail && (kinds.isNotEmpty() || lineTokens.isNotEmpty())
             val strong = distinctFlight || distinctPnr || repeatedHeader || opensFirst || opensFromTail
             when {
@@ -88,13 +108,13 @@ internal class FlightSegmenter(
                     currentTentative = inTail && lineTokens.isEmpty()
                     inTail = false
                     current = mutableListOf(line)
-                    currentKinds += kinds
+                    kinds.forEach { currentKinds[it] = 1 }
                     currentFlight = lineTokens.firstOrNull()?.key
                     currentPnr = linePnr
                 }
                 current != null -> {
                     current!! += line
-                    currentKinds += kinds
+                    kinds.forEach { currentKinds[it] = (currentKinds[it] ?: 0) + 1 }
                     if (currentFlight == null) currentFlight = lineTokens.firstOrNull()?.key
                     if (currentPnr == null) currentPnr = linePnr
                 }
@@ -147,6 +167,25 @@ internal class FlightSegmenter(
          */
         const val CODE_PAIR_GUARD = """(?![ ][A-Z]{2,}[ ][A-Z]{2,}[ ][A-Z]{2,})"""
 
+        /** `10 Nov 2026`, `10-11-2026` — the date half of a dated time stamp (non-capturing); the month may open with an OCR'd `0` (`0CT`). */
+        const val STAMP_DATE = """(?:\d{1,2}\s*[-/. ]?\s*[A-Z0][A-Z]{2,8}\s*[-/. ,]?\s*\d{2,4}|\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})"""
+
+        /** `+1d`, `*1d` (OCR'd plus), `+1 day` — the overnight marker after an arrival stamp (ADR-050). */
+        const val DAY_MARKER = """(?:\s*[+*]\s*([0-9IL])\s*(?:D|DAYS?))?"""
+
+        /**
+         * A row that is ONE clock time stamped with its date and nothing else (ADR-050):
+         * `11:05 PM • 21 Nov 2026`, `7:24 AM. 22 Nov 2026+1d`, `11:10 AM 23 Nov 2026*1d` —
+         * any of `•`, `·`, `|`, `-`, `,`, `.` or just a space between time and date.
+         * Group 1 = time, 2 = date (empty when the row prints only the time, or a time and
+         * its `+1d`), 3 = the day marker's count.
+         */
+        val ENDPOINT_TIME_ROW =
+            Regex("""^(\d{1,2}:\d{2}\s*(?:[AP]M)?)\s*[•·|,.\-]?\s*($STAMP_DATE)?$DAY_MARKER\s*$""")
+
+        /** `(SEA) Seattle-Tacoma International Airport` — an airport row of a vertical leg block (ADR-050); group 1 = code. */
+        val AIRPORT_ROW = Regex("""^\(([A-Z]{3})\)\s+(?!.*\([A-Z]{3}\))[A-Z][A-Z0-9 .,'()&/\-]*$""")
+
         private val CITY_ARROW = Regex("""\b[A-Z]{3,}\s*(?:→|->|—|–|\+|\s-\s)\s*[A-Z]{3,}\b""")
         private val PAREN_ROUTE = Regex("""\([A-Z]{3}\)\s*(?:→|->|—|–|-|\bTO\b)\s*[A-Z ]*\([A-Z]{3}\)""")
         private val CODE_PAIR = Regex("""\b[A-Z]{3}\s*(?:->|→|—|–|-)\s*[A-Z]{3}\b$CODE_PAIR_GUARD""")
@@ -157,7 +196,7 @@ internal class FlightSegmenter(
         private val LABELED_ROUTE = Regex("""\bFROM\s*[:\-]?\s*[A-Z ]*\(?[A-Z]{3}\)?\s+TO\b""")
 
         /** Header kinds of a booking confirmation (ADR-045): route headers and leg labels. */
-        val CONFIRMATION_HEADERS = listOf(CITY_ARROW, PAREN_ROUTE, CODE_PAIR, IATA_TIME_BLOCK, LEG_LABEL)
+        val CONFIRMATION_HEADERS = listOf(CITY_ARROW, PAREN_ROUTE, CODE_PAIR, IATA_TIME_BLOCK, LEG_LABEL, ENDPOINT_TIME_ROW)
 
         /** Sections that never describe a flight: hotels, fares, meals, T&C. */
         val CONFIRMATION_STOPS =

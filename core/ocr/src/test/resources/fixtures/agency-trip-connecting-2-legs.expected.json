@@ -1,0 +1,27 @@
+{
+  "flights": [
+    {
+      "pnr": { "value": "7E3AR5", "confidence": "MEDIUM" },
+      "carrier": { "value": "KL", "confidence": "MEDIUM" },
+      "flightNumber": { "value": "880", "confidence": "MEDIUM" },
+      "fromAirport": { "value": "BLR", "confidence": "MEDIUM" },
+      "toAirport": { "value": "AMS", "confidence": "MEDIUM" },
+      "flightDate": { "value": "2026-11-11", "confidence": "MEDIUM" },
+      "depTime": { "value": "02:25", "confidence": "MEDIUM" },
+      "arrTime": { "value": "08:30", "confidence": "MEDIUM" },
+      "arrivalDate": { "value": "2026-11-11", "confidence": "MEDIUM" }
+    },
+    {
+      "pnr": { "value": "7E3AR5", "confidence": "MEDIUM" },
+      "carrier": { "value": "KL", "confidence": "MEDIUM" },
+      "flightNumber": { "value": "6033", "confidence": "MEDIUM" },
+      "fromAirport": { "value": "AMS", "confidence": "MEDIUM" },
+      "toAirport": { "value": "SEA", "confidence": "MEDIUM" },
+      "flightDate": { "value": "2026-11-11", "confidence": "MEDIUM" },
+      "depTime": { "value": "10:15", "confidence": "MEDIUM" },
+      "arrTime": { "value": "11:47", "confidence": "MEDIUM" },
+      "arrivalDate": { "value": "2026-11-11", "confidence": "MEDIUM" }
+    }
+  ],
+  "source": "OCR_TEXT"
+}

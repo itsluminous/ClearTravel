@@ -1,6 +1,7 @@
 package com.itsluminous.cleartravel.core.ocr.extract
 
 import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
+import com.itsluminous.cleartravel.core.ocr.pipeline.OcrLayout
 
 /** One `carrier + flight number` mention in a line of upper-cased OCR text. */
 internal data class FlightToken(
@@ -23,14 +24,19 @@ internal data class FlightToken(
  *
  * 1. **Labeled** — `FLIGHT 6E 2345`, `Flight No: AI-0865` → HIGH.
  * 2. **Airline alias** — `Air India Express 2019`, `Air India Express IX-2019`,
- *    `IndiGo 6E 6114` → the alias's code from [FlightDocumentRules] (MEDIUM). When the
- *    document also prints a code and it disagrees with the alias (OCR `lX-1542`), the
- *    alias wins — names survive OCR far better than two-letter codes.
+ *    `IndiGo 6E 6114`, and (ADR-050) the slash-joined `Alaska Airlines / AS22` /
+ *    `Air India | AI116` cells of an agency trip view → the alias's code from
+ *    [FlightDocumentRules] (MEDIUM). When the document also prints a code and it
+ *    disagrees with the alias (OCR `lX-1542`, `Al116`), the alias wins — names survive
+ *    OCR far better than two-letter codes.
  * 3. **Bare** — `6E 6114`, `AI 0503`, `IX-2019` → MEDIUM, filtered against the
  *    stop-word list (`ON 29`, `RS 4520`), unit suffixes (`2h 35m`, `15 Kgs`), aircraft
  *    type names (`A320`, `B737`) and amounts whose currency sign OCR turned into a
  *    letter (`T944`, `Z40650` — a letter+digit carrier never prints tight against
- *    its number).
+ *    its number). ADR-050: a stop-worded code that is ALSO a known airline (`AS` —
+ *    Alaska, `VS` — Virgin Atlantic) still counts when it prints tight against its
+ *    number (`AS22`) or fills its cell alone with it (`AS 22`); `such as 22 kg` and
+ *    `… as 22 passengers` stay prose.
  */
 internal class FlightTokens(
     val rules: FlightDocumentRules = FlightDocumentRules.BUNDLED,
@@ -39,13 +45,14 @@ internal class FlightTokens(
         rules.aliasPatterns.map { (aliasRegex, code) ->
             Regex(
                 aliasRegex.pattern +
-                    """\s*(?:FLIGHT\s*)?(?:NO\.?\s*)?[:\-]?\s*(?:([A-Z][A-Z0-9]|\d[A-Z])\s*-?\s*)?(\d{2,4})\b""" +
+                    """\s*(?:FLIGHT\s*)?(?:NO\.?\s*)?(?:[:\-/|#]\s*)?(?:([A-Z][A-Z0-9]|\d[A-Z])\s*-?\s*)?(\d{2,4})\b""" +
                     UNIT_GUARD,
             ) to code
         }
     }
 
     private val stopwords: Set<String> = rules.flightCodeStopwords.map { it.uppercase() }.toSet()
+    private val knownCodes: Set<String> = rules.airlines.keys.map { it.uppercase() }.toSet()
 
     /** All tokens in [line] (upper-cased), in text order, overlaps resolved. */
     fun findAll(line: String): List<FlightToken> {
@@ -68,7 +75,8 @@ internal class FlightTokens(
             // `T944`, `Z40650` — a currency sign OCR'd as a letter in front of an amount:
             // a letter+digit carrier never prints tight against its number.
             val amount = !separated && AMOUNT_PREFIX.matches(carrier)
-            if (carrier !in stopwords && !aircraft && !amount && found.none { it.range.overlaps(m.range) }) {
+            val stopword = carrier in stopwords && !knownCodeMention(line, m, carrier, separated)
+            if (!stopword && !aircraft && !amount && found.none { it.range.overlaps(m.range) }) {
                 found += FlightToken(carrier, strip(digits), ExtractionConfidence.MEDIUM, m.range)
             }
         }
@@ -79,6 +87,22 @@ internal class FlightTokens(
     fun first(text: String): FlightToken? {
         val all = text.lines().flatMap { findAll(it) }
         return all.firstOrNull { it.confidence == ExtractionConfidence.HIGH } ?: all.firstOrNull()
+    }
+
+    /**
+     * ADR-050: a stop-worded code is still an airline when the rules table knows it AND
+     * the mention is unmistakably a flight cell — tight (`AS22`), or the whole cell /
+     * line is just the mention (`AS 22` under an `Airline/Flight #` header).
+     */
+    private fun knownCodeMention(
+        line: String,
+        match: MatchResult,
+        carrier: String,
+        separated: Boolean,
+    ): Boolean {
+        if (carrier !in knownCodes) return false
+        if (!separated) return true
+        return line.split(OcrLayout.CELL_SEPARATOR).any { it.trim() == match.value }
     }
 
     private fun strip(number: String): String = number.trimStart('0')

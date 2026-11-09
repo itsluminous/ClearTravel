@@ -22,6 +22,11 @@ import kotlinx.serialization.encoding.Encoder
  * callers read what they always did; the JSON form keeps those flat fields alongside a
  * `passengers` array, and a fixture without the array decodes them as its only
  * passenger (every pre-ADR-047 expected file stays valid and identical).
+ *
+ * ADR-050: [arrivalDate] is the arrival's OWN calendar date when the document stamps
+ * each endpoint with one (an agency trip view prints `7:24 AM • 22 Nov 2026 +1d` under
+ * the arrival airport of an overnight leg); EMPTY when the document gives the leg a
+ * single date, so every earlier fixture is unchanged.
  */
 @Serializable(with = ExtractedFlightSerializer::class)
 data class ExtractedFlight(
@@ -40,6 +45,8 @@ data class ExtractedFlight(
     val depTerminal: ExtractedField = ExtractedField.EMPTY,
     val arrTerminal: ExtractedField = ExtractedField.EMPTY,
     val cabinClass: ExtractedField = ExtractedField.EMPTY,
+    /** Arrival calendar date (ISO) when printed per endpoint (ADR-050); EMPTY = same day as [flightDate] or unknown. */
+    val arrivalDate: ExtractedField = ExtractedField.EMPTY,
     /** The people on this flight in document order; empty when the document named nobody (ADR-047). */
     val passengers: List<ExtractedPassenger> = emptyList(),
 ) {
@@ -109,6 +116,7 @@ data class ExtractedFlight(
             depTerminal = depTerminal.or(other.depTerminal),
             arrTerminal = arrTerminal.or(other.arrTerminal),
             cabinClass = cabinClass.or(other.cabinClass),
+            arrivalDate = arrivalDate.or(other.arrivalDate),
             passengers = ExtractedPassenger.merge(passengers, incomingPassengers),
         )
 
@@ -146,6 +154,7 @@ private class ExtractedFlightSurrogate(
     val seat: ExtractedField = ExtractedField.EMPTY,
     val sequenceNumber: ExtractedField = ExtractedField.EMPTY,
     val passengers: List<ExtractedPassenger>? = null,
+    val arrivalDate: ExtractedField = ExtractedField.EMPTY,
 )
 
 private object ExtractedFlightSerializer : KSerializer<ExtractedFlight> {
@@ -173,6 +182,7 @@ private object ExtractedFlightSerializer : KSerializer<ExtractedFlight> {
                 seat = value.seat,
                 sequenceNumber = value.sequenceNumber,
                 passengers = value.passengers,
+                arrivalDate = value.arrivalDate,
             ),
         )
     }
@@ -191,6 +201,7 @@ private object ExtractedFlightSerializer : KSerializer<ExtractedFlight> {
             depTerminal = s.depTerminal,
             arrTerminal = s.arrTerminal,
             cabinClass = s.cabinClass,
+            arrivalDate = s.arrivalDate,
             passengers = s.passengers ?: ExtractedPassenger.single(s.passengerName, s.seat, s.sequenceNumber),
         )
     }
