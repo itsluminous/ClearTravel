@@ -58,9 +58,12 @@ how the code works; **amended** = active, but a later ADR changed part of it (na
 | 042 | Flight from SMS/email text + train-or-flight intake for shared text | active |
 | 043 | Background sync while locked — nag fix (once-per-process, imminent-flight-only nudge; silent deferral + status) and the OPT-IN background key | active — relaxes 031 §7 only when the user opts in; nudge rule + worker table extended by 044 |
 | 044 | Train journey reminder — lead-time setting, periodic worker over hashed plaintext hints, PNR link opens the status check | active — extends 043 (second nudging job, shared latch) |
-| 045 | Multi-flight documents — segmented extraction (`List<ExtractedFlight>`), review step, per-segment save with the file on every flight | active — amends 017 (first-leg + hint multi-flight handling superseded); per-segment save amended by 046 (passenger merge, file per passenger); segment passenger fields + dedupe amended by 047 (`passengers` list, passenger merge on fold); page streaming (cap 8 → 24, one bitmap alive), prose-page triage, locator vote amended 2026-10-29 (§7) |
+| 045 | Multi-flight documents — segmented extraction (`List<ExtractedFlight>`), review step, per-segment save with the file on every flight | active — amends 017 (first-leg + hint multi-flight handling superseded); per-segment save amended by 046 (passenger merge, file per passenger); segment passenger fields + dedupe amended by 047 (`passengers` list, passenger merge on fold); page streaming (cap 8 → 24, one bitmap alive), prose-page triage, locator vote amended 2026-10-29 (§7); vertical leg blocks, paired header kind, agency vs airline locator, single-locator sharing, `arrivalDate` amended by 050 |
 | 046 | Multi-passenger flights — `flight_passengers` (schema v4), passenger merge on an existing flight, pass per passenger, mirror columns | active — amends 004 (schema v4), 015 (entity file), 025 (passenger merge), 038 (bundle per passenger), 039 (payload passengers), 045 (per-segment save); identity rule hoisted to `core:model` and one-file passenger merge added by 047 |
 | 047 | Several passengers per extracted flight — `ExtractedFlight.passengers`, every seat-table row attaches, passengers merge on segment fold, `PassengerIdentity` in `core:model`, import saves/merges every passenger of a segment | active — amends 045 (segment shape, dedupe), 046 (decision 4 rule location, decision 5 one-file fold); `Passenger Information` block tables + document-wide name sharing amended 2026-10-29 (decision 6) |
+| 048 | Place-location ladder — Maps place-id links, geocode + plus-code fallback, coordinate backfill | active — amends 029 D, 035 |
+| 049 | Journeys tab default segment — Flights for a flights-only user | active |
+| 050 | Connecting legs in agency / corporate trip views — vertical endpoint blocks, paired header kind, `arrivalDate`, airline-over-agency locator, known-code stop-word exception, image upscale before OCR, 11 more airlines | active — amends 045 (§2 segmenter + field heuristics), 009 (preprocess stage), 042 (airline table) |
 
 ---
 
@@ -3152,6 +3155,15 @@ third nudging job ever appears (none planned).
 > `PNR/Booking Reference` label chains with a majority vote over look-alike readings,
 > dated time rows, `CODE-Airport name` route cells and the `DEPARTING / RETURNED` leg
 > labels; §3 adds the real `indigo-return-two-pax-pdf` fixture.
+>
+> **Amended by ADR-050 (2026-11-09).** §2's segmenter gains a PAIRED header kind (the
+> `time • date` endpoint row of an agency trip view, which a leg prints twice) and keeps
+> a lone flight-code row the document describes later as a preamble summary; the field
+> heuristics read route, times, the departure date AND a new `ExtractedFlight.arrivalDate`
+> from two stacked endpoint pairs, rank an `Agency confirmation` below an airline
+> locator and share a document's single airline locator with every leg; §4's
+> `dropIdentityOnlyNoise` keeps any leg with a route or a time. The §1 pipeline upscales
+> narrow images to the PDF working width before OCR.
 
 **Context.** Flight imports (ADR-017) read ONE flight per file: the boarding-pass and
 booking-confirmation extractors returned a single flat record, a return trip surfaced
@@ -3857,3 +3869,121 @@ flights ignored, empty app, one-shot), e2e `JourneysDefaultSegmentE2eTest` (flig
 → Flights selected + card visible and a train saved afterwards leaves it on Flights; a
 train + flight → Trains; an archived train + flight → Trains); the existing e2e tab taps
 go through `openJourneys()`.
+
+## ADR-050 — Connecting legs in agency / corporate trip views (2026-11-09)
+
+**Context.** Two screenshots of a corporate travel tool's trip view — a one-way
+SEA → JFK → BOM → BLR itinerary (Alaska 22, Air India 116, Air India 2853) and a
+BLR → AMS → SEA one (KLM 880, KLM 6033) — each landed on ONE prefilled form instead of
+the ADR-045 "Found N flights" review, with the wrong airline (`AL 116`: ML Kit reads
+`AI116` as `Al116`), the agency's confirmation as the PNR, no route and no times. The
+layout is unlike every fixture so far: each leg is a VERTICAL block —
+
+```
+11:05 PM • 21 Nov 2026
+(SEA) Seattle-Tacoma International Airport
+Travel time: 5h 19m
+7:24 AM • 22 Nov 2026 +1d
+(JFK) John F. Kennedy International Airport
+Seat
+Airline/Flight #  Alaska Airlines / AS22  Booked
+Layover 2h 41m • New York (JFK)
+```
+
+— with the header printing `Agency confirmation number: 8IUT7P`, the first leg's code
+(`AS22`) on a row of its own and `Airline confirmation HVLYKH` once for all legs. Root
+causes, verified in code: (1) `FlightSegmenter`'s route headers needed `(XXX) … (YYY)`
+or `XXX HH:mm` on ONE row, so no boundary ever fired and the whole page was one segment;
+(2) `DATED_TIME` accepted only `,`/`.` between time and date, never `•`; (3) `AS` is a
+flight-code STOP-WORD (`such as 22 kg`) so Alaska's token was dropped, and the airline
+alias regex did not allow the `/` of `Alaska Airlines / AS22`; (4) the AI 2853 leg had
+nothing but its token in its segment and `dropIdentityOnlyNoise` removed it; (5) the
+`CONFIRMATION` label matched the AGENCY number first; (6) Alaska Airlines and KLM were
+missing from the airline table. On top, ML Kit at the screenshot's native size read
+`11:05 PM` as `1:05 PM` and `8IUT7P` as `8IUTZP`; at twice the size it read both right.
+
+**Decision.** All of it as general rules, none keyed to these images.
+
+1. **Vertical leg blocks (segmenter + extractor).** `FlightSegmenter.ENDPOINT_TIME_ROW`
+   — a row that is ONE clock time, an optional separator (`•`, `·`, `|`, `-`, `,`, `.`
+   or just a space), an optional date and an optional overnight marker (`+1d`, OCR'd
+   `*1d` / `+id`) — is a new CONFIRMATION header kind, and the first **paired** one: a
+   leg prints it twice (departure, arrival), so a repeat splits a segment only once the
+   segment already holds two of them AND its flight token (`pairedKinds`). A row that is
+   nothing but a flight code the document describes again further down (the header's
+   `AS22`) is a **summary mention** and stays in the preamble instead of opening the
+   first segment early — otherwise a header naming a different leg's flight would steal
+   the first leg's endpoints. In the extractor, `verticalLeg(lines)` pairs each endpoint
+   row with the `(IATA) Airport name` row directly below (or above) it; the first two
+   endpoints of a segment are its departure and arrival and supply the route, both clock
+   times (12-hour → 24-hour through the existing `normalizeTime`), the departure date and
+   the arrival's own date — all MEDIUM — ahead of the time-block / dated-row heuristics,
+   which are unchanged. An arrival marked `+1d` whose date did not parse is the departure
+   date plus the marker. Layover rows (`Layover 2h 41m • New York (JFK)`), travel times
+   and CO₂ lines pair with nothing and match no existing pattern (`2H 41M` is unit-guarded).
+2. **`ExtractedFlight.arrivalDate`** (ADR-045 §1 shape, additive; default EMPTY, in the
+   JSON surrogate too, so every recorded expected file is unchanged): the arrival's
+   calendar date when the document stamps each endpoint with one. `FlightFormState`
+   carries it as a hidden `arrivalDayOffset` (days after departure, clamped ≥ 0; derived
+   back from `schedDep`/`schedArr` when editing a stored journey) so `toJourney` dates
+   `schedArr` on the right day and the offset follows an edited departure date. The
+   `12:50, 10 Nov 2026  15:00, 10 Nov 2026` dated-row path of ADR-045 §7 does NOT yet set
+   it (it would re-record the IndiGo fixtures); follow-up.
+3. **Carriers.** The alias regex accepts `/`, `|` and `#` between an airline name and its
+   code (`Alaska Airlines / AS22`, `Air India | AI116`, `KLM/KL6033`); since the alias's
+   code wins over a printed code, an OCR'd `Al116` beside `Air India` is AI 116. A
+   stop-worded two-letter code that is ALSO a known airline in the rules table (`AS`,
+   `VS`) counts as a bare token when it prints tight against its number (`AS22`) or
+   fills its cell / line alone with it (`AS 22` under an `Airline/Flight #` header);
+   every other stop-word use (`such as 22 kg`, `at 22 minutes`, `up by 22 vs 2024`) is
+   still rejected, and a stop-word that is not an airline never passes.
+4. **Locators.** `LABELED_AIRLINE_PNR` / `BARE_LABELED_PNR` carry a `(?<!AGENCY )`
+   guard; the new `LABELED_AGENCY_REF` (`Agency confirmation number: 8IUT7P`,
+   6–12 alphanumerics so an OCR-glued stray character does not lose it) is a MEDIUM
+   booking handle like an OTA booking id. `BARE_LABELED_PNR` now also accepts a
+   letter-only locator at the end of a ROW inside multi-line text (`\s*$` matched only at
+   the end of the whole text, so `Airline confirmation  HVLYKH` on a header row was never
+   read). New cross-segment step `shareSingleLocator`: when every labeled airline
+   locator in the document is one reading (or look-alikes of one, ADR-045 §7 sets),
+   every segment without a HIGH locator of its own takes the most frequent reading —
+   one booking, one locator; two genuinely different locators are left alone, and the §7
+   majority vote stays as it was.
+5. **Leg retention.** `dropIdentityOnlyNoise` counts a departure or arrival time as
+   informative; only a segment with a bare carrier + number and nothing else is noise.
+6. **Pipeline (amends ADR-009 stage 2).** `BitmapPreprocessor` upscales a bitmap narrower
+   than `MIN_WORKING_WIDTH_PX` (2048, the width `PdfPageRasterizer` renders pages at and
+   now shares) by an integer factor (≤ 3) with bilinear filtering before grayscale +
+   contrast. Integer factors keep glyph edges crisp; a 2300-px scan or a rasterized PDF
+   page is untouched. On the 1278-px `blr-lko-confirmation.png` the doubled read is the
+   same except `29 -0ct- 2026` (O → 0), so `OcrDates` accepts a month opening with `0`.
+7. **Rules (ADR-003, both files identical, `FlightDocumentRulesTest` enforces).** Added
+   Alaska Airlines AS, KLM KL (`KLM Royal Dutch Airlines`), JetBlue B6, Southwest WN,
+   Air Canada AC, Air France AF, Virgin Atlantic VS, Turkish Airlines TK, Swiss LX,
+   Japan Airlines JL, ANA NH (`All Nippon Airways`); Delta, United, American, British
+   Airways, Lufthansa, Emirates, Qatar, Etihad, Singapore, Cathay were already present.
+   `VS` joins the flight-code stop-words (the word "vs"); it and `AS` pass only through
+   rule 3. Rules file version 2.
+
+**Fixtures.** `agency-trip-connecting-3-legs` and `-2-legs`: the ML Kit text of the two
+screenshots as the APP reads them (through the upscaled pipeline, recorded with
+`OcrCaptureHarnessTest`; they keep the real OCR noise — `81UT7PO`, `Air India | AI116`,
+`7E3AR50`, `*1d`) → three segments (SEA→JFK 23:05→07:24 on 21/22 Nov, JFK→BOM
+10:05→11:10 on 22/23 Nov, BOM→BLR 15:35→17:25 on 23 Nov, PNR HVLYKH HIGH, no passenger /
+seat / cabin / terminal) and two (BLR→AMS 02:25→08:30, AMS→SEA 10:15→11:47 on 11 Nov,
+PNR 7E3AR5 MEDIUM — the airline confirmation was OCR'd with a glued `0`, so the agency
+one, identical on this booking, stands in). The images are not committed (locators are
+the only personal data, but they are real). Every pre-existing `*.expected.json` is
+byte-identical.
+
+**Consequences.** The review sheet shows "Found 3 flights" / "Found 2 flights", every leg
+has its route and times, so the direct batch save applies (3 / 2 cards; the AS 22
+arrival instant is dated 22 Nov). A connecting itinerary is still N independent
+journeys — the model has no "connection" concept; grouping legs (one card, layover
+line, shared status) would need a `FlightJourney.connectionGroupId` and card/detail
+work, left as a follow-up. The trip views also list the hotel booked for the trip;
+hotels are not imported (the segmenter's hotel section stop is unchanged, the rows are
+dropped) — a lodging itinerary item from a confirmation is a separate feature, not
+started. A header that prints a flight the legs never repeat still opens the first
+segment (summary detection needs a later mention). Memory: a 1098×2000 screenshot
+becomes a 2196×4000 ARGB bitmap (~35 MB) for the duration of one OCR pass — the same
+order as a rasterized PDF page. Validation: `docs/validation-report.md`, ADR-050 run.

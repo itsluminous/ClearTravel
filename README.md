@@ -41,6 +41,14 @@ optional Google account link for Calendar/Drive sync.
   are read as the two flights they describe with every traveller on each — the
   conditions pages' example flight numbers and the fare table's amounts are ignored,
   and long PDFs are read page by page with one page in memory at a time.
+  **Connecting itineraries** from an agency or corporate travel tool's trip view (a
+  screenshot where each leg is a block of departure and arrival `time • date` rows
+  with the airport under each, the airline's confirmation printed once and the
+  agency's own reference ignored) are read as one flight per leg — SEA → JFK → BOM →
+  BLR becomes three flights with their routes, times and the arrival dated on the
+  next day where it lands there — and the airline table knows Alaska, KLM, Delta,
+  United, American, JetBlue, Southwest, Air Canada, Air France, Virgin Atlantic,
+  Turkish, Swiss, JAL and ANA alongside the Indian and Gulf carriers.
   **Multiple passengers per flight:** a flight carries a passenger list (name, seat,
   their own boarding pass). Importing a second person's pass or e-ticket for a flight
   you already have **adds them to that flight** instead of refusing it ("Added Bandana
