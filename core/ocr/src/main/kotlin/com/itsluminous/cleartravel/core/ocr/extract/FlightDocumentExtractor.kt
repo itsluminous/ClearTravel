@@ -808,10 +808,14 @@ internal class FlightDocumentExtractor(
         const val NAME_SEPARATOR_OPTIONAL = """[ ]*\d?\.?[ ]*[:\-]?[ ]*"""
         const val NAME_VALUE =
             """((?:MR|MRS|MS|MSTR|MISS|DR)\.?[ ]+[A-Z]+(?:[ ]+[A-Z]+)*|""" +
-                """[A-Z]{2,25}/[A-Z]{2,25}(?:[ ]+[A-Z]{1,10})?|[A-Z]+(?:[ ]+[A-Z]+)+)"""
+                """[A-Z]{2,25}/[ ]?[A-Z]{2,25}(?:[ ]+[A-Z]{1,10})?|[A-Z]+(?:[ ]+[A-Z]+)+)"""
 
-        /** `SHARMA/RAHUL MR` filling a whole cell — never `PNR/BOOKING REFERENCE …` or a URL path. */
-        val SLASH_NAME_CELL = Regex("""([A-Z]{2,25}/[A-Z]{2,25}(?:[ ]+MRS?|[ ]+MS)?)""")
+        /**
+         * `SHARMA/RAHUL MR` filling a whole cell — never `PNR/BOOKING REFERENCE …` or a URL
+         * path. An upscaled read (ADR-050) may space the slash (`SHARMA/ RAHUL`), as
+         * [NAME_VALUE] also allows; [displayName] trims it away.
+         */
+        val SLASH_NAME_CELL = Regex("""([A-Z]{2,25}/[ ]?[A-Z]{2,25}(?:[ ]+MRS?|[ ]+MS)?)""")
         val PLAIN_NAME = Regex("""[A-Z]{2,}(?: [A-Z]{2,}){1,3}""")
         val NAME_WORD = Regex("""[A-Z]{2,}""")
 
@@ -871,10 +875,12 @@ internal class FlightDocumentExtractor(
         /** Six alphanumerics mixing letters and digits — but not a quantity (`02HOUR`, `10MINS`, `100KGS`). */
         val BARE_PNR =
             Regex("""\b(?!\d{1,3}(?:HOUR|HOURS|HRS|HR|MIN|MINS|KGS|KG|DAYS|PCS)\b)(?=[A-Z0-9]*[A-Z])(?=[A-Z0-9]*\d)([A-Z0-9]{6})\b""")
+
+        /** `FROM: DELHI (DEL) TO: MUMBAI (BOM)`; an upscaled read (ADR-050) can glue a `0` to `TO` (`TO0:`), as [PAREN_ROUTE] also tolerates. */
         val LABELED_ROUTE =
-            Regex("""FROM\s*[:\-]?\s*[A-Z ]*\(?([A-Z]{3})\)?\s+TO\s*[:\-]?\s*[A-Z ]*\(?([A-Z]{3})\)?""")
+            Regex("""FROM\s*[:\-]?\s*[A-Z ]*\(?([A-Z]{3})\)?\s+TO0?\s*[:\-]?\s*[A-Z ]*\(?([A-Z]{3})\)?""")
         val PAREN_ROUTE =
-            Regex("""\(([A-Z]{3})\)\s*(?:->|→|—|–|-|\bTO\b)\s*[A-Z ]*\(([A-Z]{3})\)""")
+            Regex("""\(([A-Z]{3})\)\s*(?:->|→|—|–|-|\bTO0?\b)\s*[A-Z ]*\(([A-Z]{3})\)""")
         val ARROW_ROUTE = Regex("""\b([A-Z]{3})\s*(?:->|→|—|–|-)\s*([A-Z]{3})\b${FlightSegmenter.CODE_PAIR_GUARD}""")
 
         /** `PAT-Jay Prakash Narayan International Airport` — a code and the airport's name in one cell. */

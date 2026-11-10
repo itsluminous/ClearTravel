@@ -13,7 +13,8 @@ import org.junit.runners.Parameterized
  * extracted and compared against its expected-output JSON — one field table per pass
  * (ADR-003 discipline; ADR-045 `boarding-pass-two-stacked` holds two passes on one page;
  * ADR-047 `boarding-pass-two-pax-same-flight` two passes for the SAME flight → one
- * segment with two passengers).
+ * segment with two passengers; ADR-050 `boarding-pass-upscaled` is the e2e suite's
+ * printed pass as ML Kit reads it after the 2× upscale — `SHARMA/ RAHUL`, `TO0:`).
  */
 @RunWith(Parameterized::class)
 class BoardingPassTextExtractorFixturesTest(
@@ -35,7 +36,14 @@ class BoardingPassTextExtractorFixturesTest(
     companion object {
         @JvmStatic
         @Parameterized.Parameters(name = "{0}")
-        fun fixtures() = listOf("boarding-pass-1", "boarding-pass-2", "boarding-pass-two-stacked", "boarding-pass-two-pax-same-flight")
+        fun fixtures() =
+            listOf(
+                "boarding-pass-1",
+                "boarding-pass-2",
+                "boarding-pass-two-stacked",
+                "boarding-pass-two-pax-same-flight",
+                "boarding-pass-upscaled",
+            )
     }
 }
 

@@ -3956,6 +3956,11 @@ missing from the airline table. On top, ML Kit at the screenshot's native size r
    contrast. Integer factors keep glyph edges crisp; a 2300-px scan or a rasterized PDF
    page is untouched. On the 1278-px `blr-lko-confirmation.png` the doubled read is the
    same except `29 -0ct- 2026` (O → 0), so `OcrDates` accepts a month opening with `0`.
+   The doubled read of a printed pass (the e2e suite's 1400-px `SHARMA/RAHUL` bitmap)
+   spaces the slash (`SHARMA/ RAHUL`) and glues a `0` to `TO` (`TO0: MUMBAI (BOM)`), so
+   `NAME_VALUE` / `SLASH_NAME_CELL` accept `SURNAME/ GIVEN` and `LABELED_ROUTE` /
+   `PAREN_ROUTE` accept `TO0` (fixture `boarding-pass-upscaled`; found by the device run,
+   `docs/validation-report.md`).
 7. **Rules (ADR-003, both files identical, `FlightDocumentRulesTest` enforces).** Added
    Alaska Airlines AS, KLM KL (`KLM Royal Dutch Airlines`), JetBlue B6, Southwest WN,
    Air Canada AC, Air France AF, Virgin Atlantic VS, Turkish Airlines TK, Swiss LX,
