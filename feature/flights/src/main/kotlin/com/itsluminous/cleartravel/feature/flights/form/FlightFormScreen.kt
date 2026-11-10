@@ -16,6 +16,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -43,6 +44,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.itsluminous.cleartravel.core.data.share.FlightSharePayload
 import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
+import com.itsluminous.cleartravel.core.designsystem.component.ChipRow
 import com.itsluminous.cleartravel.core.designsystem.component.ExplainableIcon
 import com.itsluminous.cleartravel.core.designsystem.component.LocalDatePickerDialog
 import com.itsluminous.cleartravel.core.ocr.ExtractionConfidence
@@ -308,6 +310,12 @@ fun FlightFormScreen(
                     modifier = Modifier.weight(1f),
                 )
             }
+            if (state.arrTimeText.isNotBlank()) {
+                ArrivalDayChips(
+                    offset = state.arrivalDayOffset,
+                    onPick = { days -> viewModel.update { it.copy(arrivalDayOffset = days) } },
+                )
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
@@ -334,6 +342,50 @@ fun FlightFormScreen(
 
 /** Test tag of the form's "Add passenger" button (e2e). */
 const val ADD_PASSENGER_TAG = "flights_form_add_passenger"
+
+/** Test tag of the form's arrival-day chip row (ADR-051, e2e). */
+const val ARRIVAL_DAY_ROW_TAG = "flights_form_arrival_day"
+
+/**
+ * ADR-051: the arrival's calendar day relative to the departure date — `Same day` /
+ * `Next day` / `2 days later` chips, shown once an arrival time is typed. Before this the
+ * offset was a hidden import value, so a hand-typed 23:05 → 07:24 landed before it took
+ * off. An imported offset beyond two days keeps its own chip so it stays representable.
+ */
+@Composable
+private fun ArrivalDayChips(
+    offset: Int,
+    onPick: (Int) -> Unit,
+) {
+    val choices = (0..maxOf(MAX_PRESET_ARRIVAL_OFFSET, offset)).toList()
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.flights_form_arrival_day),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        ChipRow(modifier = Modifier.weight(1f).testTag(ARRIVAL_DAY_ROW_TAG)) {
+            choices.forEach { days ->
+                FilterChip(
+                    selected = days == offset,
+                    onClick = { onPick(days) },
+                    label = {
+                        AutoShrinkText(
+                            when (days) {
+                                0 -> stringResource(R.string.flights_form_arrival_same_day)
+                                1 -> stringResource(R.string.flights_form_arrival_next_day)
+                                else -> stringResource(R.string.flights_form_arrival_days_later, days)
+                            },
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
+/** Arrival-day chips always offered: same day, next day, two days later (ultra-long hauls across the date line). */
+private const val MAX_PRESET_ARRIVAL_OFFSET = 2
 
 /** One passenger row (ADR-046): name + seat, a stored-pass marker, and a remove control. */
 @Composable

@@ -27,6 +27,10 @@
     <string name="flights_prefill_text_arr_terminal">Arrival terminal read: %1$s</string>
     <string name="flights_card_route_separator">→</string>
     <string name="flights_card_dep_arr">Dep %1$s · Arr %2$s</string>
+    <!-- Appended to an arrival time that lands N calendar days after the departure (airline convention `07:24 +1`). -->
+    <string name="flights_arrival_day_offset">+%d</string>
+    <!-- Detail sheet: a time plus the day it falls on when that is not the flight's header date, e.g. `07:24 · Sun, 22 Nov`. -->
+    <string name="flights_time_with_day">%1$s · %2$s</string>
     <string name="flights_last_fetched">Checked %1$s</string>
     <string name="flights_never_fetched">Status never checked</string>
 
@@ -87,6 +91,10 @@
     <string name="flights_field_arr_airport">To (IATA)</string>
     <string name="flights_field_dep_time">Departure time (HH:MM)</string>
     <string name="flights_field_arr_time">Arrival time (HH:MM)</string>
+    <string name="flights_form_arrival_day">Arrives</string>
+    <string name="flights_form_arrival_same_day">Same day</string>
+    <string name="flights_form_arrival_next_day">Next day</string>
+    <string name="flights_form_arrival_days_later">%d days later</string>
     <string name="flights_form_route_hint">Route and times are optional - "Save &amp; check status" can fill them from the airline site.</string>
     <string name="flights_error_airline">Enter the 2-character airline code, e.g. 6E</string>
     <string name="flights_error_flight_number">Enter the numeric flight number, e.g. 2345</string>

@@ -218,6 +218,46 @@ class FlightFormStateTest {
     }
 
     @Test
+    fun `fromSharePayload keeps a shared overnight arrival on its next day`() {
+        // ADR-051: a recipient's form used to re-date the 07:24 arrival onto the departure day.
+        val zone = ZoneId.of("Asia/Kolkata")
+        val payload =
+            FlightSharePayload(
+                version = 1,
+                airlineIata = "AS",
+                flightNumber = "22",
+                date = "2026-11-21",
+                schedDep = ZonedDateTime.of(2026, 11, 21, 23, 5, 0, 0, zone).toEpochSecond(),
+                schedArr = ZonedDateTime.of(2026, 11, 22, 7, 24, 0, 0, zone).toEpochSecond(),
+            )
+        val state = FlightFormState.fromSharePayload(payload, zone)
+        assertThat(state.arrivalDayOffset).isEqualTo(1)
+        assertThat(state.toJourney(checkInUrl = null, zone = zone).schedArr)
+            .isEqualTo(ZonedDateTime.of(2026, 11, 22, 7, 24, 0, 0, zone).toInstant())
+        assertThat(FlightFormState.fromSharePayload(payload.copy(schedArr = null), zone).arrivalDayOffset).isEqualTo(0)
+    }
+
+    @Test
+    fun `the arrival-day chips value dates the arrival without an import`() {
+        // ADR-051: a hand-typed 23:05 → 07:24 with "Next day" picked lands on the following day.
+        val zone = ZoneId.of("Asia/Kolkata")
+        val typed =
+            FlightFormState(
+                airlineIata = "AS",
+                flightNumber = "22",
+                dateText = "2026-11-21",
+                depTimeText = "23:05",
+                arrTimeText = "07:24",
+            )
+        assertThat(typed.toJourney(checkInUrl = null, zone = zone).schedArr)
+            .isEqualTo(ZonedDateTime.of(2026, 11, 21, 7, 24, 0, 0, zone).toInstant())
+        assertThat(typed.copy(arrivalDayOffset = 1).toJourney(checkInUrl = null, zone = zone).schedArr)
+            .isEqualTo(ZonedDateTime.of(2026, 11, 22, 7, 24, 0, 0, zone).toInstant())
+        assertThat(typed.copy(arrivalDayOffset = 2).toJourney(checkInUrl = null, zone = zone).schedArr)
+            .isEqualTo(ZonedDateTime.of(2026, 11, 23, 7, 24, 0, 0, zone).toInstant())
+    }
+
+    @Test
     fun `fromExtraction maps values and keeps per-field confidence markers`() {
         val extraction =
             BoardingPassExtraction(

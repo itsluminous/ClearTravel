@@ -83,12 +83,15 @@ internal fun FlightCardBody(
                 val dep = formatTime(flight.estDep ?: flight.schedDep)
                 val arr = formatTime(flight.estArr ?: flight.schedArr)
                 if (dep != null || arr != null) {
+                    // `Arr 07:24 +1`: an overnight leg carries the airline's day suffix (ADR-050 amendment).
+                    val arrWithDay =
+                        arr?.let { withDayOffset(it, arrivalDayOffset(flight), stringResource(R.string.flights_arrival_day_offset)) }
                     AutoShrinkText(
                         text =
                             stringResource(
                                 R.string.flights_card_dep_arr,
                                 dep ?: stringResource(R.string.flights_value_unknown),
-                                arr ?: stringResource(R.string.flights_value_unknown),
+                                arrWithDay ?: stringResource(R.string.flights_value_unknown),
                             ),
                         style = MaterialTheme.typography.bodyMedium,
                     )

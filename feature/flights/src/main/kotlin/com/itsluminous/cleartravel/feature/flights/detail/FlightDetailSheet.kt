@@ -44,6 +44,7 @@ import com.itsluminous.cleartravel.core.model.FlightPassenger
 import com.itsluminous.cleartravel.feature.flights.R
 import com.itsluminous.cleartravel.feature.flights.list.FlightStatusChip
 import com.itsluminous.cleartravel.feature.flights.list.formatDate
+import com.itsluminous.cleartravel.feature.flights.list.formatDayIfDiffers
 import com.itsluminous.cleartravel.feature.flights.list.formatTime
 import com.itsluminous.cleartravel.feature.flights.list.formatTimestamp
 import com.itsluminous.cleartravel.feature.flights.list.passengerHeadline
@@ -51,6 +52,9 @@ import com.itsluminous.cleartravel.feature.flights.list.passengerLabel
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcome
 import com.itsluminous.cleartravel.feature.flights.status.CheckOutcomeKind
 import com.itsluminous.cleartravel.feature.flights.status.FlightStatusFallbacks
+import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneId
 
 /** Test tag of every passenger row in the detail sheet (e2e). */
 const val PASSENGER_ROW_TAG = "flights_detail_passenger_row"
@@ -126,17 +130,20 @@ fun FlightDetailSheet(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
+            // Every time that is not on the header day carries its day (`07:24 · Sun, 22 Nov`):
+            // the overnight arrival of ADR-050, or a departure moved off the header date.
+            val headerDay = flight.date ?: flight.schedDep?.atZone(ZoneId.systemDefault())?.toLocalDate()
             EndpointBlock(
                 titleRes = R.string.flights_label_departure,
-                scheduled = formatTime(flight.schedDep),
-                estimated = formatTime(flight.estDep),
+                scheduled = formatTimeWithDay(flight.schedDep, headerDay),
+                estimated = formatTimeWithDay(flight.estDep, headerDay),
                 terminal = flight.depTerminal,
                 gate = flight.depGate,
             )
             EndpointBlock(
                 titleRes = R.string.flights_label_arrival,
-                scheduled = formatTime(flight.schedArr),
-                estimated = formatTime(flight.estArr),
+                scheduled = formatTimeWithDay(flight.schedArr, headerDay),
+                estimated = formatTimeWithDay(flight.estArr, headerDay),
                 terminal = flight.arrTerminal,
                 gate = flight.arrGate,
             )
@@ -349,6 +356,17 @@ fun FlightDetailSheet(
             },
         )
     }
+}
+
+/** `07:24`, or `07:24 · Sun, 22 Nov` when [instant] falls on another day than [headerDay]; null when unknown. */
+@Composable
+private fun formatTimeWithDay(
+    instant: Instant?,
+    headerDay: LocalDate?,
+): String? {
+    val time = formatTime(instant) ?: return null
+    val day = formatDayIfDiffers(instant, headerDay) ?: return time
+    return stringResource(R.string.flights_time_with_day, time, day)
 }
 
 @Composable

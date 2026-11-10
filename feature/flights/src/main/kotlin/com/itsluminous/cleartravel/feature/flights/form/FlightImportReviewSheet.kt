@@ -28,6 +28,7 @@ import com.itsluminous.cleartravel.core.designsystem.component.AutoShrinkText
 import com.itsluminous.cleartravel.core.designsystem.component.ClearTravelCard
 import com.itsluminous.cleartravel.feature.flights.R
 import com.itsluminous.cleartravel.feature.flights.list.formatDate
+import com.itsluminous.cleartravel.feature.flights.list.withDayOffset
 
 /** Test tag of the review sheet's confirm button (e2e). */
 const val IMPORT_REVIEW_CONFIRM_TAG = "flights_import_review_confirm"
@@ -149,8 +150,8 @@ private fun reviewTitle(form: FlightFormState): String {
 }
 
 /**
- * `Thu, 29 Oct 2026 · 10:30 · PNR R87T5G · Seat 12A · BANDANA KUMARI` — only the parts the
- * segment has (ADR-046 names the passenger). A segment carrying SEVERAL passengers
+ * `Thu, 29 Oct 2026 · Dep 10:30 · Arr 13:05 · PNR R87T5G · Seat 12A · BANDANA KUMARI` — only
+ * the parts the segment has (ADR-046 names the passenger; an overnight arrival reads `Arr 07:24 +1`). A segment carrying SEVERAL passengers
  * (ADR-047) ends with `2 passengers: PRAKASH KUMAR 12A, BANDANA KUMARI 12B` instead of
  * the single seat + name.
  */
@@ -178,10 +179,22 @@ private fun reviewDetails(form: FlightFormState): String {
     return (
         listOfNotNull(
             FlightFormState.parseDate(form.dateText)?.let { formatDate(it) },
-            form.depTimeText.takeIf { it.isNotBlank() },
+            reviewTimes(form),
             form.pnr.takeIf { it.isNotBlank() }?.let { stringResource(R.string.flights_import_review_pnr, it) },
         ) + passengerParts
     ).joinToString(stringResource(R.string.flights_import_review_separator))
+}
+
+/**
+ * `Dep 23:05 · Arr 07:24 +1` when the segment has both times (the `+N` is its ADR-050
+ * arrival-day offset), the departure time alone when that is all it has, null without any.
+ */
+@Composable
+private fun reviewTimes(form: FlightFormState): String? {
+    val dep = form.depTimeText.trim().takeIf { it.isNotBlank() }
+    val arr = form.arrTimeText.trim().takeIf { it.isNotBlank() } ?: return dep
+    val arrWithDay = withDayOffset(arr, form.arrivalDayOffset, stringResource(R.string.flights_arrival_day_offset))
+    return stringResource(R.string.flights_card_dep_arr, dep ?: stringResource(R.string.flights_value_unknown), arrWithDay)
 }
 
 /** `PRAKASH KUMAR 12A`; an unnamed row is `Passenger 2 12B`; a seatless one just the name. */

@@ -125,9 +125,10 @@ data class FlightFormState(
     val arrTimeText: String = "",
     /**
      * Calendar days the arrival lies after the departure (ADR-050): 1 for an overnight
-     * leg whose document stamped the arrival `+1d`, 0 otherwise. Not a visible field —
-     * it rides along from an import or a stored journey so [toJourney] dates the
-     * arrival instant on the right day even after the user edits the departure date.
+     * leg whose document stamped the arrival `+1d`, 0 otherwise. Prefilled from an
+     * import or a stored journey and, since ADR-051, edited through the form's `Arrives`
+     * chips (Same day / Next day / N days later), so [toJourney] dates the arrival
+     * instant on the right day even after the user edits the departure date.
      */
     val arrivalDayOffset: Int = 0,
     val confidences: Map<FlightField, ExtractionConfidence> = emptyMap(),
@@ -262,6 +263,11 @@ data class FlightFormState(
                 arrAirport = payload.arrAirport.trim().uppercase(),
                 depTimeText = timeText(payload.schedDep),
                 arrTimeText = timeText(payload.schedArr),
+                arrivalDayOffset =
+                    dayOffset(
+                        SharePayloadMappers.toInstant(payload.schedDep)?.atZone(zone)?.toLocalDate(),
+                        SharePayloadMappers.toInstant(payload.schedArr)?.atZone(zone)?.toLocalDate(),
+                    ),
                 passengers =
                     payload.passengers
                         .map { PassengerFormRow(name = it.name.trim(), seat = it.seat.trim().uppercase()) }
