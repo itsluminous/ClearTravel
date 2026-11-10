@@ -5,6 +5,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
+import java.time.temporal.ChronoUnit
 
 /**
  * The app-wide LOCALIZED date/time rendering used wherever a screen shows a plain
@@ -26,4 +27,26 @@ object DateFormats {
         instant: Instant,
         zone: ZoneId = ZoneId.systemDefault(),
     ): String = TIMESTAMP_MEDIUM_SHORT.format(instant.atZone(zone))
+
+    /**
+     * Calendar days from [from] to [to]: 0 on the same day, 1 for an overnight flight or
+     * train leg, 2 for a journey that spans two midnights, negative when [to] is earlier;
+     * null when either side is unknown. Shared by the flight surfaces that print `+1`
+     * after an arrival time (ADR-050 amendment) and open to the train route page
+     * (multi-day rakes) — ADR-036 keeps date helpers two features need here.
+     */
+    fun dayOffset(
+        from: LocalDate?,
+        to: LocalDate?,
+    ): Int? {
+        if (from == null || to == null) return null
+        return ChronoUnit.DAYS.between(from, to).toInt()
+    }
+
+    /** [dayOffset] of two instants read as calendar days in [zone] (device zone by default). */
+    fun dayOffset(
+        from: Instant?,
+        to: Instant?,
+        zone: ZoneId = ZoneId.systemDefault(),
+    ): Int? = dayOffset(from?.atZone(zone)?.toLocalDate(), to?.atZone(zone)?.toLocalDate())
 }
