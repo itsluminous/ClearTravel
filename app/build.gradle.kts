@@ -41,7 +41,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = (project.findProperty("appVersionCode") as? String)?.toInt() ?: 1
-        versionName = (project.findProperty("appVersionName") as? String) ?: "0.0.10"
+        versionName = (project.findProperty("appVersionName") as? String) ?: "0.0.11"
 
         testInstrumentationRunner = "com.itsluminous.cleartravel.HiltTestRunner"
 
