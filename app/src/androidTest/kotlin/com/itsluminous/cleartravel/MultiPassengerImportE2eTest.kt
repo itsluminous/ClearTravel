@@ -67,11 +67,13 @@ class MultiPassengerImportE2eTest {
         composeRule.onNodeWithText("IX 2019 · BLR $sep LKO").assertExists()
         composeRule.onNodeWithText("IX 1542 · LKO $sep BLR").assertExists()
         composeRule
-            .onNodeWithText("Thu, 29 Oct 2026 · 10:30 · PNR R87T5G · 2 passengers: $FIRST ${FIRST_SEATS[0]}, $SECOND ${SECOND_SEATS[0]}")
-            .assertExists()
+            .onNodeWithText(
+                "Thu, 29 Oct 2026 · Dep 10:30 · Arr 13:05 · PNR R87T5G · 2 passengers: $FIRST ${FIRST_SEATS[0]}, $SECOND ${SECOND_SEATS[0]}",
+            ).assertExists()
         composeRule
-            .onNodeWithText("Sat, 31 Oct 2026 · 20:30 · PNR D2FE9V · 2 passengers: $FIRST ${FIRST_SEATS[1]}, $SECOND ${SECOND_SEATS[1]}")
-            .assertExists()
+            .onNodeWithText(
+                "Sat, 31 Oct 2026 · Dep 20:30 · Arr 23:00 · PNR D2FE9V · 2 passengers: $FIRST ${FIRST_SEATS[1]}, $SECOND ${SECOND_SEATS[1]}",
+            ).assertExists()
         composeRule.onNode(hasTestTag(IMPORT_REVIEW_CONFIRM_TAG)).performClick()
 
         // Journeys/Flights: two cards with the seats joined, the batch notice, both passengers stored per flight.

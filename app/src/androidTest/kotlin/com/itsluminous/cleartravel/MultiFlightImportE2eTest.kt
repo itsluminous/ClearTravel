@@ -68,9 +68,9 @@ class MultiFlightImportE2eTest {
         val sep = composeRule.string(FlightsR.string.flights_card_route_separator)
         composeRule.onNodeWithText("IX 2019 · BLR $sep LKO").assertExists()
         composeRule.onNodeWithText("IX 1542 · LKO $sep BLR").assertExists()
-        // ADR-046: the segment card names the passenger too.
-        composeRule.onNodeWithText("Thu, 29 Oct 2026 · 10:30 · PNR R87T5G · Seat 12A · PRAKASH KUMAR").assertExists()
-        composeRule.onNodeWithText("Sat, 31 Oct 2026 · 20:30 · PNR D2FE9V · Seat 10A · PRAKASH KUMAR").assertExists()
+        // ADR-046: the segment card names the passenger too; both times print (ADR-050 amendment).
+        composeRule.onNodeWithText("Thu, 29 Oct 2026 · Dep 10:30 · Arr 13:05 · PNR R87T5G · Seat 12A · PRAKASH KUMAR").assertExists()
+        composeRule.onNodeWithText("Sat, 31 Oct 2026 · Dep 20:30 · Arr 23:00 · PNR D2FE9V · Seat 10A · PRAKASH KUMAR").assertExists()
         composeRule.onNode(hasTestTag(IMPORT_REVIEW_CONFIRM_TAG)).performClick()
 
         // Landed on Journeys/Flights: two cards, and the batch notice.
