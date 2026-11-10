@@ -3992,3 +3992,61 @@ started. A header that prints a flight the legs never repeat still opens the fir
 segment (summary detection needs a later mention). Memory: a 1098×2000 screenshot
 becomes a 2196×4000 ARGB bitmap (~35 MB) for the duration of one OCR pass — the same
 order as a rasterized PDF page. Validation: `docs/validation-report.md`, ADR-050 run.
+
+## ADR-051 — The arrival day is visible: `+1` on cards, the date on the sheet, editable in the form (2026-11-10)
+
+**Context.** ADR-050 stores an overnight leg's arrival on the next calendar day (`AS 22`
+SEA 23:05 Sat 21 Nov → JFK 07:24 Sun 22 Nov: `schedArr` is the 22 Nov instant, verified
+from the share-link blob in the ADR-050 device run), but nothing showed it: the card
+printed one date line and `Dep 23:05 · Arr 07:24`, the detail sheet `Scheduled: 07:24`.
+A reader had no way to tell a landing eight hours later from one sixteen hours earlier.
+In the same vein the form carried `arrivalDayOffset` as a HIDDEN import value, so a
+hand-typed 23:05 → 07:24 (and every overnight flight opened from a shared link, whose
+`fromSharePayload` never set the offset) was stored landing before it took off.
+
+**Decision.** Amends ADR-050 §2 (UI surfaces) and ADR-036 (one more shared date helper).
+
+1. **Helper in `core:designsystem`.** `DateFormats.dayOffset(from, to)` — calendar days
+   from one `LocalDate`/`Instant` to another in a zone (device zone by default): 0 same
+   day, 1 overnight, 2 across two midnights, negative when the end is earlier, null when
+   either side is unknown. It lives beside `formatDate` because the train route page
+   (multi-day rakes) is the obvious second caller; `feature:flights` keeps the
+   flight-shaped wrappers in `FlightUiFormat`: `arrivalDayOffset(flight)` compares the
+   LIVE times the card shows (estimated, else scheduled; the header date when no
+   departure instant exists) so a delay that slips past midnight also reads `+1`;
+   `withDayOffset(time, offset, "+%d")` appends the suffix only for a positive offset;
+   `formatDayIfDiffers(instant, headerDay)` yields `Sun, 22 Nov` (`EEE, d MMM`, the year
+   is already in the header) only off the header day.
+2. **Card, share image, review card.** The `Dep · Arr` line of `FlightCardBody` (list card
+   AND the ADR-039 share image, which renders the same body) becomes `Dep 23:05 · Arr
+   07:24 +1` — the airline convention, `+2` for two midnights, nothing for a same-day
+   landing (string `flights_arrival_day_offset` = `+%d`; the line was already an
+   `AutoShrinkText`). The ADR-045 review card, which printed the departure time alone,
+   now prints both times through the same `flights_card_dep_arr` template with the
+   segment's offset (`Thu, 29 Oct 2026 · Dep 10:30 · Arr 13:05 · PNR …`; the two import
+   e2e assertions were updated).
+3. **Detail sheet.** Every Scheduled / Estimated time of the Departure and Arrival rows
+   that does not fall on the header day (the flight's `date`, else `schedDep`'s day)
+   carries its day: `Scheduled: 07:24 · Sun, 22 Nov` (`flights_time_with_day`). Same-day
+   times stay as they were; the departure gets a day only in the edge case where a
+   status check moved it off the header date. Zone: the device zone, as every flight
+   time on these surfaces already is (the model has no airport zone; ADR-013
+   best-effort).
+4. **Form control (the "only if simple" call — it is).** An `Arrives` row of `FilterChip`s
+   — `Same day` / `Next day` / `2 days later`, plus the stored value's own chip when an
+   import carried more — appears under the time fields once an arrival time is typed
+   and edits `arrivalDayOffset` directly (test tag `flights_form_arrival_day`). No
+   inference from `arr < dep` is added: a short hop that departs 23:50 and lands 00:40 is
+   `Next day` by the same control, and a chip the user can see beats a rule that flips
+   behind their back. `fromSharePayload` now derives the offset from the shared
+   instants, so a shared overnight flight lands on its day in the recipient's form.
+
+**Consequences.** Status-check mapping is unchanged — `AirlineStatusMapper` and
+`GoogleFlightsExtractor` already build full arrival instants from the card's arrival
+date (falling back to the departure date), so an estimated arrival on the next day shows
+`+1` / its day without further work. Trains do not yet call `dayOffset`; the route page
+keeps its schedule-day arithmetic (`TrainTicketLogic`) until it is reworked. Tests:
+`DateFormatsTest` (+4), `FlightUiFormatTest` (5, new), `FlightFormStateTest` (+2: shared
+overnight flight, chips value), e2e `FlightArrivalDateE2eTest` (2: seeded overnight +
+same-day cards and sheets; typed flight with `Next day`). Validation:
+`docs/validation-report.md`, ADR-051 run.

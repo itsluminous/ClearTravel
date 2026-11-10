@@ -46,7 +46,9 @@ optional Google account link for Calendar/Drive sync.
   with the airport under each, the airline's confirmation printed once and the
   agency's own reference ignored) are read as one flight per leg — SEA → JFK → BOM →
   BLR becomes three flights with their routes, times and the arrival dated on the
-  next day where it lands there — and the airline table knows Alaska, KLM, Delta,
+  next day where it lands there (the card and share image say `Arr 07:24 +1`, the
+  detail sheet `Scheduled: 07:24 · Sun, 22 Nov`, and the form's *Arrives* chips —
+  same day / next day / 2 days later — set it by hand) — and the airline table knows Alaska, KLM, Delta,
   United, American, JetBlue, Southwest, Air Canada, Air France, Virgin Atlantic,
   Turkish, Swiss, JAL and ANA alongside the Indian and Gulf carriers.
   **Multiple passengers per flight:** a flight carries a passenger list (name, seat,

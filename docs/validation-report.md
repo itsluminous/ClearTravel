@@ -1469,3 +1469,30 @@ Journeys → Flights → `Add flight` → `Import booking confirmation`.
 
 `emulator-5554` / `emulator-5556` were present before, never targeted, left running;
 `emulator-5562` killed after this run.
+
+## Arrival day visible — `+1` on cards, the date on the sheet, `Arrives` chips (2026-11-10 07:30–07:55 IST, emulator Android_16_AOSP_Medium as `emulator-5562`, API 36, ADR-051)
+
+Fresh debug install of `fd6acf8` on an AVD started for this run (`-no-snapshot-save`;
+the connected suite had cleared the app, so the ADR-032 wizard ran: password
+`TestPass123` → `Use offline` → `Start fresh` → notifications `ALLOW`). Every read is a
+`uiautomator dump` node text + bounds (no screenshots). The real agency screenshot
+`BLR_Flight.png` (1098×2000, not committed) pushed to `/sdcard/Download/`, picked through
+Journeys → Flights → `Add flight` → `Import booking confirmation`. Device zone
+Asia/Kolkata; every single-line value measured 63 px tall like its siblings (no wrap).
+
+| # | Step | Dump | Result |
+|---|---|---|---|
+| a1 | Review sheet | `Found 3 flights in this file` · `AS 22 · SEA → JFK` / `Sat, 21 Nov 2026 · Dep 23:05 · Arr 7:24 +1 · PNR HVLYKH` · `AI 116 · JFK → BOM` / `Sun, 22 Nov 2026 · Dep 10:05 · Arr 11:10 +1 · PNR HVLYKH` · `AI 2853 · BOM → BLR` / `Mon, 23 Nov 2026 · Dep 15:35 · Arr 17:25 · PNR HVLYKH` (the form's `H:mm` time text, as the ADR-050 run's `2:25`) | PASS |
+| a2 | `Add 3 flights` → cards | `Added 3 flights`; `AS 22 · SEA → JFK · Sat, 21 Nov 2026 · Dep 23:05 · Arr 07:24 +1`, `AI 116 · JFK → BOM · Sun, 22 Nov 2026 · Dep 10:05 · Arr 11:10 +1`, `AI 2853 · BOM → BLR · Mon, 23 Nov 2026 · Dep 15:35 · Arr 17:25` (no suffix) | PASS |
+| a3 | `AS 22` detail sheet | Departure `Scheduled: 23:05` · `Estimated: -`; Arrival **`Scheduled: 07:24 · Sun, 22 Nov`** · `Estimated: -` — one line, bounds `[63,1905][652,1968]` | PASS |
+| a4 | `AI 2853` detail sheet | Departure `Scheduled: 15:35`, Arrival `Scheduled: 17:25` — time only | PASS |
+| b1 | `AI 2853` → `Edit` → form | under the time fields: `Arrives` · `Same day` (checked) · `Next day` · `2 days later`, chip labels 53 px single-line | PASS |
+| b2 | `Next day` → `Save` | chip check moved to `Next day`; card `Dep 15:35 · Arr 17:25 +1`; sheet Arrival `Scheduled: 17:25 · Tue, 24 Nov` | PASS |
+| b3 | `Edit` again | the form re-opens with `Next day` checked (`fromJourney` derives the offset back from the stored instants); `Same day` → `Save` → card `Dep 15:35 · Arr 17:25` | PASS |
+| c1 | `AS 22` card → `Share flight` | share sheet `Sharing image` (the card rendered, not the text-only fallback) with caption `My flight AS 22 · 21 Nov · SEA → JFK - open in Clear Travel to add it: https://cleartravel.itsluminous.com/share/flight/…`; the image is the same `FlightCardBody` the list dumped as `Arr 07:24 +1` | PASS |
+| d1 | Cleanup | the 3 cards deleted through the sheet (`Delete this flight?` → `Delete`) → `No flight journeys yet`; `/sdcard/Download/BLR_Flight.png` removed | done |
+| g1 | Full gate → `arrdate.log` | BUILD SUCCESSFUL, unit **1398/1398** (1387 before: `DateFormatsTest` +4, `FlightUiFormatTest` 5 new, `FlightFormStateTest` +2) | PASS |
+| g2 | `connectedDebugAndroidTest` on `emulator-5562` only (`connected-051.log`) | app e2e **39/39** (37 + `FlightArrivalDateE2eTest` 2) + `core:ocr` 5 (1 `@Ignore` harness skip), BUILD SUCCESSFUL in 3m 36s | PASS |
+
+`emulator-5554` / `emulator-5556` / `192.168.68.53:5555` were present before, never
+targeted, left running; `emulator-5562` killed after this run.
